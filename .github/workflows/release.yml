@@ -1,0 +1,33 @@
+# Nobody picks a version. release-please reads the Conventional Commits that
+# land on main and keeps a release pull request open carrying the next
+# version and the changelog entry, bumping [project].version in
+# pyproject.toml; merging that pull request tags the release and writes the
+# notes. Nothing here builds or publishes anything else — a project stamped
+# from this template adds a publish step to PyPI (or wherever it deploys)
+# the day it has something worth publishing.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Never two releases at once, and never cancel one halfway: a killed run can
+# leave a tag pushed and the release notes half-written.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # tags the release and writes it
+      pull-requests: write # keeps the release pull request up to date
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

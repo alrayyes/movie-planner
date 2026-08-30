@@ -1,0 +1,65 @@
+# Dependabot raises the pull request; CI decides whether it lands. Everything
+# here is pinned to an exact version, which is the whole reason this works —
+# a floating range drifts silently and there's nothing to raise a pull
+# request about.
+#
+# Three pins Dependabot can't see, and which are updated by hand: uv's own
+# version (the `version:` input on astral-sh/setup-uv in ci.yml), and the
+# VALE_VERSION/GITLEAKS_VERSION release binaries in prose.yml/gitleaks.yml.
+# None of the three live anywhere Dependabot's ecosystems look.
+version: 2
+
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 10
+    commit-message:
+      # Conventional Commits, because commitlint checks these messages and
+      # the version number is computed from them. uv ships in the built
+      # package, so a bump here is a change to what ships whether or not
+      # it's security-relevant, and fix: cuts the patch release the same way
+      # any other fix does. github-actions below stays ci: — it changes the
+      # pipeline, not the artifact.
+      prefix: fix
+      include: scope
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Amsterdam
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  # Nothing here is JavaScript. package.json exists so commitlint can
+  # resolve the shared config it extends, which bunx alone cannot do.
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Amsterdam
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      tooling:
+        patterns: ["*"]
+        update-types: [minor, patch]
