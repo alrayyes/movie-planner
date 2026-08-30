@@ -13,8 +13,8 @@
 
 ## 3. Duplicate detection
 
-- [ ] 3.1 Implement title normalization (case-fold, strip punctuation, strip known noise suffixes like trailing " - Movies") and verify with a unit test covering the "Ready or Not 2" suffix case
-- [ ] 3.2 Implement fuzzy match plus same-day gate against existing entries using rapidfuzz with a configurable threshold, and verify with tests for same-title/same-day flagged and same-title/different-day not flagged
+- [x] 3.1 Implement title normalization (case-fold, strip punctuation, strip known noise suffixes like trailing " - Movies") and verify with a unit test covering the "Ready or Not 2" suffix case
+- [x] 3.2 Implement fuzzy match plus same-day gate against existing entries using rapidfuzz with a configurable threshold, and verify with tests for same-title/same-day flagged and same-title/different-day not flagged
 - [ ] 3.3 Wire the duplicate check into interactive logging as a confirm-to-add prompt, and verify by running the log command against a seeded duplicate and confirming the prompt appears
 - [ ] 3.4 Wire the duplicate check into bulk import as skip-and-report with a `--force` override, and verify with an import test asserting skipped rows appear in the summary and `--force` persists them
 
