@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.3.1...movie-planner-v0.4.0) (2026-08-30)
+
+
+### Features
+
+* **docker:** publish a Docker image alongside each release ([f98914c](https://github.com/alrayyes/movie-planner/commit/f98914cf3e66995bd9629d80664fdcf267762dc6))
+* **docker:** publish a Docker image alongside each release ([d1ff900](https://github.com/alrayyes/movie-planner/commit/d1ff900ddce305bd50f3215a779a0e30c2514845))
+
 ## [0.3.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.3.0...movie-planner-v0.3.1) (2026-08-30)
 
 
