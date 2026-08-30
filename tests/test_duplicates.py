@@ -21,16 +21,7 @@ def test_normalize_title(title: str, expected: str) -> None:
 
 
 def _entry(entry_id: int, title: str, entry_date: date) -> Entry:
-    return Entry(
-        id=entry_id,
-        title=title,
-        date=entry_date,
-        start_time=None,
-        end_time=None,
-        medium_id=1,
-        venue_id=None,
-        caldav_uid=None,
-    )
+    return Entry(id=entry_id, title=title, date=entry_date, medium_id=1)
 
 
 def test_find_duplicate_same_title_same_day_is_flagged() -> None:
