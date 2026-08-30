@@ -123,8 +123,11 @@ api_key = "..."
 db_path = "~/.local/share/movie-planner/movies.db"
 ```
 
-All three sections are required. A missing file or a missing key fails
-with a message naming the problem, not a stack trace.
+Run `movie-planner init` to write a starter copy of this file, ready to
+edit — any other command run against a missing config file offers to do
+the same, interactively. All three sections are required; a missing file
+or a missing key fails with a message naming the problem, not a stack
+trace.
 
 ## Import examples
 
