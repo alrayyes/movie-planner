@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS entries (
     start_time TEXT,
     end_time TEXT,
     medium_id INTEGER NOT NULL REFERENCES media(id),
-    venue_id INTEGER REFERENCES venues(id)
+    venue_id INTEGER REFERENCES venues(id),
+    caldav_uid TEXT
 );
 """
 
@@ -64,10 +65,11 @@ class Entry:
     end_time: datetime.time | None
     medium_id: int
     venue_id: int | None
+    caldav_uid: str | None
 
 
 def _row_to_entry(row: tuple) -> Entry:
-    entry_id, title, date_str, start_str, end_str, medium_id, venue_id = row
+    entry_id, title, date_str, start_str, end_str, medium_id, venue_id, caldav_uid = row
     return Entry(
         id=entry_id,
         title=title,
@@ -76,6 +78,7 @@ def _row_to_entry(row: tuple) -> Entry:
         end_time=datetime.time.fromisoformat(end_str) if end_str else None,
         medium_id=medium_id,
         venue_id=venue_id,
+        caldav_uid=caldav_uid,
     )
 
 
@@ -85,7 +88,16 @@ class Store:
         self._conn = sqlite3.connect(db_path)
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    def _migrate(self) -> None:
+        # ALTER TABLE ADD COLUMN, guarded, for a database created before
+        # this column existed - CREATE TABLE IF NOT EXISTS above only
+        # covers a brand-new database.
+        columns = {row[1] for row in self._conn.execute("PRAGMA table_info(entries)")}
+        if "caldav_uid" not in columns:
+            self._conn.execute("ALTER TABLE entries ADD COLUMN caldav_uid TEXT")
 
     def close(self) -> None:
         self._conn.close()
@@ -165,7 +177,7 @@ class Store:
     ) -> Entry:
         cur = self._conn.execute(
             "INSERT INTO entries (title, date, start_time, end_time, medium_id, venue_id) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?)",  # caldav_uid is set later, once synced
             (
                 title,
                 date.isoformat(),
@@ -181,7 +193,7 @@ class Store:
 
     def get_entry(self, entry_id: int) -> Entry:
         row = self._conn.execute(
-            "SELECT id, title, date, start_time, end_time, medium_id, venue_id "
+            "SELECT id, title, date, start_time, end_time, medium_id, venue_id, caldav_uid "
             "FROM entries WHERE id = ?",
             (entry_id,),
         ).fetchone()
@@ -196,7 +208,10 @@ class Store:
         date_to: datetime.date | None = None,
         medium_id: int | None = None,
     ) -> list[Entry]:
-        query = "SELECT id, title, date, start_time, end_time, medium_id, venue_id FROM entries"
+        query = (
+            "SELECT id, title, date, start_time, end_time, medium_id, venue_id, caldav_uid "
+            "FROM entries"
+        )
         clauses = []
         params: list[object] = []
         if date_from is not None:
@@ -224,6 +239,7 @@ class Store:
         end_time: datetime.time | None = _UNSET,
         medium_id: int = _UNSET,
         venue_id: int | None = _UNSET,
+        caldav_uid: str | None = _UNSET,
     ) -> Entry:
         current = self.get_entry(entry_id)
         new_title = current.title if title is _UNSET else title
@@ -232,9 +248,10 @@ class Store:
         new_end = current.end_time if end_time is _UNSET else end_time
         new_medium = current.medium_id if medium_id is _UNSET else medium_id
         new_venue = current.venue_id if venue_id is _UNSET else venue_id
+        new_caldav_uid = current.caldav_uid if caldav_uid is _UNSET else caldav_uid
         self._conn.execute(
             "UPDATE entries SET title=?, date=?, start_time=?, end_time=?, "
-            "medium_id=?, venue_id=? WHERE id=?",
+            "medium_id=?, venue_id=?, caldav_uid=? WHERE id=?",
             (
                 new_title,
                 new_date.isoformat(),
@@ -242,6 +259,7 @@ class Store:
                 new_end.isoformat() if new_end else None,
                 new_medium,
                 new_venue,
+                new_caldav_uid,
                 entry_id,
             ),
         )

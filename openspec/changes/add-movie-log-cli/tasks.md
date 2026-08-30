@@ -20,11 +20,11 @@
 
 ## 4. Calendar sync
 
-- [ ] 4.1 Implement a CalDAV client wrapper around `caldav`/`icalendar` for the configured Baikal calendar, and verify with a connectivity check against a test calendar
-- [ ] 4.2 Implement VEVENT creation with the date-only/start-only/full-range mapping rules, and verify with tests for all three time-completeness cases
-- [ ] 4.3 Implement push-on-create that stores the returned CalDAV UID on the local entry, and verify by creating an entry and confirming the UID round-trips
-- [ ] 4.4 Implement update/delete propagation keyed by the stored UID, and verify with tests that update and delete a local entry and check the corresponding VEVENT changed or is gone
-- [ ] 4.5 Implement sync-failure handling (local entry persists, failure is reported, push is retryable) and verify by simulating an unreachable calendar during logging
+- [x] 4.1 Implement a CalDAV client wrapper around `caldav`/`icalendar` for the configured Baikal calendar, and verify with a connectivity check against a test calendar
+- [x] 4.2 Implement VEVENT creation with the date-only/start-only/full-range mapping rules, and verify with tests for all three time-completeness cases
+- [x] 4.3 Implement push-on-create that stores the returned CalDAV UID on the local entry, and verify by creating an entry and confirming the UID round-trips
+- [x] 4.4 Implement update/delete propagation keyed by the stored UID, and verify with tests that update and delete a local entry and check the corresponding VEVENT changed or is gone
+- [x] 4.5 Implement sync-failure handling (local entry persists, failure is reported, push is retryable) and verify by simulating an unreachable calendar during logging
 
 ## 5. Metadata
 
