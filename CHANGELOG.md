@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.3.0...movie-planner-v0.3.1) (2026-08-30)
+
+
+### Documentation
+
+* add pip/pipx install instructions to the README ([89b3088](https://github.com/alrayyes/movie-planner/commit/89b3088496cc3caa29346bbcd9168bf8acf3be37))
+* add pip/pipx install instructions to the README ([f6267e3](https://github.com/alrayyes/movie-planner/commit/f6267e3df455ff9b8c51b17a4076792f2a58beaa))
+
 ## [0.3.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.2.0...movie-planner-v0.3.0) (2026-08-30)
 
 
