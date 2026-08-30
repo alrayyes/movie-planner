@@ -12,11 +12,6 @@ prompt, enriches entries with IMDb/Rotten Tomatoes/Metacritic ratings via
 OMDb and a manually entered Letterboxd link, and catches accidental
 duplicate log entries with fuzzy title matching.
 
-**Status: chassis only.** The commands described below (`log`, `list`,
-`update`, `delete`, `locations`, `import`) don't exist yet. The full plan
-— proposal, design decisions, and the task breakdown — lives in
-[`openspec/changes/add-movie-log-cli/`](openspec/changes/add-movie-log-cli/).
-
 ## Requirements
 
 - **Python 3.14 or newer.**
@@ -37,10 +32,10 @@ duplicate log entries with fuzzy title matching.
   tools resolve and stay pinned.
 - **[Vale](https://vale.sh)**, pinned in
   [CONTRIBUTING.md](CONTRIBUTING.md#getting-set-up).
-- **A Baikal (CalDAV) calendar already set up**, once calendar sync
-  lands — this tool doesn't provision one.
-- **An [OMDb API key](https://www.omdbapi.com/apikey.aspx)**, once
-  metadata fetching lands.
+- **A Baikal (CalDAV) calendar already set up** — this tool doesn't
+  provision one, only syncs to it.
+- **An [OMDb API key](https://www.omdbapi.com/apikey.aspx)**, for the
+  IMDb/Rotten Tomatoes/Metacritic ratings fetched on each logged entry.
 
 ## Installation
 
@@ -56,9 +51,32 @@ uv sync
 uv run movie-planner --help
 ```
 
-Real commands land as the tasks in
-[`openspec/changes/add-movie-log-cli/tasks.md`](openspec/changes/add-movie-log-cli/tasks.md)
-get implemented.
+Log a viewing interactively (each field prompts if you leave it off, when
+running in a terminal):
+
+```sh
+uv run movie-planner log --title "Dune" --date 2026-01-01 --medium cinema \
+  --venue "Grand Vista Cinema"
+```
+
+A likely duplicate (same normalized title, same day) asks for confirmation
+before adding — pass `--force` to skip that, or to add it non-interactively.
+
+Other commands:
+
+```sh
+uv run movie-planner list --from 2026-01-01 --to 2026-01-31 --medium cinema
+uv run movie-planner update 3 --title "Dune Part Two"
+uv run movie-planner delete 3
+uv run movie-planner locations media add cinema --physical
+uv run movie-planner locations venues add "Grand Vista Cinema"
+uv run movie-planner import movies.csv --force
+uv run movie-planner sync retry
+```
+
+`import` accepts a `.csv` or `.json` file with the same fields as
+`examples/`; `sync retry` re-pushes any entry that failed to sync when it
+was logged or imported.
 
 ## Configuration
 

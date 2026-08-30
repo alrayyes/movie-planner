@@ -36,12 +36,24 @@ class ParsedRow:
 
 
 @dataclass(frozen=True)
+class ImportedEntry:
+    """An entry created by `run_import`, paired with the venue name used to
+    create it - the venue's own name isn't on `Entry`, and the calendar
+    sync push needs it to build the VEVENT's location field.
+    """
+
+    entry: Entry
+    venue: str | None
+
+
+@dataclass(frozen=True)
 class ImportSummary:
     imported: int
     skipped_duplicates: int
     failed: int
     skipped_details: list[str]
     failed_details: list[str]
+    imported_entries: list[ImportedEntry]
 
 
 def _parse_time(value: str | None) -> datetime.time | None:
@@ -95,6 +107,7 @@ def run_import(
     failed = 0
     skipped_details = []
     failed_details = []
+    imported_entries: list[ImportedEntry] = []
 
     for row in rows:
         if row.error is not None:
@@ -126,6 +139,7 @@ def run_import(
         if r.imdb_url:
             entry = store.update_entry(entry.id, imdb_url=r.imdb_url)
         existing.append(entry)
+        imported_entries.append(ImportedEntry(entry=entry, venue=r.venue))
         imported += 1
 
     return ImportSummary(
@@ -134,4 +148,5 @@ def run_import(
         failed=failed,
         skipped_details=skipped_details,
         failed_details=failed_details,
+        imported_entries=imported_entries,
     )

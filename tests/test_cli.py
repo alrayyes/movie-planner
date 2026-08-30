@@ -1,6 +1,14 @@
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+from fakes import FakeCalendar
 from typer.testing import CliRunner
 
+from movie_planner.calendar_sync import CalendarClient
 from movie_planner.cli import app
+from movie_planner.omdb import MovieRatings
+from movie_planner.store import Store
 
 runner = CliRunner()
 
@@ -10,3 +18,581 @@ def test_help() -> None:
 
     assert result.exit_code == 0
     assert "movie-planner" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "args", [["log", "--help"], ["locations", "media", "--help"], ["sync", "retry", "--help"]]
+)
+def test_subcommand_help_does_not_require_a_config_file(
+    args: list[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """`--config` isn't passed, so this only works if `--help` short-circuits
+    before the app callback tries to load a (nonexistent) config file.
+    """
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+    result = runner.invoke(app, args)
+
+    assert result.exit_code == 0, result.output
+
+
+@pytest.fixture
+def config_path(tmp_path: Path) -> Path:
+    db_path = tmp_path / "movies.db"
+    path = tmp_path / "config.toml"
+    path.write_text(
+        f"""
+        [caldav]
+        url = "https://baikal.example.com/calendars/movies/"
+        username = "moviewatcher"
+        password = "secret"
+
+        [omdb]
+        api_key = "test-key"
+
+        [storage]
+        db_path = "{db_path}"
+        """
+    )
+    return path
+
+
+@pytest.fixture
+def calendar(monkeypatch: pytest.MonkeyPatch) -> FakeCalendar:
+    fake = FakeCalendar()
+    monkeypatch.setattr(
+        CalendarClient, "connect", classmethod(lambda cls, **kw: CalendarClient(fake))
+    )
+    return fake
+
+
+@pytest.fixture
+def no_omdb_match(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: None)
+
+
+@pytest.fixture
+def omdb_match(monkeypatch: pytest.MonkeyPatch) -> None:
+    ratings = MovieRatings(imdb="8.5/10", rotten_tomatoes="91%", metacritic="80")
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: ratings)
+
+
+def _store(config_path: Path) -> Iterator[Store]:
+    import tomllib
+
+    with config_path.open("rb") as f:
+        data = tomllib.load(f)
+    return Store(Path(data["storage"]["db_path"]))
+
+
+# --- log: tasks 3.3, 7.1 ---
+
+
+def test_log_creates_entry_and_syncs_to_calendar(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.title == "Dune"
+    assert entry.caldav_uid is not None
+    assert entry.caldav_uid in calendar.events_by_uid
+    store.close()
+
+
+def test_log_venue_not_required_for_non_physical_medium(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Paper Constellations",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "netflix",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.venue_id is None
+    store.close()
+
+
+def test_log_duplicate_without_force_is_rejected_non_interactively(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    common = [
+        "--config",
+        str(config_path),
+        "log",
+        "--title",
+        "Solstice Run",
+        "--date",
+        "2026-01-01",
+        "--medium",
+        "cinema",
+    ]
+    first = runner.invoke(app, common)
+    assert first.exit_code == 0, first.output
+
+    second = runner.invoke(app, common)
+
+    assert second.exit_code != 0
+    assert "duplicate" in second.output.lower()
+    store = _store(config_path)
+    assert len(store.list_entries()) == 1
+    store.close()
+
+
+def test_log_duplicate_with_force_is_persisted(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    common = [
+        "--config",
+        str(config_path),
+        "log",
+        "--title",
+        "Solstice Run",
+        "--date",
+        "2026-01-01",
+        "--medium",
+        "cinema",
+    ]
+    first = runner.invoke(app, common)
+    assert first.exit_code == 0, first.output
+
+    second = runner.invoke(app, [*common, "--force"])
+
+    assert second.exit_code == 0, second.output
+    store = _store(config_path)
+    assert len(store.list_entries()) == 2
+    store.close()
+
+
+def test_log_fetches_omdb_ratings(
+    config_path: Path, calendar: FakeCalendar, omdb_match: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.imdb_rating == "8.5/10"
+    store.close()
+
+
+def test_log_sync_failure_still_persists_the_entry(config_path: Path, no_omdb_match: None) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "calendar" in result.output.lower()
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid is None
+    store.close()
+
+
+# --- list ---
+
+
+def test_list_shows_logged_entries(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "list"])
+
+    assert result.exit_code == 0, result.output
+    assert "Dune" in result.output
+    assert "cinema" in result.output
+    assert "Grand Vista Cinema" in result.output
+
+
+# --- error paths ---
+
+
+def test_log_without_title_fails_non_interactively(
+    config_path: Path, calendar: FakeCalendar
+) -> None:
+    result = runner.invoke(
+        app, ["--config", str(config_path), "log", "--date", "2026-01-01", "--medium", "cinema"]
+    )
+
+    assert result.exit_code != 0
+    assert "title is required" in result.output.lower()
+
+
+def test_log_with_invalid_date_fails(config_path: Path, calendar: FakeCalendar) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "not-a-date",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "not a valid date" in result.output.lower()
+
+
+def test_update_unknown_entry_fails(config_path: Path) -> None:
+    result = runner.invoke(app, ["--config", str(config_path), "update", "999", "--title", "X"])
+
+    assert result.exit_code != 0
+    assert "999" in result.output
+
+
+def test_delete_unknown_entry_fails(config_path: Path) -> None:
+    result = runner.invoke(app, ["--config", str(config_path), "delete", "999"])
+
+    assert result.exit_code != 0
+    assert "999" in result.output
+
+
+def test_locations_media_add_duplicate_fails(config_path: Path) -> None:
+    runner.invoke(app, ["--config", str(config_path), "locations", "media", "add", "cinema"])
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "locations", "media", "add", "cinema"]
+    )
+
+    assert result.exit_code != 0
+    assert "cinema" in result.output.lower()
+
+
+def test_locations_venues_remove_unknown_fails(config_path: Path) -> None:
+    result = runner.invoke(
+        app, ["--config", str(config_path), "locations", "venues", "remove", "Nowhere"]
+    )
+
+    assert result.exit_code != 0
+    assert "nowhere" in result.output.lower()
+
+
+def test_import_unsupported_file_type_fails(config_path: Path, tmp_path: Path) -> None:
+    bad_path = tmp_path / "movies.txt"
+    bad_path.write_text("not a csv or json")
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(bad_path)])
+
+    assert result.exit_code != 0
+    assert "unsupported" in result.output.lower()
+
+
+# --- update / delete: task 7.2 ---
+
+
+def test_update_changes_entry_and_propagates_to_calendar(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    store.close()
+
+    result = runner.invoke(
+        app,
+        ["--config", str(config_path), "update", str(entry.id), "--title", "Dune Part Two"],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    updated = store.get_entry(entry.id)
+    assert updated.title == "Dune Part Two"
+    assert "Dune Part Two" in calendar.events_by_uid[updated.caldav_uid].data
+    store.close()
+
+
+def test_delete_removes_entry_and_calendar_event(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    uid = entry.caldav_uid
+    store.close()
+
+    result = runner.invoke(app, ["--config", str(config_path), "delete", str(entry.id)])
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    assert store.list_entries() == []
+    assert calendar.events_by_uid[uid].deleted is True
+    store.close()
+
+
+# --- locations ---
+
+
+def test_locations_media_add_list_remove(config_path: Path) -> None:
+    add = runner.invoke(
+        app, ["--config", str(config_path), "locations", "media", "add", "cinema", "--physical"]
+    )
+    assert add.exit_code == 0, add.output
+
+    listing = runner.invoke(app, ["--config", str(config_path), "locations", "media", "list"])
+    assert "cinema" in listing.output
+
+    remove = runner.invoke(
+        app, ["--config", str(config_path), "locations", "media", "remove", "cinema"]
+    )
+    assert remove.exit_code == 0, remove.output
+    listing_after = runner.invoke(app, ["--config", str(config_path), "locations", "media", "list"])
+    assert "cinema" not in listing_after.output
+
+
+def test_locations_venues_add_list_remove(config_path: Path) -> None:
+    add = runner.invoke(
+        app, ["--config", str(config_path), "locations", "venues", "add", "Grand Vista"]
+    )
+    assert add.exit_code == 0, add.output
+
+    listing = runner.invoke(app, ["--config", str(config_path), "locations", "venues", "list"])
+    assert "Grand Vista" in listing.output
+
+    remove = runner.invoke(
+        app, ["--config", str(config_path), "locations", "venues", "remove", "Grand Vista"]
+    )
+    assert remove.exit_code == 0, remove.output
+
+
+def test_locations_remove_medium_in_use_is_rejected(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "locations", "media", "remove", "cinema"]
+    )
+
+    assert result.exit_code != 0
+    assert "cinema" in result.output.lower()
+
+
+# --- import: tasks 3.4, 7.1, 7.3 ---
+
+
+def test_import_csv_persists_rows_and_syncs_to_calendar(
+    config_path: Path, calendar: FakeCalendar, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text(
+        "title,date,start_time,end_time,medium,venue,imdb_url\n"
+        "Dune,2026-01-01,,,cinema,Grand Vista Cinema,\n"
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "1 imported" in result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid in calendar.events_by_uid
+    store.close()
+
+
+def test_import_reports_skipped_duplicates_in_summary(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium\nDune,2026-01-01,cinema\n")
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "1 skipped" in result.output
+    store = _store(config_path)
+    assert len(store.list_entries()) == 1
+    store.close()
+
+
+def test_import_force_persists_duplicates(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium\nDune,2026-01-01,cinema\n")
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path), "--force"])
+
+    assert result.exit_code == 0, result.output
+    assert "1 imported" in result.output
+    store = _store(config_path)
+    assert len(store.list_entries()) == 2
+    store.close()
+
+
+# --- sync retry ---
+
+
+def test_sync_retry_pushes_unsynced_entries(config_path: Path, no_omdb_match: None) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid is None  # no calendar reachable during log
+    store.close()
+
+    fake = FakeCalendar()
+    import pytest as _pytest
+
+    with _pytest.MonkeyPatch.context() as mp:
+        mp.setattr(CalendarClient, "connect", classmethod(lambda cls, **kw: CalendarClient(fake)))
+        result = runner.invoke(app, ["--config", str(config_path), "sync", "retry"])
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (retried,) = store.list_entries()
+    assert retried.caldav_uid is not None
+    assert retried.caldav_uid in fake.events_by_uid
+    store.close()
