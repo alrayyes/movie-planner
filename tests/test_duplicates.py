@@ -29,6 +29,7 @@ def _entry(entry_id: int, title: str, entry_date: date) -> Entry:
         end_time=None,
         medium_id=1,
         venue_id=None,
+        caldav_uid=None,
     )
 
 

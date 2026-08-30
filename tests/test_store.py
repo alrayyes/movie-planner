@@ -148,6 +148,56 @@ def test_non_physical_medium_allows_no_venue(store: Store) -> None:
     assert entry.venue_id is None
 
 
+def test_new_entry_has_no_caldav_uid(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+
+    assert entry.caldav_uid is None
+
+
+def test_update_entry_sets_caldav_uid(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+
+    updated = store.update_entry(entry.id, caldav_uid="abc-123")
+
+    assert updated.caldav_uid == "abc-123"
+    assert store.get_entry(entry.id).caldav_uid == "abc-123"
+
+
+def test_migrates_a_database_created_before_caldav_uid_existed(tmp_path: Path) -> None:
+    import sqlite3
+
+    db_path = tmp_path / "movies.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE media (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            is_physical_place INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE venues (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+        CREATE TABLE entries (
+            id INTEGER PRIMARY KEY, title TEXT NOT NULL, date TEXT NOT NULL,
+            start_time TEXT, end_time TEXT,
+            medium_id INTEGER NOT NULL REFERENCES media(id),
+            venue_id INTEGER REFERENCES venues(id)
+        );
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    s = Store(db_path)
+    try:
+        medium = s.add_medium("cinema", is_physical_place=True)
+        entry = s.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+        assert entry.caldav_uid is None
+    finally:
+        s.close()
+
+
 def test_list_entries_ordered_by_date(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     store.create_entry(title="Second", date=date(2026, 2, 1), medium_id=medium.id)
