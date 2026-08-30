@@ -49,6 +49,8 @@ pre-commit:
       glob: "*.md"
       exclude:
         - "CHANGELOG.md"
+        - "openspec/**"
+        - ".claude/**"
       run: vale {staged_files}
 
 commit-msg:
