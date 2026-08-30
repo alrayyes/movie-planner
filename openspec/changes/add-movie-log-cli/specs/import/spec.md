@@ -1,7 +1,7 @@
 ## Purpose
 
-Brings existing viewing history into the local store in bulk from CSV,
-JSON, or the existing org-mode log format.
+Brings existing viewing history into the local store in bulk from CSV
+or JSON.
 
 ## ADDED Requirements
 
@@ -24,18 +24,6 @@ validation and duplicate-detection rules.
 - **WHEN** the user imports a JSON file with valid entries
 - **THEN** each entry is persisted as a movie-log entry and synced to
   the calendar
-
-### Requirement: Import from org-mode
-The system SHALL import viewing entries from an org-mode file matching
-the existing log's structure — a heading per entry, an org timestamp
-for date/time, and CINEMA/IMDB properties — applying the same
-validation and duplicate-detection rules.
-
-#### Scenario: Valid org-mode import
-- **WHEN** the user imports an org-mode file matching the existing log
-  structure
-- **THEN** each entry is persisted as a movie-log entry, with its IMDB
-  property stored as metadata and CINEMA property stored as venue
 
 ### Requirement: Import summary
 The system SHALL report, after each import run, how many rows were

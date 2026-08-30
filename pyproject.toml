@@ -18,7 +18,6 @@ dependencies = [
   "caldav==3.2.1",
   "httpx==0.28.1",
   "icalendar==7.3",
-  "orgparse==0.4.20251020",
   "questionary==2.1.1",
   "rapidfuzz==3.14.5",
   "typer==0.27.1",
