@@ -1,10 +1,10 @@
 from collections.abc import Iterator
-from dataclasses import dataclass, field
 from datetime import date, time
 from pathlib import Path
 
 import icalendar
 import pytest
+from fakes import FakeCalendar
 
 from movie_planner.calendar_sync import (
     CalendarClient,
@@ -89,44 +89,6 @@ def test_build_vevent_uid_and_title_carried_through() -> None:
 
 
 # --- CalendarClient: task 4.1, wrapping a caldav.Calendar-like object ---
-
-
-@dataclass
-class FakeEvent:
-    data: str
-    deleted: bool = False
-
-    def save(self) -> None:
-        pass
-
-    def delete(self) -> None:
-        self.deleted = True
-
-
-@dataclass
-class FakeCalendar:
-    """Duck-types the slice of caldav.Calendar this module uses."""
-
-    events_by_uid: dict[str, FakeEvent] = field(default_factory=dict)
-    fail_next: bool = False
-
-    def events(self) -> list[FakeEvent]:
-        if self.fail_next:
-            raise ConnectionError("simulated failure")
-        return list(self.events_by_uid.values())
-
-    def add_event(self, ical: str) -> FakeEvent:
-        if self.fail_next:
-            raise ConnectionError("simulated failure")
-        uid = str(icalendar.Calendar.from_ical(ical).walk("VEVENT")[0]["uid"])
-        event = FakeEvent(data=ical)
-        self.events_by_uid[uid] = event
-        return event
-
-    def event_by_uid(self, uid: str) -> FakeEvent:
-        if self.fail_next:
-            raise ConnectionError("simulated failure")
-        return self.events_by_uid[uid]
 
 
 def test_calendar_client_connect_wires_up_the_dav_client(monkeypatch: pytest.MonkeyPatch) -> None:
