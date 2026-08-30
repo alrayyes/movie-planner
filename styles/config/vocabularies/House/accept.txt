@@ -1,6 +1,7 @@
 # Product and tool names, spelled the way their owners spell them. Vale.Terms
 # holds the prose to exactly these, so casing here is the casing everywhere.
 Dependabot
+Codecov
 GitHub
 [Rr]uff
 [Tt]yper
