@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.4.1...movie-planner-v0.5.0) (2026-08-30)
+
+
+### Features
+
+* **cli:** add an init command to write a starter config.toml ([#29](https://github.com/alrayyes/movie-planner/issues/29)) ([f6c553a](https://github.com/alrayyes/movie-planner/commit/f6c553a553b993416b84aae3b65857eea5744115)), closes [#28](https://github.com/alrayyes/movie-planner/issues/28)
+
 ## [0.4.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.4.0...movie-planner-v0.4.1) (2026-08-30)
 
 
