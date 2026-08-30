@@ -7,9 +7,9 @@
 
 ## 2. Local data store
 
-- [ ] 2.1 Define the SQLite schema for entries, medium reference table, and venue reference table, and verify all tables are created on first run
-- [ ] 2.2 Implement medium/venue CRUD (add/list/remove) enforcing rejection of removal while referenced, and verify with a test that removes a medium in use and asserts it's rejected
-- [ ] 2.3 Implement entry CRUD (create/list/update/delete) against the schema, and verify with tests covering optional start/end time and venue-only-prompted-for-physical-medium
+- [x] 2.1 Define the SQLite schema for entries, medium reference table, and venue reference table, and verify all tables are created on first run
+- [x] 2.2 Implement medium/venue CRUD (add/list/remove) enforcing rejection of removal while referenced, and verify with a test that removes a medium in use and asserts it's rejected
+- [x] 2.3 Implement entry CRUD (create/list/update/delete) against the schema, and verify with tests covering optional start/end time and venue-only-prompted-for-physical-medium
 
 ## 3. Duplicate detection
 
