@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from datetime import date, time
 from pathlib import Path
 
@@ -7,19 +8,26 @@ from movie_planner.store import Store, StoreError
 
 
 @pytest.fixture
-def store(tmp_path: Path) -> Store:
-    return Store(tmp_path / "movies.db")
+def store(tmp_path: Path) -> Iterator[Store]:
+    s = Store(tmp_path / "movies.db")
+    yield s
+    s.close()
 
 
 def test_init_creates_all_tables_on_first_run(tmp_path: Path) -> None:
     db_path = tmp_path / "movies.db"
 
-    Store(db_path)
+    Store(db_path).close()
 
     import sqlite3
 
     conn = sqlite3.connect(db_path)
-    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    try:
+        tables = {
+            row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+    finally:
+        conn.close()
     assert {"entries", "media", "venues"} <= tables
 
 
