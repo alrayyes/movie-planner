@@ -35,10 +35,10 @@
 
 ## 6. Import
 
-- [ ] 6.1 Implement CSV import mapping columns to entry fields, routed through validation and duplicate detection, and verify against a sample CSV fixture
-- [ ] 6.2 Implement JSON import with the same field set and rules, and verify against a sample JSON fixture
-- [ ] 6.3 Implement org-mode import matching the existing log's heading/timestamp/CINEMA/IMDB structure, and verify against a fixture derived from the real log format, including its duplicate-PROPERTIES-drawer quirk
-- [ ] 6.4 Implement the end-of-import summary (imported / skipped-duplicate / failed counts) and verify with a fixture that produces one of each outcome
+- [x] 6.1 Implement CSV import mapping columns to entry fields, routed through validation and duplicate detection, and verify against a sample CSV fixture
+- [x] 6.2 Implement JSON import with the same field set and rules, and verify against a sample JSON fixture
+- [x] 6.3 Implement org-mode import matching the existing log's heading/timestamp/CINEMA/IMDB structure, and verify against a fixture derived from the real log format, including its duplicate-PROPERTIES-drawer quirk
+- [x] 6.4 Implement the end-of-import summary (imported / skipped-duplicate / failed counts) and verify with a fixture that produces one of each outcome
 
 ## 7. Interactive CLI wiring & end-to-end
 
