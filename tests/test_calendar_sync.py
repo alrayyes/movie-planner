@@ -27,14 +27,14 @@ def test_build_vevent_date_only_is_all_day() -> None:
     ical_text = build_vevent(
         uid="uid-1",
         title="Paper Constellations",
-        entry_date=date(2026, 3, 14),
+        entry_date=date(2024, 1, 20),
         start_time=None,
         end_time=None,
         venue=None,
     )
 
     event = _parse(ical_text)
-    assert event["dtstart"].dt == date(2026, 3, 14)
+    assert event["dtstart"].dt == date(2024, 1, 20)
     assert "dtend" not in event
 
 
@@ -42,7 +42,7 @@ def test_build_vevent_start_only_has_no_dtend() -> None:
     ical_text = build_vevent(
         uid="uid-2",
         title="Solstice Run",
-        entry_date=date(2026, 5, 19),
+        entry_date=date(2024, 6, 2),
         start_time=time(16, 10),
         end_time=None,
         venue="Riverside Multiplex",
@@ -51,7 +51,7 @@ def test_build_vevent_start_only_has_no_dtend() -> None:
     event = _parse(ical_text)
     from datetime import datetime
 
-    assert event["dtstart"].dt == datetime(2026, 5, 19, 16, 10)
+    assert event["dtstart"].dt == datetime(2024, 6, 2, 16, 10)
     assert "dtend" not in event
     assert str(event["location"]) == "Riverside Multiplex"
 
@@ -60,7 +60,7 @@ def test_build_vevent_full_range_has_dtstart_and_dtend() -> None:
     ical_text = build_vevent(
         uid="uid-3",
         title="The Clockmaker's Daughter",
-        entry_date=date(2026, 1, 3),
+        entry_date=date(2024, 3, 15),
         start_time=time(14, 0),
         end_time=time(16, 32),
         venue="Grand Vista Cinema",
@@ -69,8 +69,8 @@ def test_build_vevent_full_range_has_dtstart_and_dtend() -> None:
     event = _parse(ical_text)
     from datetime import datetime
 
-    assert event["dtstart"].dt == datetime(2026, 1, 3, 14, 0)
-    assert event["dtend"].dt == datetime(2026, 1, 3, 16, 32)
+    assert event["dtstart"].dt == datetime(2024, 3, 15, 14, 0)
+    assert event["dtend"].dt == datetime(2024, 3, 15, 16, 32)
 
 
 def test_build_vevent_uid_and_title_carried_through() -> None:
