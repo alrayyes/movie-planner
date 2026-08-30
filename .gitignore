@@ -1,5 +1,9 @@
 # What this project builds, not what an editor or OS drops beside it —
 # those live in ~/.config/git/gitignore_global, not here.
+
+# Claude Code session runtime state, not project scaffolding.
+.claude/scheduled_tasks.lock
+
 __pycache__/
 *.py[cod]
 *.egg-info/

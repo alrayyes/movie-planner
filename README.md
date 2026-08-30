@@ -59,6 +59,27 @@ Real commands land as the tasks in
 [`openspec/changes/add-movie-log-cli/tasks.md`](openspec/changes/add-movie-log-cli/tasks.md)
 get implemented.
 
+## Configuration
+
+A TOML file at `$XDG_CONFIG_HOME/movie-planner/config.toml`
+(`~/.config/movie-planner/config.toml` if `XDG_CONFIG_HOME` isn't set):
+
+```toml
+[caldav]
+url = "https://baikal.example.com/dav.php/calendars/ryan/movies/"
+username = "ryan"
+password = "..."
+
+[omdb]
+api_key = "..."
+
+[storage]
+db_path = "~/.local/share/movie-planner/movies.db"
+```
+
+All three sections are required. A missing file or a missing key fails
+with a message naming the problem, not a stack trace.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the toolchain, the hooks, and
