@@ -533,7 +533,6 @@ dependencies = [
     { name = "caldav" },
     { name = "httpx" },
     { name = "icalendar" },
-    { name = "orgparse" },
     { name = "questionary" },
     { name = "rapidfuzz" },
     { name = "typer" },
@@ -551,8 +550,7 @@ dev = [
 requires-dist = [
     { name = "caldav", specifier = "==3.2.1" },
     { name = "httpx", specifier = "==0.28.1" },
-    { name = "icalendar", specifier = "==7.3.0" },
-    { name = "orgparse", specifier = "==0.4.20251020" },
+    { name = "icalendar", specifier = "==7.3" },
     { name = "questionary", specifier = "==2.1.1" },
     { name = "rapidfuzz", specifier = "==3.14.5" },
     { name = "typer", specifier = "==0.27.1" },
@@ -578,15 +576,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/21/e0/bf0dfc98ff4fd6dc1f4872972c14688f159013ebecda27c71ccb42bfdff4/niquests-3.21.1.tar.gz", hash = "sha256:8ba6ee8712570ae41dfc59ac2ac7e509dcde660c6cc47078b43be423a2f99e64", size = 1081377, upload-time = "2026-08-28T09:36:36.291Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/be/fe/fca859af3c83c718d8228c918716b6b32dcda96ee94980cb9849a415e1c9/niquests-3.21.1-py3-none-any.whl", hash = "sha256:ac1ff8061cb480cdaad07f08b95cf21ee0a68ef21fbc2b6ddf5afff8e0d0072e", size = 230450, upload-time = "2026-08-28T09:36:34.682Z" },
-]
-
-[[package]]
-name = "orgparse"
-version = "0.4.20251020"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e9/52/a27b9fd19fa3677f4f831d35e1c441769eefac3551f46dc988333661f53c/orgparse-0.4.20251020.tar.gz", hash = "sha256:64415d0f889c90612e5a55db7f350a6ee04a353573489562bb9c479ef4cd100c", size = 40735, upload-time = "2025-10-30T22:35:41.352Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/27/14/6c0076cc49e14e0071fb7707f4c4e97cc1c44efbcc59fad2b56aeda7ede4/orgparse-0.4.20251020-py3-none-any.whl", hash = "sha256:8738e422aaba1bc0567548a282be60a4a0f1c60bfd6a94c8c977f04fe5de904c", size = 34839, upload-time = "2025-10-30T22:35:40.49Z" },
 ]
 
 [[package]]

@@ -1,0 +1,25 @@
+[
+  {
+    "title": "The Clockmaker's Daughter",
+    "date": "2024-03-15",
+    "start_time": "19:00",
+    "end_time": "21:15",
+    "medium": "cinema",
+    "venue": "Grand Vista Cinema",
+    "imdb_url": "https://www.imdb.com/title/tt0000101/"
+  },
+  {
+    "title": "Solstice Run",
+    "date": "2024-06-02",
+    "start_time": "20:30",
+    "medium": "cinema",
+    "venue": "Riverside Multiplex",
+    "imdb_url": "https://www.imdb.com/title/tt0000102/"
+  },
+  {
+    "title": "Paper Constellations",
+    "date": "2024-01-20",
+    "medium": "netflix",
+    "imdb_url": "https://www.imdb.com/title/tt0000103/"
+  }
+]
