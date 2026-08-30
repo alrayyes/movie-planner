@@ -9,11 +9,11 @@ from movie_planner.store import Entry
 @pytest.mark.parametrize(
     ("title", "expected"),
     [
-        ("The Housemaid", "the housemaid"),
-        ("Ready or Not 2: Here I Come - Movies", "ready or not 2 here i come"),
-        ("Ready or Not 2: Here I Come", "ready or not 2 here i come"),
-        ("Loverboy: Vertrouw Niemand", "loverboy vertrouw niemand"),
-        ("  Good Boy  ", "good boy"),
+        ("The Clockmaker's Daughter", "the clockmakers daughter"),
+        ("Midnight Ferry: Part Two - Movies", "midnight ferry part two"),
+        ("Midnight Ferry: Part Two", "midnight ferry part two"),
+        ("Nightfall Junction: No One Returns", "nightfall junction no one returns"),
+        ("  Quiet Static  ", "quiet static"),
     ],
 )
 def test_normalize_title(title: str, expected: str) -> None:
@@ -25,37 +25,38 @@ def _entry(entry_id: int, title: str, entry_date: date) -> Entry:
 
 
 def test_find_duplicate_same_title_same_day_is_flagged() -> None:
-    existing = [_entry(1, "Ready or Not 2: Here I Come - Movies", date(2026, 3, 29))]
+    existing = [_entry(1, "Midnight Ferry: Part Two - Movies", date(2024, 8, 10))]
 
-    match = find_duplicate("Ready or Not 2: Here I Come", date(2026, 3, 29), existing)
+    match = find_duplicate("Midnight Ferry: Part Two", date(2024, 8, 10), existing)
 
     assert match is existing[0]
 
 
 def test_find_duplicate_same_title_different_day_not_flagged() -> None:
-    existing = [_entry(1, "The Housemaid", date(2026, 1, 3))]
+    existing = [_entry(1, "The Clockmaker's Daughter", date(2024, 3, 15))]
 
-    match = find_duplicate("The Housemaid", date(2026, 6, 1), existing)
+    match = find_duplicate("The Clockmaker's Daughter", date(2024, 11, 5), existing)
 
     assert match is None
 
 
 def test_find_duplicate_different_title_same_day_not_flagged() -> None:
-    existing = [_entry(1, "The Housemaid", date(2026, 1, 3))]
+    existing = [_entry(1, "The Clockmaker's Daughter", date(2024, 3, 15))]
 
-    match = find_duplicate("Cold Storage", date(2026, 1, 3), existing)
+    match = find_duplicate("Glass Horizon", date(2024, 3, 15), existing)
 
     assert match is None
 
 
 def test_find_duplicate_respects_configurable_threshold() -> None:
-    existing = [_entry(1, "The Housemaid", date(2026, 1, 3))]
+    existing = [_entry(1, "The Clockmaker's Daughter", date(2024, 3, 15))]
 
-    # "The House" is a loose partial match - passes a low threshold, not the
-    # high default.
-    assert find_duplicate("The House", date(2026, 1, 3), existing, threshold=50) is existing[0]
-    assert find_duplicate("The House", date(2026, 1, 3), existing, threshold=95) is None
+    # A loose partial match - passes a low threshold, not the high default.
+    assert (
+        find_duplicate("The Clockmaker", date(2024, 3, 15), existing, threshold=50) is existing[0]
+    )
+    assert find_duplicate("The Clockmaker", date(2024, 3, 15), existing, threshold=95) is None
 
 
 def test_find_duplicate_with_no_existing_entries() -> None:
-    assert find_duplicate("Anything", date(2026, 1, 1), []) is None
+    assert find_duplicate("Anything", date(2024, 1, 1), []) is None

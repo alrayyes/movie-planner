@@ -13,7 +13,7 @@ SHALL persist the entry to the local store.
 
 #### Scenario: Logging with a full time range
 - **WHEN** the user runs the log command and provides title, date, start
-  time, end time, medium "cinema", and venue "Tuschinski"
+  time, end time, medium "cinema", and venue "Grand Vista Cinema"
 - **THEN** a new entry is persisted with all provided fields
 
 #### Scenario: Logging with unknown times
@@ -31,8 +31,8 @@ medium list and the venue list, and SHALL offer only currently-defined
 values, plus an option to add a new one, when prompting.
 
 #### Scenario: Adding a new venue
-- **WHEN** the user adds venue "Pathe Noord" via the locations command
-- **THEN** "Pathe Noord" appears as a selectable venue on subsequent log
+- **WHEN** the user adds venue "Starlight Cinema" via the locations command
+- **THEN** "Starlight Cinema" appears as a selectable venue on subsequent log
   entries
 
 #### Scenario: Removing a medium in use

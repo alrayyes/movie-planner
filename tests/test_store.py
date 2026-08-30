@@ -64,7 +64,7 @@ def test_remove_unknown_medium_raises(store: Store) -> None:
 
 def test_remove_medium_in_use_is_rejected(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
-    store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
 
     with pytest.raises(StoreError, match="cinema"):
         store.remove_medium("cinema")
@@ -73,55 +73,55 @@ def test_remove_medium_in_use_is_rejected(store: Store) -> None:
 
 
 def test_add_and_list_venues(store: Store) -> None:
-    store.add_venue("Tuschinski")
+    store.add_venue("Grand Vista Cinema")
     store.add_venue("City")
 
-    assert [v.name for v in store.list_venues()] == ["City", "Tuschinski"]
+    assert [v.name for v in store.list_venues()] == ["City", "Grand Vista Cinema"]
 
 
 def test_add_duplicate_venue_rejected(store: Store) -> None:
-    store.add_venue("Tuschinski")
+    store.add_venue("Grand Vista Cinema")
 
-    with pytest.raises(StoreError, match="Tuschinski"):
-        store.add_venue("Tuschinski")
+    with pytest.raises(StoreError, match="Grand Vista Cinema"):
+        store.add_venue("Grand Vista Cinema")
 
 
 def test_remove_unknown_venue_raises(store: Store) -> None:
-    with pytest.raises(StoreError, match="Tuschinski"):
-        store.remove_venue("Tuschinski")
+    with pytest.raises(StoreError, match="Grand Vista Cinema"):
+        store.remove_venue("Grand Vista Cinema")
 
 
 def test_remove_venue_not_in_use(store: Store) -> None:
-    store.add_venue("Tuschinski")
+    store.add_venue("Grand Vista Cinema")
 
-    store.remove_venue("Tuschinski")
+    store.remove_venue("Grand Vista Cinema")
 
     assert store.list_venues() == []
 
 
 def test_remove_venue_in_use_is_rejected(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
-    venue = store.add_venue("Tuschinski")
-    store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id, venue_id=venue.id)
+    venue = store.add_venue("Grand Vista Cinema")
+    store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id, venue_id=venue.id)
 
-    with pytest.raises(StoreError, match="Tuschinski"):
-        store.remove_venue("Tuschinski")
+    with pytest.raises(StoreError, match="Grand Vista Cinema"):
+        store.remove_venue("Grand Vista Cinema")
 
 
 def test_create_entry_with_full_time_range(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
-    venue = store.add_venue("Tuschinski")
+    venue = store.add_venue("Grand Vista Cinema")
 
     entry = store.create_entry(
-        title="The Housemaid",
-        date=date(2026, 1, 3),
+        title="The Clockmaker's Daughter",
+        date=date(2024, 3, 15),
         start_time=time(14, 0),
         end_time=time(16, 32),
         medium_id=medium.id,
         venue_id=venue.id,
     )
 
-    assert entry.title == "The Housemaid"
+    assert entry.title == "The Clockmaker's Daughter"
     assert entry.start_time == time(14, 0)
     assert entry.end_time == time(16, 32)
     assert entry.venue_id == venue.id
@@ -131,7 +131,7 @@ def test_create_entry_with_unknown_times(store: Store) -> None:
     medium = store.add_medium("netflix", is_physical_place=False)
 
     entry = store.create_entry(
-        title="Louis Theroux: Inside the Manosphere", date=date(2026, 3, 14), medium_id=medium.id
+        title="Paper Constellations", date=date(2024, 1, 20), medium_id=medium.id
     )
 
     assert entry.start_time is None
@@ -142,7 +142,7 @@ def test_create_entry_with_unknown_times(store: Store) -> None:
 def test_non_physical_medium_allows_no_venue(store: Store) -> None:
     medium = store.add_medium("netflix", is_physical_place=False)
 
-    entry = store.create_entry(title="A show", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.create_entry(title="A show", date=date(2024, 3, 15), medium_id=medium.id)
 
     assert medium.is_physical_place is False
     assert entry.venue_id is None
@@ -151,14 +151,14 @@ def test_non_physical_medium_allows_no_venue(store: Store) -> None:
 def test_new_entry_has_no_caldav_uid(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
 
-    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
 
     assert entry.caldav_uid is None
 
 
 def test_update_entry_sets_caldav_uid(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
-    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
 
     updated = store.update_entry(entry.id, caldav_uid="abc-123")
 
@@ -192,7 +192,7 @@ def test_migrates_a_database_created_before_caldav_uid_existed(tmp_path: Path) -
     s = Store(db_path)
     try:
         medium = s.add_medium("cinema", is_physical_place=True)
-        entry = s.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+        entry = s.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
         assert entry.caldav_uid is None
     finally:
         s.close()
@@ -201,7 +201,7 @@ def test_migrates_a_database_created_before_caldav_uid_existed(tmp_path: Path) -
 def test_list_entries_ordered_by_date(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     store.create_entry(title="Second", date=date(2026, 2, 1), medium_id=medium.id)
-    store.create_entry(title="First", date=date(2026, 1, 1), medium_id=medium.id)
+    store.create_entry(title="First", date=date(2024, 3, 15), medium_id=medium.id)
 
     entries = store.list_entries()
 
@@ -221,8 +221,8 @@ def test_list_entries_filtered_by_date_range(store: Store) -> None:
 def test_list_entries_filtered_by_medium(store: Store) -> None:
     cinema = store.add_medium("cinema", is_physical_place=True)
     netflix = store.add_medium("netflix", is_physical_place=False)
-    store.create_entry(title="Cinema movie", date=date(2026, 1, 1), medium_id=cinema.id)
-    store.create_entry(title="Netflix movie", date=date(2026, 1, 1), medium_id=netflix.id)
+    store.create_entry(title="Cinema movie", date=date(2024, 3, 15), medium_id=cinema.id)
+    store.create_entry(title="Netflix movie", date=date(2024, 3, 15), medium_id=netflix.id)
 
     entries = store.list_entries(medium_id=cinema.id)
 
@@ -231,7 +231,7 @@ def test_list_entries_filtered_by_medium(store: Store) -> None:
 
 def test_update_entry_changes_the_stored_date(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
-    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
 
     updated = store.update_entry(entry.id, date=date(2026, 1, 2))
 
@@ -242,7 +242,7 @@ def test_update_entry_changes_the_stored_date(store: Store) -> None:
 def test_update_entry_leaves_unspecified_fields_alone(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(
-        title="Dune", date=date(2026, 1, 1), start_time=time(14, 0), medium_id=medium.id
+        title="Dune", date=date(2024, 3, 15), start_time=time(14, 0), medium_id=medium.id
     )
 
     updated = store.update_entry(entry.id, title="Dune Part Two")
@@ -253,7 +253,7 @@ def test_update_entry_leaves_unspecified_fields_alone(store: Store) -> None:
 
 def test_delete_entry_removes_it_from_list(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
-    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
 
     store.delete_entry(entry.id)
 
@@ -273,7 +273,7 @@ def test_get_unknown_entry_raises(store: Store) -> None:
 def test_new_entry_has_no_metadata(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
 
-    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
 
     assert entry.imdb_rating is None
     assert entry.rotten_tomatoes_rating is None
@@ -284,7 +284,7 @@ def test_new_entry_has_no_metadata(store: Store) -> None:
 
 def test_update_entry_sets_omdb_ratings(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
-    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
 
     updated = store.update_entry(
         entry.id,
@@ -302,7 +302,7 @@ def test_update_entry_sets_omdb_ratings(store: Store) -> None:
 
 def test_update_entry_sets_letterboxd_link_and_rating(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
-    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
 
     updated = store.update_entry(
         entry.id,
@@ -316,7 +316,7 @@ def test_update_entry_sets_letterboxd_link_and_rating(store: Store) -> None:
 
 def test_update_entry_sets_imdb_url(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
-    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
 
     updated = store.update_entry(entry.id, imdb_url="https://www.imdb.com/title/tt1160419/")
 
@@ -341,9 +341,9 @@ def test_get_or_create_medium_creates_when_missing(store: Store) -> None:
 
 
 def test_get_or_create_venue_returns_existing(store: Store) -> None:
-    created = store.add_venue("Tuschinski")
+    created = store.add_venue("Grand Vista Cinema")
 
-    fetched = store.get_or_create_venue("Tuschinski")
+    fetched = store.get_or_create_venue("Grand Vista Cinema")
 
     assert fetched == created
     assert len(store.list_venues()) == 1
