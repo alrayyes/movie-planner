@@ -1,0 +1,25 @@
+[
+  {
+    "title": "The Housemaid",
+    "date": "2026-01-03",
+    "start_time": "14:00",
+    "end_time": "16:32",
+    "medium": "cinema",
+    "venue": "Tuschinski",
+    "imdb_url": "https://www.imdb.com/title/tt27543632/"
+  },
+  {
+    "title": "Mortal Kombat II",
+    "date": "2026-05-19",
+    "start_time": "16:10",
+    "medium": "cinema",
+    "venue": "Gsc Gurney Plaza Penang",
+    "imdb_url": "https://www.imdb.com/title/tt17490712/"
+  },
+  {
+    "title": "Louis Theroux: Inside the Manosphere",
+    "date": "2026-03-14",
+    "medium": "netflix",
+    "imdb_url": "https://www.imdb.com/title/tt39792948/"
+  }
+]
