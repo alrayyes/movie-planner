@@ -50,7 +50,7 @@ jobs:
       - run: uv sync --frozen
       - name: pytest
         run: |
-          uv run pytest --cov=movie_planner --cov-report=term-missing | tee coverage.txt
+          uv run pytest --cov=movie_planner --cov-report=term-missing --cov-report=xml | tee coverage.txt
           {
             echo '### Coverage'
             echo
@@ -58,6 +58,11 @@ jobs:
             cat coverage.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
 
   build:
     runs-on: ubuntu-24.04
