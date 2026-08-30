@@ -18,3 +18,6 @@ styles/proselint/
 # OpenSpec artifacts follow the openspec CLI's own formatting conventions,
 # not this repo's prose style.
 openspec/
+
+# Claude Code's own skill/command scaffolding, not this repo's prose.
+.claude/
