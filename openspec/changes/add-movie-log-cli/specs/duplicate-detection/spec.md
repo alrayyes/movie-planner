@@ -30,8 +30,8 @@ stripped — before fuzzy comparison.
 
 #### Scenario: Suffix noise ignored
 - **WHEN** a candidate titled "Midnight Ferry: Part Two" is compared
-  against an existing entry titled "Midnight Ferry: Part Two -
-  Movies" logged the same day
+  against an existing entry titled "Midnight Ferry: Part Two - Movies"
+  logged the same day
 - **THEN** the two are treated as matching for duplicate detection
 
 ### Requirement: Confirm before adding in interactive logging
