@@ -270,5 +270,49 @@ def test_get_unknown_entry_raises(store: Store) -> None:
         store.get_entry(123)
 
 
+def test_new_entry_has_no_metadata(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+
+    assert entry.imdb_rating is None
+    assert entry.rotten_tomatoes_rating is None
+    assert entry.metacritic_rating is None
+    assert entry.letterboxd_url is None
+    assert entry.letterboxd_rating is None
+
+
+def test_update_entry_sets_omdb_ratings(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+
+    updated = store.update_entry(
+        entry.id,
+        imdb_rating="8.5/10",
+        rotten_tomatoes_rating="94%",
+        metacritic_rating="82/100",
+    )
+
+    assert updated.imdb_rating == "8.5/10"
+    assert updated.rotten_tomatoes_rating == "94%"
+    assert updated.metacritic_rating == "82/100"
+    reloaded = store.get_entry(entry.id)
+    assert reloaded.imdb_rating == "8.5/10"
+
+
+def test_update_entry_sets_letterboxd_link_and_rating(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+
+    updated = store.update_entry(
+        entry.id,
+        letterboxd_url="https://letterboxd.com/film/dune-2021/",
+        letterboxd_rating="4.5",
+    )
+
+    assert updated.letterboxd_url == "https://letterboxd.com/film/dune-2021/"
+    assert updated.letterboxd_rating == "4.5"
+
+
 def test_close_does_not_raise(store: Store) -> None:
     store.close()

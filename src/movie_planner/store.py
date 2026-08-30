@@ -5,7 +5,7 @@ synced mirror, never read back from.
 
 import datetime
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -31,9 +31,26 @@ CREATE TABLE IF NOT EXISTS entries (
     end_time TEXT,
     medium_id INTEGER NOT NULL REFERENCES media(id),
     venue_id INTEGER REFERENCES venues(id),
-    caldav_uid TEXT
+    caldav_uid TEXT,
+    imdb_rating TEXT,
+    rotten_tomatoes_rating TEXT,
+    metacritic_rating TEXT,
+    letterboxd_url TEXT,
+    letterboxd_rating TEXT
 );
 """
+
+# Columns added to `entries` after its initial release, ALTERed in for a
+# database created before each one existed - CREATE TABLE IF NOT EXISTS
+# above only covers a brand-new database.
+_MIGRATED_COLUMNS = (
+    "caldav_uid",
+    "imdb_rating",
+    "rotten_tomatoes_rating",
+    "metacritic_rating",
+    "letterboxd_url",
+    "letterboxd_rating",
+)
 
 
 class StoreError(Exception):
@@ -61,15 +78,51 @@ class Entry:
     id: int
     title: str
     date: datetime.date
-    start_time: datetime.time | None
-    end_time: datetime.time | None
     medium_id: int
-    venue_id: int | None
-    caldav_uid: str | None
+    start_time: datetime.time | None = None
+    end_time: datetime.time | None = None
+    venue_id: int | None = None
+    caldav_uid: str | None = None
+    imdb_rating: str | None = None
+    rotten_tomatoes_rating: str | None = None
+    metacritic_rating: str | None = None
+    letterboxd_url: str | None = None
+    letterboxd_rating: str | None = None
+
+
+_ENTRY_COLUMNS = (
+    "id",
+    "title",
+    "date",
+    "start_time",
+    "end_time",
+    "medium_id",
+    "venue_id",
+    "caldav_uid",
+    "imdb_rating",
+    "rotten_tomatoes_rating",
+    "metacritic_rating",
+    "letterboxd_url",
+    "letterboxd_rating",
+)
 
 
 def _row_to_entry(row: tuple) -> Entry:
-    entry_id, title, date_str, start_str, end_str, medium_id, venue_id, caldav_uid = row
+    (
+        entry_id,
+        title,
+        date_str,
+        start_str,
+        end_str,
+        medium_id,
+        venue_id,
+        caldav_uid,
+        imdb_rating,
+        rotten_tomatoes_rating,
+        metacritic_rating,
+        letterboxd_url,
+        letterboxd_rating,
+    ) = row
     return Entry(
         id=entry_id,
         title=title,
@@ -79,6 +132,11 @@ def _row_to_entry(row: tuple) -> Entry:
         medium_id=medium_id,
         venue_id=venue_id,
         caldav_uid=caldav_uid,
+        imdb_rating=imdb_rating,
+        rotten_tomatoes_rating=rotten_tomatoes_rating,
+        metacritic_rating=metacritic_rating,
+        letterboxd_url=letterboxd_url,
+        letterboxd_rating=letterboxd_rating,
     )
 
 
@@ -92,12 +150,10 @@ class Store:
         self._conn.commit()
 
     def _migrate(self) -> None:
-        # ALTER TABLE ADD COLUMN, guarded, for a database created before
-        # this column existed - CREATE TABLE IF NOT EXISTS above only
-        # covers a brand-new database.
         columns = {row[1] for row in self._conn.execute("PRAGMA table_info(entries)")}
-        if "caldav_uid" not in columns:
-            self._conn.execute("ALTER TABLE entries ADD COLUMN caldav_uid TEXT")
+        for column in _MIGRATED_COLUMNS:
+            if column not in columns:
+                self._conn.execute(f"ALTER TABLE entries ADD COLUMN {column} TEXT")
 
     def close(self) -> None:
         self._conn.close()
@@ -193,8 +249,7 @@ class Store:
 
     def get_entry(self, entry_id: int) -> Entry:
         row = self._conn.execute(
-            "SELECT id, title, date, start_time, end_time, medium_id, venue_id, caldav_uid "
-            "FROM entries WHERE id = ?",
+            f"SELECT {', '.join(_ENTRY_COLUMNS)} FROM entries WHERE id = ?",
             (entry_id,),
         ).fetchone()
         if row is None:
@@ -208,10 +263,7 @@ class Store:
         date_to: datetime.date | None = None,
         medium_id: int | None = None,
     ) -> list[Entry]:
-        query = (
-            "SELECT id, title, date, start_time, end_time, medium_id, venue_id, caldav_uid "
-            "FROM entries"
-        )
+        query = f"SELECT {', '.join(_ENTRY_COLUMNS)} FROM entries"
         clauses = []
         params: list[object] = []
         if date_from is not None:
@@ -240,26 +292,45 @@ class Store:
         medium_id: int = _UNSET,
         venue_id: int | None = _UNSET,
         caldav_uid: str | None = _UNSET,
+        imdb_rating: str | None = _UNSET,
+        rotten_tomatoes_rating: str | None = _UNSET,
+        metacritic_rating: str | None = _UNSET,
+        letterboxd_url: str | None = _UNSET,
+        letterboxd_rating: str | None = _UNSET,
     ) -> Entry:
         current = self.get_entry(entry_id)
-        new_title = current.title if title is _UNSET else title
-        new_date = current.date if date is _UNSET else date
-        new_start = current.start_time if start_time is _UNSET else start_time
-        new_end = current.end_time if end_time is _UNSET else end_time
-        new_medium = current.medium_id if medium_id is _UNSET else medium_id
-        new_venue = current.venue_id if venue_id is _UNSET else venue_id
-        new_caldav_uid = current.caldav_uid if caldav_uid is _UNSET else caldav_uid
+        changes = {
+            "title": title,
+            "date": date,
+            "start_time": start_time,
+            "end_time": end_time,
+            "medium_id": medium_id,
+            "venue_id": venue_id,
+            "caldav_uid": caldav_uid,
+            "imdb_rating": imdb_rating,
+            "rotten_tomatoes_rating": rotten_tomatoes_rating,
+            "metacritic_rating": metacritic_rating,
+            "letterboxd_url": letterboxd_url,
+            "letterboxd_rating": letterboxd_rating,
+        }
+        updated = replace(current, **{k: v for k, v in changes.items() if v is not _UNSET})
         self._conn.execute(
-            "UPDATE entries SET title=?, date=?, start_time=?, end_time=?, "
-            "medium_id=?, venue_id=?, caldav_uid=? WHERE id=?",
+            "UPDATE entries SET title=?, date=?, start_time=?, end_time=?, medium_id=?, "
+            "venue_id=?, caldav_uid=?, imdb_rating=?, rotten_tomatoes_rating=?, "
+            "metacritic_rating=?, letterboxd_url=?, letterboxd_rating=? WHERE id=?",
             (
-                new_title,
-                new_date.isoformat(),
-                new_start.isoformat() if new_start else None,
-                new_end.isoformat() if new_end else None,
-                new_medium,
-                new_venue,
-                new_caldav_uid,
+                updated.title,
+                updated.date.isoformat(),
+                updated.start_time.isoformat() if updated.start_time else None,
+                updated.end_time.isoformat() if updated.end_time else None,
+                updated.medium_id,
+                updated.venue_id,
+                updated.caldav_uid,
+                updated.imdb_rating,
+                updated.rotten_tomatoes_rating,
+                updated.metacritic_rating,
+                updated.letterboxd_url,
+                updated.letterboxd_rating,
                 entry_id,
             ),
         )
