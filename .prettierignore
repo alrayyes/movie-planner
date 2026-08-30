@@ -14,3 +14,7 @@ CHANGELOG.md
 # Vale's downloaded style packages.
 styles/Google/
 styles/proselint/
+
+# OpenSpec artifacts follow the openspec CLI's own formatting conventions,
+# not this repo's prose style.
+openspec/
