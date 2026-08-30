@@ -1,0 +1,26 @@
+# What this project builds, not what an editor or OS drops beside it —
+# those live in ~/.config/git/gitignore_global, not here.
+__pycache__/
+*.py[cod]
+*.egg-info/
+/dist
+/build
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.txt
+htmlcov/
+
+# uv's project virtualenv. uv.lock is committed; the environment it builds
+# from that lock is not.
+.venv/
+
+node_modules/
+.bun-cache/
+
+# Written by the release job, not by hand.
+CHANGELOG.md
+
+# Vale's style packages, downloaded by `vale sync`.
+/styles/Google/
+/styles/proselint/
