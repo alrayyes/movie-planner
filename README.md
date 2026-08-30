@@ -1,2 +1,69 @@
 # movie-planner
-CLI that logs watched movies and syncs them to a CalDAV calendar
+
+[![CI](https://github.com/alrayyes/movie-planner/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/alrayyes/movie-planner/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/alrayyes/movie-planner?sort=semver)](https://github.com/alrayyes/movie-planner/releases/latest)
+[![licence](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
+
+A command-line tool that logs the movies you've watched — title, date,
+start/end time, where you watched it — and syncs each viewing to a Baikal
+(CalDAV) calendar. It replaces a hand-maintained org-mode log with a guided
+prompt, enriches entries with IMDb/Rotten Tomatoes/Metacritic ratings via
+OMDb and a manually entered Letterboxd link, and catches accidental
+duplicate log entries with fuzzy title matching.
+
+**Status: chassis only.** The commands described below (`log`, `list`,
+`update`, `delete`, `locations`, `import`) don't exist yet. The full plan
+— proposal, design decisions, and the task breakdown — lives in
+[`openspec/changes/add-movie-log-cli/`](openspec/changes/add-movie-log-cli/).
+
+## Requirements
+
+- **Python 3.14 or newer.**
+- **[uv](https://docs.astral.sh/uv/)**, for the virtual environment, the
+  dependencies and running everything below. Not installed by default —
+  one-time setup:
+
+  ```sh
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  ```
+
+  Confirm it worked with `uv --version`.
+
+- **[bun](https://bun.sh)**, for the tooling that isn't Python —
+  commitlint, Prettier, markdownlint, and the
+  [lefthook](https://lefthook.dev) that runs the git hooks. There's a
+  `package.json`, but nothing here is JavaScript; it exists only so those
+  tools resolve and stay pinned.
+- **[Vale](https://vale.sh)**, pinned in
+  [CONTRIBUTING.md](CONTRIBUTING.md#getting-set-up).
+- **A Baikal (CalDAV) calendar already set up**, once calendar sync
+  lands — this tool doesn't provision one.
+- **An [OMDb API key](https://www.omdbapi.com/apikey.aspx)**, once
+  metadata fetching lands.
+
+## Installation
+
+```sh
+git clone https://github.com/alrayyes/movie-planner.git
+cd movie-planner
+uv sync
+```
+
+## Usage
+
+```sh
+uv run movie-planner --help
+```
+
+Real commands land as the tasks in
+[`openspec/changes/add-movie-log-cli/tasks.md`](openspec/changes/add-movie-log-cli/tasks.md)
+get implemented.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the toolchain, the hooks, and
+how a change gets reviewed and released.
+
+## Licence
+
+[GPL-3.0](LICENSE).
