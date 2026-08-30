@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.4.0...movie-planner-v0.4.1) (2026-08-30)
+
+
+### Documentation
+
+* **changelog:** deduplicate entries caused by merge-commit PRs ([#26](https://github.com/alrayyes/movie-planner/issues/26)) ([6d75144](https://github.com/alrayyes/movie-planner/commit/6d75144e0ec8e9e7241f78b14beb526e4a960df1))
+
 ## [0.4.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.3.1...movie-planner-v0.4.0) (2026-08-30)
 
 
