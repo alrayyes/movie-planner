@@ -5,6 +5,7 @@ import pytest
 from fakes import FakeCalendar
 from typer.testing import CliRunner
 
+from movie_planner import config as config_module
 from movie_planner.calendar_sync import CalendarClient
 from movie_planner.cli import app
 from movie_planner.omdb import MovieRatings
@@ -271,6 +272,75 @@ def test_list_shows_logged_entries(
     assert "Dune" in result.output
     assert "cinema" in result.output
     assert "Grand Vista Cinema" in result.output
+
+
+# --- init ---
+
+
+def test_init_writes_a_starter_config(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+
+    result = runner.invoke(app, ["--config", str(config_path), "init"])
+
+    assert result.exit_code == 0, result.output
+    assert config_path.is_file()
+    loaded = config_module.load_config(config_path)
+    assert loaded.caldav_url
+    assert loaded.omdb_api_key
+
+
+def test_init_refuses_to_overwrite_without_force(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("existing content")
+
+    result = runner.invoke(app, ["--config", str(config_path), "init"])
+
+    assert result.exit_code != 0
+    assert config_path.read_text() == "existing content"
+
+
+def test_init_force_overwrites(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("existing content")
+
+    result = runner.invoke(app, ["--config", str(config_path), "init", "--force"])
+
+    assert result.exit_code == 0, result.output
+    assert config_path.read_text() != "existing content"
+
+
+def test_missing_config_non_interactively_points_at_init(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+
+    result = runner.invoke(app, ["--config", str(config_path), "list"])
+
+    assert result.exit_code != 0
+    assert "movie-planner init" in result.output
+
+
+def test_missing_config_interactively_offers_to_create_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "config.toml"
+    monkeypatch.setattr("movie_planner.cli._is_interactive", lambda: True)
+
+    result = runner.invoke(app, ["--config", str(config_path), "list"], input="y\n")
+
+    assert result.exit_code != 0
+    assert config_path.is_file()
+    assert "wrote a starter config" in result.output.lower()
+
+
+def test_missing_config_interactively_declined_does_not_write_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "config.toml"
+    monkeypatch.setattr("movie_planner.cli._is_interactive", lambda: True)
+
+    result = runner.invoke(app, ["--config", str(config_path), "list"], input="n\n")
+
+    assert result.exit_code != 0
+    assert not config_path.is_file()
 
 
 # --- error paths ---

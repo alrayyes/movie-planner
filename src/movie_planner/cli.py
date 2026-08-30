@@ -42,16 +42,79 @@ def callback(
     ctx.obj = config
 
 
+_STARTER_CONFIG = """\
+[caldav]
+url = "https://baikal.example.com/dav.php/calendars/moviewatcher/movies/"
+username = "moviewatcher"
+password = "..."
+
+[omdb]
+api_key = "..."
+
+[storage]
+db_path = "~/.local/share/movie-planner/movies.db"
+"""
+
+
+def _is_interactive() -> bool:
+    return sys.stdin.isatty()
+
+
+def _write_starter_config(config_path: Path) -> None:
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(_STARTER_CONFIG)
+
+
 def _cfg(ctx: typer.Context) -> config_module.Config:
+    config_path = ctx.obj or config_module.default_config_path()
+
+    if not config_path.is_file():
+        if _is_interactive() and typer.confirm(
+            f"No config file found at {config_path}. Create a starter one now?",
+            default=True,
+        ):
+            _write_starter_config(config_path)
+            typer.echo(
+                f"Wrote a starter config to {config_path}. Edit it with your CalDAV "
+                "credentials and OMDb API key, then run this command again."
+            )
+        else:
+            typer.secho(
+                f"No config file found at {config_path}. "
+                "Run 'movie-planner init' to create a starter one.",
+                fg=typer.colors.RED,
+                err=True,
+            )
+        raise typer.Exit(code=1)
+
     try:
-        return config_module.load_config(ctx.obj)
+        return config_module.load_config(config_path)
     except config_module.ConfigError as e:
         typer.secho(str(e), fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from e
 
 
-def _is_interactive() -> bool:
-    return sys.stdin.isatty()
+@app.command()
+def init(
+    ctx: typer.Context,
+    force: Annotated[
+        bool, typer.Option("--force", help="Overwrite an existing config file.")
+    ] = False,
+) -> None:
+    """Write a starter config.toml, ready to edit."""
+    config_path = ctx.obj or config_module.default_config_path()
+    if config_path.is_file() and not force:
+        typer.secho(
+            f"{config_path} already exists. Pass --force to overwrite it.",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+
+    _write_starter_config(config_path)
+    typer.echo(
+        f"Wrote a starter config to {config_path}. Edit it with your CalDAV "
+        "credentials and OMDb API key before running any other command."
+    )
 
 
 def _parse_date(value: str) -> date:
