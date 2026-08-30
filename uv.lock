@@ -541,7 +541,7 @@ wheels = [
 
 [[package]]
 name = "movie-planner"
-version = "0.1.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "caldav" },
@@ -577,7 +577,7 @@ dev = [
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-cov", specifier = "==7.1" },
     { name = "ruff", specifier = "==0.16.5" },
-    { name = "testcontainers", specifier = "==4.15.0" },
+    { name = "testcontainers", specifier = "==4.15" },
 ]
 
 [[package]]
