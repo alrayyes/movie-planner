@@ -28,10 +28,10 @@
 
 ## 5. Metadata
 
-- [ ] 5.1 Implement an OMDb client (title/IMDb ID lookup, local caching of successful matches) and verify with tests covering a match and a no-match response
-- [ ] 5.2 Wire OMDb fetch into the logging flow, storing IMDb/Rotten Tomatoes/Metacritic ratings, and verify an entry gains ratings after logging
-- [ ] 5.3 Implement manual Letterboxd link/rating entry and verify it can be attached to and later shown on an entry
-- [ ] 5.4 Verify an entry can be logged, updated, and synced with no metadata attached at all
+- [x] 5.1 Implement an OMDb client (title/IMDb ID lookup, local caching of successful matches) and verify with tests covering a match and a no-match response
+- [x] 5.2 Wire OMDb fetch into the logging flow, storing IMDb/Rotten Tomatoes/Metacritic ratings, and verify an entry gains ratings after logging
+- [x] 5.3 Implement manual Letterboxd link/rating entry and verify it can be attached to and later shown on an entry
+- [x] 5.4 Verify an entry can be logged, updated, and synced with no metadata attached at all
 
 ## 6. Import
 
