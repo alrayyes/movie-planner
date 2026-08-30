@@ -87,5 +87,5 @@ double feature; a y/N prompt handles that in one step.
 
 N/A — greenfield project, nothing to migrate from in-system. First-run
 prerequisites: the Baikal calendar already created, CalDAV credentials,
-an OMDb API key, and (optionally) the existing org-mode file for a
-one-time import.
+an OMDb API key, and (optionally) a CSV or JSON export of existing
+viewing history for a one-time import.

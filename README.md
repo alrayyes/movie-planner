@@ -80,6 +80,12 @@ db_path = "~/.local/share/movie-planner/movies.db"
 All three sections are required. A missing file or a missing key fails
 with a message naming the problem, not a stack trace.
 
+## Import examples
+
+[`examples/`](examples/) has three fictional viewings in CSV and JSON
+form. It shows the field names and structure that each import format
+expects.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the toolchain, the hooks, and

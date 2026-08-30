@@ -28,8 +28,8 @@ watch, when, and where."
   same-day proximity flags a likely-duplicate viewing. Interactive
   logging asks for confirmation before adding; bulk import skips flagged
   rows by default and reports them, with a `--force` flag to bypass.
-- Bulk import from CSV, JSON, and the existing org-mode log format, all
-  routed through the same duplicate-detection check.
+- Bulk import from CSV or JSON, routed through the same
+  duplicate-detection check.
 
 ## Capabilities
 
@@ -46,8 +46,8 @@ watch, when, and where."
 - `duplicate-detection`: fuzzy title and date-proximity matching against
   existing entries, with confirm-to-add behavior in interactive logging
   and skip-and-report behavior during bulk import.
-- `import`: bulk-loading viewing events from CSV, JSON, and org-mode
-  files into the local store, through duplicate detection.
+- `import`: bulk-loading viewing events from CSV or JSON files into the
+  local store, through duplicate detection.
 
 ### Modified Capabilities
 None — this is a new project with no existing specs.
