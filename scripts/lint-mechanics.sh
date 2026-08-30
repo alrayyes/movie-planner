@@ -41,9 +41,10 @@ if [ -z "$jdk" ]; then
 fi
 export JAVA_HOME="$jdk"
 
-# CHANGELOG.md is written by the release job; correcting it is not this
+# CHANGELOG.md is written by the release job, and OpenSpec's generated
+# artifacts follow their own conventions; correcting either is not this
 # script's business.
-files=$(git ls-files '*.md' | grep -v '^CHANGELOG.md$')
+files=$(git ls-files '*.md' | grep -v '^CHANGELOG.md$' | grep -v '^openspec/')
 
 echo "Checking:"
 echo "$files"

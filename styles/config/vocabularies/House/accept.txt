@@ -37,3 +37,8 @@ whoever's
 CI
 YAML
 JSON
+OMDb
+Letterboxd
+IMDb
+CalDAV
+Baikal

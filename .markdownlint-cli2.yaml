@@ -15,6 +15,9 @@ ignores:
   # held to somebody else's rules.
   - "styles/Google/**"
   - "styles/proselint/**"
+  # OpenSpec artifacts follow the openspec CLI's own formatting conventions
+  # (heading levels, scenario structure), not this repo's prose style.
+  - "openspec/**"
 
 config:
   # markdownlint/style/prettier drops MD013 because Prettier reflows prose on

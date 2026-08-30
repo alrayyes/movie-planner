@@ -4,12 +4,12 @@
 [![release](https://img.shields.io/github/v/release/alrayyes/movie-planner?sort=semver)](https://github.com/alrayyes/movie-planner/releases/latest)
 [![licence](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
 
-A CLI that logs the movies you've watched — title, date, start/end time,
-where you watched it — and syncs each viewing to a Baikal (CalDAV)
-calendar. It replaces a hand-maintained org-mode log with a guided prompt,
-enriches entries with IMDb/Rotten Tomatoes/Metacritic ratings via OMDb and
-a manually-entered Letterboxd link, and catches accidental duplicate log
-entries with fuzzy title matching.
+A command-line tool that logs the movies you've watched — title, date,
+start/end time, where you watched it — and syncs each viewing to a Baikal
+(CalDAV) calendar. It replaces a hand-maintained org-mode log with a guided
+prompt, enriches entries with IMDb/Rotten Tomatoes/Metacritic ratings via
+OMDb and a manually entered Letterboxd link, and catches accidental
+duplicate log entries with fuzzy title matching.
 
 **Status: chassis only.** The commands described below (`log`, `list`,
 `update`, `delete`, `locations`, `import`) don't exist yet. The full plan
