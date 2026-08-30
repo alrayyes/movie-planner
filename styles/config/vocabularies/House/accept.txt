@@ -43,3 +43,6 @@ Letterboxd
 IMDb
 CalDAV
 Baikal
+hadolint
+GHCR
+pipx

@@ -28,6 +28,10 @@
   `ltex-cli-plus` needs nothing installed: the hook fetches and caches it
   on first use.
 
+- **[Docker](https://docs.docker.com/engine/install/)**, running locally,
+  for the hooks that lint and build `Dockerfile` (hadolint, then a plain
+  `docker build`).
+
 Two commands install the linters and the git hooks:
 
 ```sh

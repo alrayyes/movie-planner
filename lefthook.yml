@@ -53,6 +53,23 @@ pre-commit:
         - ".claude/**"
       run: vale {staged_files}
 
+    - name: hadolint
+      glob: "Dockerfile"
+      run:
+        docker run --rm -i hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
+        < Dockerfile
+
+    # Scoped to the Dockerfile plus what it actually COPYs, so a commit
+    # touching neither skips this entirely.
+    - name: docker-build
+      glob:
+        - "Dockerfile"
+        - "pyproject.toml"
+        - "uv.lock"
+        - "README.md"
+        - "src/**"
+      run: docker build -t movie-planner:pre-commit-check . && docker rmi movie-planner:pre-commit-check
+
 commit-msg:
   jobs:
     # Resolved from node_modules rather than fetched by bunx: commitlint has to
@@ -102,3 +119,11 @@ pre-push:
     # then costs about ten seconds.
     - name: mechanics
       run: bun run lint:mechanics
+
+    - name: hadolint
+      run:
+        docker run --rm -i hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
+        < Dockerfile
+
+    - name: docker-build
+      run: docker build -t movie-planner:pre-push-check . && docker rmi movie-planner:pre-push-check

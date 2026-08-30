@@ -79,6 +79,21 @@ jobs:
         # a project stamped from it adds that the day it needs one.
         run: uv build
 
+  docker:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: hadolint
+        run: >
+          docker run --rm -i
+          hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
+          < Dockerfile
+      - name: docker build
+        # Proves the image still builds — hadolint only reads the Dockerfile
+        # as text and can't catch that on its own. Not pushed here; the
+        # release job publishes it to GHCR once a release actually cuts.
+        run: docker build -t movie-planner:ci .
+
   # Layout and structure. Style and mechanics are prose.yml — see its header
   # comment for why they're split out.
   prose:
