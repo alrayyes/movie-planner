@@ -42,9 +42,9 @@ fi
 export JAVA_HOME="$jdk"
 
 # CHANGELOG.md is written by the release job, and OpenSpec's generated
-# artifacts follow their own conventions; correcting either is not this
-# script's business.
-files=$(git ls-files '*.md' | grep -v '^CHANGELOG.md$' | grep -v '^openspec/')
+# artifacts and Claude Code's own scaffolding follow their own
+# conventions; correcting any of them is not this script's business.
+files=$(git ls-files '*.md' | grep -v '^CHANGELOG.md$' | grep -v '^openspec/' | grep -v '^\.claude/')
 
 echo "Checking:"
 echo "$files"
