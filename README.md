@@ -39,17 +39,32 @@ duplicate log entries with fuzzy title matching.
 
 ## Installation
 
+For development, or to run from a checkout:
+
 ```sh
 git clone https://github.com/alrayyes/movie-planner.git
 cd movie-planner
 uv sync
 ```
 
+To just install the `movie-planner` command without a checkout — this
+project isn't published to PyPI, so install straight from the repo:
+
+```sh
+pipx install git+https://github.com/alrayyes/movie-planner.git
+```
+
+`pip install` works the same way in place of `pipx` if you'd rather manage
+the virtual environment yourself.
+
 ## Usage
 
 ```sh
 uv run movie-planner --help
 ```
+
+(Drop `uv run` and call `movie-planner` directly if you installed it with
+`pipx`/`pip` instead of running from a checkout.)
 
 Log a viewing interactively (each field prompts if you leave it off, when
 running in a terminal):
