@@ -57,6 +57,18 @@ pipx install git+https://github.com/alrayyes/movie-planner.git
 `pip install` works the same way in place of `pipx` if you'd rather manage
 the virtual environment yourself.
 
+A [Docker image](https://github.com/alrayyes/movie-planner/pkgs/container/movie-planner)
+is published on every release too — mount your config and data
+directories in, and run as your own user (not the image's built-in one)
+so it can write to them:
+
+```sh
+docker run --rm -it --user "$(id -u):$(id -g)" -e HOME=/home/movieplanner \
+  -v ~/.config/movie-planner:/home/movieplanner/.config/movie-planner \
+  -v ~/.local/share/movie-planner:/home/movieplanner/.local/share/movie-planner \
+  ghcr.io/alrayyes/movie-planner:latest --help
+```
+
 ## Usage
 
 ```sh

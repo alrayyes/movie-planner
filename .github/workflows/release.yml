@@ -2,9 +2,9 @@
 # land on main and keeps a release pull request open carrying the next
 # version and the changelog entry, bumping [project].version in
 # pyproject.toml; merging that pull request tags the release and writes the
-# notes. Nothing here builds or publishes anything else — a project stamped
-# from this template adds a publish step to PyPI (or wherever it deploys)
-# the day it has something worth publishing.
+# notes. That tag then drives publishing a Docker image to GHCR
+# (rules/cli.md: every CLI tool ships one alongside its native package) —
+# nothing here publishes to PyPI, since that's not wired up yet.
 name: release
 
 on:
@@ -26,8 +26,36 @@ jobs:
     permissions:
       contents: write # tags the release and writes it
       pull-requests: write # keeps the release pull request up to date
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  docker-publish:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write # pushes the image to GHCR
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/alrayyes/movie-planner:${{ needs.release-please.outputs.tag_name }}
+            ghcr.io/alrayyes/movie-planner:latest
