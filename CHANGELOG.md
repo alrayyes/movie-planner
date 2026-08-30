@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.2.0...movie-planner-v0.3.0) (2026-08-30)
+
+
+### Features
+
+* **cli:** wire log, list, update, delete, locations, import, and sync retry commands ([d5f299c](https://github.com/alrayyes/movie-planner/commit/d5f299c9a5f1fb0b40a2fb05f2c53d32d9942654))
+* **cli:** wire log, list, update, delete, locations, import, and sync retry commands ([6ba1160](https://github.com/alrayyes/movie-planner/commit/6ba1160b098a1b649ba4679ebd84c2d449888108)), closes [#17](https://github.com/alrayyes/movie-planner/issues/17)
+
 ## [0.2.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.1.0...movie-planner-v0.2.0) (2026-08-30)
 
 
