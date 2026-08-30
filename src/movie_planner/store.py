@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS entries (
     rotten_tomatoes_rating TEXT,
     metacritic_rating TEXT,
     letterboxd_url TEXT,
-    letterboxd_rating TEXT
+    letterboxd_rating TEXT,
+    imdb_url TEXT
 );
 """
 
@@ -50,6 +51,7 @@ _MIGRATED_COLUMNS = (
     "metacritic_rating",
     "letterboxd_url",
     "letterboxd_rating",
+    "imdb_url",
 )
 
 
@@ -88,6 +90,7 @@ class Entry:
     metacritic_rating: str | None = None
     letterboxd_url: str | None = None
     letterboxd_rating: str | None = None
+    imdb_url: str | None = None
 
 
 _ENTRY_COLUMNS = (
@@ -104,40 +107,38 @@ _ENTRY_COLUMNS = (
     "metacritic_rating",
     "letterboxd_url",
     "letterboxd_rating",
+    "imdb_url",
 )
 
 
 def _row_to_entry(row: tuple) -> Entry:
-    (
-        entry_id,
-        title,
-        date_str,
-        start_str,
-        end_str,
-        medium_id,
-        venue_id,
-        caldav_uid,
-        imdb_rating,
-        rotten_tomatoes_rating,
-        metacritic_rating,
-        letterboxd_url,
-        letterboxd_rating,
-    ) = row
+    values = dict(zip(_ENTRY_COLUMNS, row, strict=True))
     return Entry(
-        id=entry_id,
-        title=title,
-        date=datetime.date.fromisoformat(date_str),
-        start_time=datetime.time.fromisoformat(start_str) if start_str else None,
-        end_time=datetime.time.fromisoformat(end_str) if end_str else None,
-        medium_id=medium_id,
-        venue_id=venue_id,
-        caldav_uid=caldav_uid,
-        imdb_rating=imdb_rating,
-        rotten_tomatoes_rating=rotten_tomatoes_rating,
-        metacritic_rating=metacritic_rating,
-        letterboxd_url=letterboxd_url,
-        letterboxd_rating=letterboxd_rating,
+        id=values["id"],
+        title=values["title"],
+        date=datetime.date.fromisoformat(values["date"]),
+        start_time=datetime.time.fromisoformat(values["start_time"])
+        if values["start_time"]
+        else None,
+        end_time=datetime.time.fromisoformat(values["end_time"]) if values["end_time"] else None,
+        medium_id=values["medium_id"],
+        venue_id=values["venue_id"],
+        caldav_uid=values["caldav_uid"],
+        imdb_rating=values["imdb_rating"],
+        rotten_tomatoes_rating=values["rotten_tomatoes_rating"],
+        metacritic_rating=values["metacritic_rating"],
+        letterboxd_url=values["letterboxd_url"],
+        letterboxd_rating=values["letterboxd_rating"],
+        imdb_url=values["imdb_url"],
     )
+
+
+def _serialize_entry_field(name: str, value: object) -> object:
+    if name == "date":
+        return value.isoformat()
+    if name in ("start_time", "end_time"):
+        return value.isoformat() if value else None
+    return value
 
 
 class Store:
@@ -190,6 +191,10 @@ class Store:
         self._conn.execute("DELETE FROM media WHERE id = ?", (medium_id,))
         self._conn.commit()
 
+    def get_or_create_medium(self, name: str, *, is_physical_place: bool) -> Medium:
+        existing = next((m for m in self.list_media() if m.name == name), None)
+        return existing or self.add_medium(name, is_physical_place=is_physical_place)
+
     # --- venues ---
 
     def add_venue(self, name: str) -> Venue:
@@ -204,6 +209,10 @@ class Store:
     def list_venues(self) -> list[Venue]:
         rows = self._conn.execute("SELECT id, name FROM venues ORDER BY name")
         return [Venue(id=r[0], name=r[1]) for r in rows]
+
+    def get_or_create_venue(self, name: str) -> Venue:
+        existing = next((v for v in self.list_venues() if v.name == name), None)
+        return existing or self.add_venue(name)
 
     def remove_venue(self, name: str) -> None:
         row = self._conn.execute("SELECT id FROM venues WHERE name = ?", (name,)).fetchone()
@@ -297,6 +306,7 @@ class Store:
         metacritic_rating: str | None = _UNSET,
         letterboxd_url: str | None = _UNSET,
         letterboxd_rating: str | None = _UNSET,
+        imdb_url: str | None = _UNSET,
     ) -> Entry:
         current = self.get_entry(entry_id)
         changes = {
@@ -312,27 +322,15 @@ class Store:
             "metacritic_rating": metacritic_rating,
             "letterboxd_url": letterboxd_url,
             "letterboxd_rating": letterboxd_rating,
+            "imdb_url": imdb_url,
         }
         updated = replace(current, **{k: v for k, v in changes.items() if v is not _UNSET})
+        columns = _ENTRY_COLUMNS[1:]  # everything but id
+        set_clause = ", ".join(f"{column}=?" for column in columns)
+        values = [_serialize_entry_field(column, getattr(updated, column)) for column in columns]
         self._conn.execute(
-            "UPDATE entries SET title=?, date=?, start_time=?, end_time=?, medium_id=?, "
-            "venue_id=?, caldav_uid=?, imdb_rating=?, rotten_tomatoes_rating=?, "
-            "metacritic_rating=?, letterboxd_url=?, letterboxd_rating=? WHERE id=?",
-            (
-                updated.title,
-                updated.date.isoformat(),
-                updated.start_time.isoformat() if updated.start_time else None,
-                updated.end_time.isoformat() if updated.end_time else None,
-                updated.medium_id,
-                updated.venue_id,
-                updated.caldav_uid,
-                updated.imdb_rating,
-                updated.rotten_tomatoes_rating,
-                updated.metacritic_rating,
-                updated.letterboxd_url,
-                updated.letterboxd_rating,
-                entry_id,
-            ),
+            f"UPDATE entries SET {set_clause} WHERE id=?",
+            (*values, entry_id),
         )
         self._conn.commit()
         return self.get_entry(entry_id)
