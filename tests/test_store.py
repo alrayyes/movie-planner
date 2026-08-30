@@ -314,5 +314,47 @@ def test_update_entry_sets_letterboxd_link_and_rating(store: Store) -> None:
     assert updated.letterboxd_rating == "4.5"
 
 
+def test_update_entry_sets_imdb_url(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+
+    updated = store.update_entry(entry.id, imdb_url="https://www.imdb.com/title/tt1160419/")
+
+    assert updated.imdb_url == "https://www.imdb.com/title/tt1160419/"
+
+
+def test_get_or_create_medium_returns_existing(store: Store) -> None:
+    created = store.add_medium("cinema", is_physical_place=True)
+
+    fetched = store.get_or_create_medium("cinema", is_physical_place=False)
+
+    assert fetched == created
+    assert len(store.list_media()) == 1
+
+
+def test_get_or_create_medium_creates_when_missing(store: Store) -> None:
+    medium = store.get_or_create_medium("netflix", is_physical_place=False)
+
+    assert medium.name == "netflix"
+    assert medium.is_physical_place is False
+    assert store.list_media() == [medium]
+
+
+def test_get_or_create_venue_returns_existing(store: Store) -> None:
+    created = store.add_venue("Grand Vista Cinema")
+
+    fetched = store.get_or_create_venue("Grand Vista Cinema")
+
+    assert fetched == created
+    assert len(store.list_venues()) == 1
+
+
+def test_get_or_create_venue_creates_when_missing(store: Store) -> None:
+    venue = store.get_or_create_venue("City")
+
+    assert venue.name == "City"
+    assert store.list_venues() == [venue]
+
+
 def test_close_does_not_raise(store: Store) -> None:
     store.close()
