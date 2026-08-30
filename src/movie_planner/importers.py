@@ -1,16 +1,13 @@
-"""Bulk import from CSV, JSON, and the existing org-mode log format. Every
-format parses to the same ImportRow, and run_import applies the same
-validation and duplicate-detection rules used by interactive logging.
+"""Bulk import from CSV and JSON. Every format parses to the same
+ImportRow, and run_import applies the same validation and
+duplicate-detection rules used by interactive logging.
 """
 
 import csv
 import datetime
 import json
-import re
 from dataclasses import dataclass
 from pathlib import Path
-
-import orgparse
 
 from movie_planner.duplicates import find_duplicate
 from movie_planner.store import Entry, Store
@@ -83,59 +80,6 @@ def parse_csv(path: Path) -> list[ParsedRow]:
 def parse_json(path: Path) -> list[ParsedRow]:
     data = json.loads(path.read_text(encoding="utf-8"))
     return [_row_from_dict(i, raw) for i, raw in enumerate(data, start=1)]
-
-
-def _org_node_to_row(row_number: int, node: object) -> ParsedRow:
-    try:
-        timestamp = node.rangelist[0] if node.rangelist else node.datelist[0]
-        start = timestamp.start
-        end = getattr(timestamp, "end", None)
-        if isinstance(start, datetime.datetime):
-            entry_date = start.date()
-            start_time = start.time()
-            end_time = end.time() if end else None
-        else:
-            entry_date = start
-            start_time = None
-            end_time = None
-
-        medium_tags = node.parent.shallow_tags if node.parent is not None else set()
-        if len(medium_tags) != 1:
-            raise ValueError(f"cannot tell the medium from heading tags {sorted(medium_tags)!r}")
-        medium = next(iter(medium_tags))
-
-        venue = node.properties.get("CINEMA")
-        if venue is None:
-            # A second :PROPERTIES: drawer after the timestamp - orgparse
-            # only parses the first one into `.properties`; the rest is
-            # left as raw text in `.body`. Recover it from there.
-            match = re.search(r"^:CINEMA:\s*(.+?)\s*$", node.body, re.MULTILINE)
-            venue = match.group(1) if match else None
-
-        entry = ImportRow(
-            title=node.heading,
-            date=entry_date,
-            medium=medium,
-            start_time=start_time,
-            end_time=end_time,
-            venue=venue,
-            imdb_url=node.properties.get("IMDB"),
-        )
-    except (ValueError, AttributeError, IndexError) as e:
-        return ParsedRow(row_number=row_number, entry=None, error=str(e))
-    return ParsedRow(row_number=row_number, entry=entry, error=None)
-
-
-def parse_org(path: Path) -> list[ParsedRow]:
-    root = orgparse.load(str(path))
-    rows = []
-    row_number = 0
-    for node in root[1:]:
-        if not (node.rangelist or node.datelist):
-            continue  # a structural heading (e.g. "Cinema"), not a movie
-        row_number += 1
-        rows.append(_org_node_to_row(row_number, node))
-    return rows
 
 
 def run_import(

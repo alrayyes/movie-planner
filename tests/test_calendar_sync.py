@@ -143,7 +143,9 @@ def test_calendar_client_connect_wires_up_the_dav_client(monkeypatch: pytest.Mon
     monkeypatch.setattr("movie_planner.calendar_sync.caldav.DAVClient", FakeDAVClient)
 
     client = CalendarClient.connect(
-        url="https://baikal.example.com/calendars/movies/", username="moviewatcher", password="secret"
+        url="https://baikal.example.com/calendars/movies/",
+        username="moviewatcher",
+        password="secret",
     )
 
     assert isinstance(client, CalendarClient)
