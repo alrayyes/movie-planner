@@ -1,0 +1,102 @@
+# The same commands CI runs, so the two cannot drift. The hook catches it
+# early; CI is the gate that cannot be skipped.
+#
+# Grows a job here the same PR that adds the tool it runs — a linter with no
+# hook is a linter you only meet at CI.
+
+# pre-commit may write. Let every fixer run and restage what it touched — a
+# commit should not fail over a quote style a tool can settle by itself.
+pre-commit:
+  jobs:
+    # ruff format decides the layout, ruff check then judges what it
+    # produced — the same ordering reason as Prettier before markdownlint
+    # below.
+    - name: ruff-format
+      glob: "*.py"
+      run: uv run ruff format {staged_files}
+      stage_fixed: true
+
+    - name: ruff-check
+      glob: "*.py"
+      run: uv run ruff check --fix {staged_files}
+      stage_fixed: true
+
+    # Unlike ruff, pyproject-fmt exits non-zero the moment it rewrites the
+    # file, even outside --check. `|| true` swallows that so the job reads
+    # as passed and stage_fixed restages the write, instead of lefthook
+    # treating the fix as a failure and skipping the restage.
+    - name: pyproject-fmt
+      glob: "pyproject.toml"
+      run: uv run pyproject-fmt {staged_files} || true
+      stage_fixed: true
+
+    # Prettier decides the layout, markdownlint then judges what Prettier
+    # produced. The other order has markdownlint fixing something Prettier is
+    # about to overwrite.
+    - name: prettier
+      glob: "*.{md,yml,yaml}"
+      run: bunx prettier --write {staged_files}
+      stage_fixed: true
+
+    - name: markdownlint
+      glob: "*.md"
+      run: bunx markdownlint-cli2 {staged_files}
+
+    # Fast enough for a commit. LTeX is not — around ten seconds a file — so
+    # mechanics run at push instead, where the wait is paid once rather than
+    # per commit.
+    - name: vale
+      glob: "*.md"
+      exclude:
+        - "CHANGELOG.md"
+      run: vale {staged_files}
+
+commit-msg:
+  jobs:
+    # Resolved from node_modules rather than fetched by bunx: commitlint has to
+    # load the config its own config extends, and bunx cannot resolve a sibling
+    # package for it. Run `bun install` if this cannot find itself.
+    - name: commitlint
+      run: bunx commitlint --edit {1}
+
+# pre-push never writes. A hook rewriting files under a push leaves the pushed
+# commit and the working tree disagreeing about what was reviewed.
+#
+# Parallel because of that: nothing here touches a file, so no job can be
+# reading what another is rewriting.
+pre-push:
+  parallel: true
+  jobs:
+    - name: pytest
+      run: uv run pytest
+
+    - name: ruff-check
+      run: uv run ruff check
+
+    - name: ruff-format-check
+      run: uv run ruff format --check
+
+    - name: pyproject-fmt-check
+      run: uv run pyproject-fmt --check pyproject.toml
+
+    # These are `package.json` scripts rather than the commands spelled out,
+    # because CI runs the same ones and a literal copied into two files drifts
+    # the first time somebody edits one of them.
+    - name: prettier
+      run: bun run format:check
+
+    - name: markdownlint
+      run: bun run lint:md
+
+    # Every other linter here runs at commit, at push and in CI. Vale ran at
+    # commit and then nothing until CI, because its invocation lived in the
+    # workflow as a block of bash with nothing a hook could reuse. It is a
+    # script now, and this is the whole-tree run that was missing.
+    - name: vale
+      run: bun run lint:prose
+
+    # Grammar and spelling. Left out of pre-commit on the grounds that it is a
+    # ~300 MB download, which it is — but it caches outside the repository and
+    # then costs about ten seconds.
+    - name: mechanics
+      run: bun run lint:mechanics
