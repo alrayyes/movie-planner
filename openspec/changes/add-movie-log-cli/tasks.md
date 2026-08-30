@@ -1,9 +1,9 @@
 ## 1. Project setup
 
-- [ ] 1.1 Initialize the Python project structure (pyproject.toml, package layout, `typer` entrypoint) and verify `movie-planner --help` runs
-- [ ] 1.2 Add pinned dependencies (typer, questionary, caldav, icalendar, rapidfuzz, an HTTP client for OMDb, orgparse) to pyproject.toml and verify a clean-venv install succeeds
-- [ ] 1.3 Add TOML config loading (CalDAV URL/credentials, OMDb API key, SQLite DB path) and verify a missing or invalid config produces a clear error rather than a stack trace
-- [ ] 1.4 Add LICENSE (GPL-3.0) and a README covering setup and configuration, and verify the documented commands work as written
+- [x] 1.1 Initialize the Python project structure (pyproject.toml, package layout, `typer` entrypoint) and verify `movie-planner --help` runs
+- [x] 1.2 Add pinned dependencies (typer, questionary, caldav, icalendar, rapidfuzz, an HTTP client for OMDb, orgparse) to pyproject.toml and verify a clean-venv install succeeds
+- [x] 1.3 Add TOML config loading (CalDAV URL/credentials, OMDb API key, SQLite DB path) and verify a missing or invalid config produces a clear error rather than a stack trace
+- [x] 1.4 Add LICENSE (GPL-3.0) and a README covering setup and configuration, and verify the documented commands work as written
 
 ## 2. Local data store
 
