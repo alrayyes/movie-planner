@@ -60,7 +60,7 @@ the virtual environment yourself.
 A [Docker image](https://github.com/alrayyes/movie-planner/pkgs/container/movie-planner)
 is published on every release too — mount your config and data
 directories in, and run as your own user (not the image's built-in one)
-so it can write to them. The flags below drop every capability the CLI
+so it can write to them. The flags below drop every capability the tool
 doesn't need, block privilege escalation, make the root filesystem
 read-only (with a `tmpfs` for the one path that needs to write), and
 cap resource usage:
