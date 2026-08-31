@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.5.1...movie-planner-v0.6.0) (2026-08-31)
+
+
+### Features
+
+* add .deb/.rpm packaging via nfpm ([#39](https://github.com/alrayyes/movie-planner/issues/39)) ([7e3b0a4](https://github.com/alrayyes/movie-planner/commit/7e3b0a498937ad6c3b2988b7d32d7f6864a04543))
+
 ## [0.5.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.5.0...movie-planner-v0.5.1) (2026-08-31)
 
 
