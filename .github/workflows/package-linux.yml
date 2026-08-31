@@ -1,9 +1,19 @@
-# Builds and install-tests the .deb/.rpm on every push/PR (dry run,
-# publish: false) and again, identically, from the release job once a
-# release actually cuts (publish: true) — a reusable workflow so the
-# two callers can't build the package differently. See
+# Builds and install-tests the .deb/.rpm on every push/PR (a fixed dev
+# version) and again, identically, from the release job once a release
+# actually cuts — a reusable workflow so the two callers can't build
+# the package differently. See
 # openspec/changes/add-os-packaging/design.md for why this exists as
 # a frozen binary rather than depending on distro python3-* packages.
+#
+# Deliberately asks for nothing beyond the default `contents: read` a
+# checkout needs — attesting provenance and uploading release assets
+# needs `id-token`/`attestations: write`, which a job that only ever
+# calls this reusable workflow (ci.yml's dry run) has no way to grant
+# without exceeding its own workflow's default permissions, and
+# GitHub rejects that mismatch by failing the *entire calling
+# workflow file* to parse, not just the one job. release.yml does the
+# attest/upload itself, as a plain job, against the artifact this
+# workflow uploads.
 name: package-linux
 
 on:
@@ -13,27 +23,12 @@ on:
         description: Package version — a leading "v" (release-please's tag format) is stripped automatically
         required: true
         type: string
-      publish:
-        description: Attest provenance and upload the built packages as release assets
-        required: false
-        type: boolean
-        default: false
-      tag_name:
-        description: Release tag to upload assets to (required when publish is true)
-        required: false
-        type: string
 
 jobs:
   build-and-test:
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write # only used to upload release assets, when publish is true
-      attestations: write # attaches build provenance to the packages
-      id-token: write # required for the attestation's keyless signing
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.tag_name || github.sha }}
 
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
@@ -101,14 +96,11 @@ jobs:
             man -w movie-planner
           '
 
-      - name: Attest build provenance
-        if: inputs.publish
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          subject-path: "dist-pyinstaller/movie-planner_*.deb,dist-pyinstaller/movie-planner-*.rpm"
-
-      - name: Upload release assets
-        if: inputs.publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ inputs.tag_name }}" dist-pyinstaller/movie-planner_*.deb dist-pyinstaller/movie-planner-*.rpm
+          name: linux-packages
+          path: |
+            dist-pyinstaller/movie-planner_*.deb
+            dist-pyinstaller/movie-planner-*.rpm
+          if-no-files-found: error
+          retention-days: 7

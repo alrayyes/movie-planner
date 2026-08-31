@@ -110,7 +110,7 @@ jobs:
   package-linux:
     uses: ./.github/workflows/package-linux.yml
     with:
-      version: 0.0.0-dev
+      version: "0.0.0-dev"
 
   # Layout and structure. Style and mechanics are prose.yml — see its header
   # comment for why they're split out.
