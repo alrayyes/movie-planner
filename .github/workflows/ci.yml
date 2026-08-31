@@ -122,14 +122,20 @@ jobs:
     runs-on: ubuntu-24.04
     container: archlinux:latest
     steps:
+      # archlinux:latest ships no git at all. Confirmed live: with git
+      # missing, actions/checkout falls back to downloading a tarball
+      # via the GitHub REST API instead of a real clone — the checkout
+      # succeeds, but the result has no .git directory, so `git
+      # archive HEAD` two steps later fails with "not a git
+      # repository". git has to be present before checkout runs, not
+      # just before the steps that call it directly.
+      - name: Bootstrap git for checkout
+        run: pacman -Sy --noconfirm --needed git
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install build tooling
-        # archlinux:latest ships no git at all — actions/checkout
-        # falls back to the GitHub API to do the checkout without it,
-        # but every step after this one needs a real git binary.
         run: |
           pacman -Sy --noconfirm --needed \
-            base-devel git sudo man-db \
+            base-devel sudo man-db \
             python-build python-installer python-wheel python-uv-build \
             python-caldav python-httpx python-icalendar python-rapidfuzz python-typer
           # The archlinux image's own pacman.conf excludes man pages

@@ -129,16 +129,17 @@ jobs:
     runs-on: ubuntu-24.04
     container: archlinux:latest
     steps:
+      # See ci.yml's aur job for why this has to happen before
+      # checkout, not just before the steps that call git directly.
+      - name: Bootstrap git for checkout
+        run: pacman -Sy --noconfirm --needed git
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
       - name: Install build tooling
-        # archlinux:latest ships no git at all — actions/checkout
-        # falls back to the GitHub API to do the checkout without it,
-        # but every step after this one needs a real git binary.
         run: |
           pacman -Sy --noconfirm --needed \
-            base-devel git openssh sudo man-db \
+            base-devel openssh sudo man-db \
             python-build python-installer python-wheel python-uv-build \
             python-caldav python-httpx python-icalendar python-rapidfuzz python-typer
           # See ci.yml's aur job for why this line is removed.
