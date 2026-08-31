@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.8.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.7.0...movie-planner-v0.8.0) (2026-08-31)
+
+
+### Features
+
+* add a Nix flake ([#44](https://github.com/alrayyes/movie-planner/issues/44)) ([6608b2b](https://github.com/alrayyes/movie-planner/commit/6608b2b3aec98151b2380db1375f3a1a07fc143d))
+
+
+### Bug Fixes
+
+* **nix:** override uv-build to the version this project needs ([#48](https://github.com/alrayyes/movie-planner/issues/48)) ([9e1b763](https://github.com/alrayyes/movie-planner/commit/9e1b76397a711776da798de08cec1d33e8621c48))
+
+
+### Documentation
+
+* add docs/INSTALL.md ([#46](https://github.com/alrayyes/movie-planner/issues/46)) ([9acf5fd](https://github.com/alrayyes/movie-planner/commit/9acf5fd542998164b907fb56224170030c37758d))
+
 ## [0.7.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.6.0...movie-planner-v0.7.0) (2026-08-31)
 
 
