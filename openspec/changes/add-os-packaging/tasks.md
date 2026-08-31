@@ -29,12 +29,11 @@
   on `needs.release-please.outputs.release_created == 'true'`, version
   taken from `needs.release-please.outputs.tag_name`, and verify the
   job runs and produces both files on a test release — via the shared
-  `package-linux.yml` reusable workflow, not yet exercised against a
-  real tagged release (task 8.2)
+  `package-linux.yml` reusable workflow, verified against the real
+  v0.7.0 release
 - [x] 3.4 Upload the `.deb` and `.rpm` as GitHub Release assets
   (`gh release upload` or an equivalent action) and verify they appear
-  on the release page — wired, not yet exercised against a real
-  release (task 8.2)
+  on the release page — verified against the real v0.7.0 release
 
 ## 4. Man page
 
@@ -62,8 +61,9 @@
 - [x] 5.1 Add `actions/attest-build-provenance` for the `.deb`/`.rpm`
   (and the frozen binary, if attested separately) and verify
   `gh attestation verify` succeeds against a built artifact — wired,
-  not yet exercised against a real release (task 8.2); the frozen
-  binary itself isn't a release asset so isn't separately attested
+  verified against the real v0.7.0 release (`gh attestation verify`
+  succeeds against the downloaded `.deb`); the frozen binary itself
+  isn't a release asset so isn't separately attested
 
 ## 6. Install-test what gets built
 
@@ -109,24 +109,34 @@
   files to the personal AUR git repo, and verify the package appears
   on `aur.archlinux.org/packages/movie-planner` — wired into the
   release job (clone, regenerate, commit, push over the shared
-  `aur-ci` key), not yet exercised against a real release (task 8.2);
+  `aur-ci` key), verified against the real v0.7.0 release — the AUR
+  push succeeded on its first real attempt;
   AUR's host key is pinned in the workflow (fetched via `ssh-keyscan`
   against the real host)
 - [x] 7.4 Add the release-job step that bumps `pkgver`/checksum,
   regenerates `.SRCINFO`, commits, and pushes to AUR on every release,
   and verify it runs end-to-end on a real tagged release — wired,
   gated on the same install-test as task 6.3 passing first; the
-  end-to-end real-release run is task 8.2
+  end-to-end real-release run is task 8.2, now done
 
 ## 8. Docs and verification
 
-- [ ] 8.1 Add `docs/INSTALL.md` covering every install method
+- [x] 8.1 Add `docs/INSTALL.md` covering every install method
   (checkout, `pipx`/`pip`, Docker, AUR, `.deb`, `.rpm`), shrink
   `README.md`'s Installation section to a link plus what it already
   covers, and verify every command shown actually works against a real
-  published release
-- [ ] 8.2 Tag a real release and confirm, for that one release: the
+  published release — verified against v0.7.0; found the AUR section's
+  first draft was itself wrong (a bare `makepkg -si` can't resolve
+  `python-questionary`'s own AUR-only dependency), fixed to lead with
+  an AUR helper
+- [x] 8.2 Tag a real release and confirm, for that one release: the
   `.deb` and `.rpm` are attached and provenance-verifiable, the AUR
   package resolves the same version, `man movie-planner` works, and
-  `movie-planner --help` runs after each install method — then close
-  the GitHub issue referencing what shipped
+  `movie-planner --help` runs after each install method — all
+  confirmed against the real v0.7.0 release, including a from-scratch
+  AUR install via the real published package (not a local stand-in).
+  The Nix flake (a separate, not-yet-merged change) isn't part of
+  this - closing the GitHub issue waits for that
+- [ ] 8.3 Once the Nix flake lands and is verified against a real
+  release too, close the GitHub issue referencing everything that
+  shipped
