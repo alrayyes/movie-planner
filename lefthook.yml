@@ -98,6 +98,9 @@ pre-push:
     - name: pyproject-fmt-check
       run: uv run pyproject-fmt --check pyproject.toml
 
+    - name: pip-audit
+      run: uv run pip-audit
+
     # These are `package.json` scripts rather than the commands spelled out,
     # because CI runs the same ones and a literal copied into two files drifts
     # the first time somebody edits one of them.

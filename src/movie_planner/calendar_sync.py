@@ -70,7 +70,7 @@ class CalendarClient:
         self._calendar = calendar
 
     @classmethod
-    def connect(cls, *, url: str, username: str, password: str) -> "CalendarClient":
+    def connect(cls, *, url: str, username: str, password: str) -> CalendarClient:
         client = caldav.DAVClient(url=url, username=username, password=password)
         return cls(client.calendar(url=url))
 

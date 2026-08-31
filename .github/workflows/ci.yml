@@ -37,6 +37,8 @@ jobs:
         run: uv run ruff format --check
       - name: pyproject-fmt --check
         run: uv run pyproject-fmt --check pyproject.toml
+      - name: pip-audit
+        run: uv run pip-audit
 
   test:
     runs-on: ubuntu-24.04
