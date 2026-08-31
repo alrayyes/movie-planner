@@ -119,14 +119,28 @@ that checksum is computed straight from the GitHub release asset
 reads a `Click` command/group straight from the running code
 (`typer.main.get_command(app)` gives it something to point at) and
 writes a roff man page, so the page can't drift out of sync with the
-actual `--help` output the way a hand-maintained one would. A single
-checked-in `scripts/generate-man.sh` (mirroring how `scripts/lint-*.sh`
-already work in this repo) runs `click-man` and writes
-`man/movie-planner.1` - both the `nfpm` build step and the AUR
-`PKGBUILD`'s `package()` function call the same script, so the two
-packages can't end up with different man pages. `nfpm.yaml` and the
-`PKGBUILD` each place the (gzip-compressed, standard for both Debian
-and Arch) result at `usr/share/man/man1/movie-planner.1.gz`.
+actual `--help` output the way a hand-maintained one would. A checked-in
+`scripts/generate-man.sh` (mirroring how `scripts/lint-*.sh` already
+work in this repo) runs `click-man` via `uv run` and writes
+`man/movie-planner.1` - the `nfpm` build step uses this script.
+
+**The AUR `PKGBUILD` and `flake.nix` do NOT call that script** - both
+turned out to need the same divergence, discovered the same way (a
+build failure, not foresight): `scripts/generate-man.sh` shells out to
+`uv run`, and neither environment has `uv` in the picture at all (the
+PKGBUILD builds with plain `python -m build`/`python -m installer`
+against Arch's own packages; the flake builds with Nix's own Python
+infrastructure). Both instead invoke `click_man.core.write_man_pages`
+directly via a one-off `python -c`, against the CLI made importable
+straight off the built environment (`PYTHONPATH` for the flake's
+`postInstall`; the source tree's `src/` directory for the PKGBUILD's
+`package()`, since its runtime dependencies are already
+system-installed by the time `package()` runs). Three call sites for
+the same generation logic instead of one, but the alternative -
+teaching `scripts/generate-man.sh` to work without `uv` at all - would
+have meant giving up the one thing that script is for on the `.deb`/
+`.rpm` side: guaranteeing the CI dry run and the release build can't
+generate the page differently.
 
 Alternative considered: hand-write a man page in `scdoc` or raw roff.
 Rejected - it's one more place `--help` text has to be kept in sync by
@@ -152,6 +166,36 @@ This runs as part of the same `release_created`-gated job, right after
 the packages are built and before either the GitHub Release upload or
 the AUR push - a broken package now blocks its own release rather than
 shipping and getting caught after the fact.
+
+**Container base images lie about man pages, on two different
+distros.** `debian:bookworm-slim` and the official `archlinux` image
+both ship a package-manager config that silently excludes
+`/usr/share/man/*` from every install, purely to keep the image small
+- `dpkg -i`/`pacman -U` both report success and even list the man
+pages as belonging to the package (`dpkg -L`/`pacman -Ql`), while
+never actually writing them to disk. This is a Docker-image-specific
+optimization, not real Debian/Arch behavior on an actual install. The
+install-test step uses the **full** `debian:bookworm` image rather
+than `-slim` for exactly this reason, and strips the equivalent
+`NoExtract = usr/share/man/*` line from `archlinux:latest`'s
+`/etc/pacman.conf` before installing anything - otherwise the check
+would pass while proving nothing.
+
+**`container:` jobs need an explicit `git safe.directory`.**
+`actions/checkout`'s own dubious-ownership fix writes into a temporary
+`$HOME` that exists only for that step; a job running `container:
+archlinux:latest` as root never sees that config again in later
+steps' real `$HOME`, so any git command after checkout (`git archive`
+for the CI dry run's local tarball, in particular) fails with
+"detected dubious ownership" without `git config --global --add
+safe.directory "$GITHUB_WORKSPACE"` run explicitly - and that has to
+come *after* `pacman -S git`, since the base `archlinux` image ships
+no git at all.
+
+**`pkgver` cannot contain a hyphen** - Arch reserves it for the
+`pkgver-pkgrel` separator - so the CI dry run's stand-in version is a
+plain `0.0.0`, not `0.0.0-dev` the way `package-linux.yml`'s nfpm dry
+run uses (nfpm has no such restriction).
 
 ### Installation instructions move to their own doc
 
