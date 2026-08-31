@@ -1,9 +1,9 @@
 ## Purpose
 
 Lets someone install `movie-planner` through their own package manager
-instead of a manual checkout — an AUR package for Arch, and `.deb`/
-`.rpm` files attached directly to each GitHub Release for everything
-else.
+instead of a manual checkout — an AUR package for Arch, `.deb`/`.rpm`
+files attached directly to each GitHub Release for everything else,
+and a `flake.nix` for Nix/NixOS.
 
 ## ADDED Requirements
 
@@ -40,14 +40,24 @@ released version through the distro's own Python packages.
   resulting `movie-planner` command matches the version the PKGBUILD
   declares
 
+### Requirement: Installable from Nix and NixOS
+The project SHALL provide a `flake.nix` that builds a working install
+of `movie-planner` from source against nixpkgs' own Python packages.
+
+#### Scenario: Install via a flake
+- **WHEN** a user runs `nix profile install github:alrayyes/movie-planner`
+  or `nix run github:alrayyes/movie-planner`
+- **THEN** the flake builds successfully and the resulting
+  `movie-planner` command runs
+
 ### Requirement: A man page ships with every install method
-Every install method (`.deb`, `.rpm`, AUR) SHALL install a man page for
-`movie-planner`, generated from the CLI's own help output rather than
-maintained separately, so it can't drift out of sync with the tool it
-documents.
+Every install method (`.deb`, `.rpm`, AUR, Nix) SHALL install a man
+page for `movie-planner`, generated from the CLI's own help output
+rather than maintained separately, so it can't drift out of sync with
+the tool it documents.
 
 #### Scenario: Man page available after install
-- **WHEN** a user installs `movie-planner` through any of the three
+- **WHEN** a user installs `movie-planner` through any of the
   supported methods
 - **THEN** `man movie-planner` shows a page describing the CLI's
   commands and options
@@ -55,9 +65,10 @@ documents.
 ### Requirement: A built package is verified before it's published
 The release process SHALL install each built package (`.deb` on a
 Debian-family system, `.rpm` on an RPM-family system) and confirm
-`movie-planner` runs successfully afterward, and SHALL build the AUR
-`PKGBUILD` and confirm it installs successfully, before that release's
-packages are published or pushed to the AUR.
+`movie-planner` runs successfully afterward, SHALL build the AUR
+`PKGBUILD` and confirm it installs successfully, and SHALL build the
+Nix flake and confirm the resulting package runs successfully, before
+that release's packages are published or pushed to the AUR.
 
 #### Scenario: A package that builds but fails to install
 - **WHEN** an `nfpm`-built `.deb` or `.rpm` fails to install, or an
