@@ -24,6 +24,7 @@
       "changelog",
       "commitlint",
       "devDependencies",
+      "filesystem",
       "isort",
       "lefthook",
       "ltex-cli-plus",
