@@ -1,0 +1,106 @@
+# Builds and install-tests the .deb/.rpm on every push/PR (a fixed dev
+# version) and again, identically, from the release job once a release
+# actually cuts — a reusable workflow so the two callers can't build
+# the package differently. See
+# openspec/changes/add-os-packaging/design.md for why this exists as
+# a frozen binary rather than depending on distro python3-* packages.
+#
+# Deliberately asks for nothing beyond the default `contents: read` a
+# checkout needs — attesting provenance and uploading release assets
+# needs `id-token`/`attestations: write`, which a job that only ever
+# calls this reusable workflow (ci.yml's dry run) has no way to grant
+# without exceeding its own workflow's default permissions, and
+# GitHub rejects that mismatch by failing the *entire calling
+# workflow file* to parse, not just the one job. release.yml does the
+# attest/upload itself, as a plain job, against the artifact this
+# workflow uploads.
+name: package-linux
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Package version — a leading "v" (release-please's tag format) is stripped automatically
+        required: true
+        type: string
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          # Pinned like any other toolchain. The Python version itself comes
+          # from .python-version, which setup-uv reads without being told to.
+          version: "0.12.7"
+
+      - name: uv sync
+        # Not --no-dev: click-man is a dev dependency, and the man pages it
+        # generates ship in the package.
+        run: uv sync --frozen
+
+      - name: Strip the tag's leading "v" for nfpm's version field
+        id: version
+        run: echo "value=${INPUT_VERSION#v}" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+
+      - name: Generate man pages
+        run: ./scripts/generate-man.sh
+
+      - name: Build the frozen binary
+        run: ./scripts/build-binary.sh
+
+      - name: Package .deb and .rpm
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          docker run --rm \
+            -v "$(pwd)":/src -w /src \
+            -e VERSION \
+            goreleaser/nfpm@sha256:a662cb167d7b6d3a83920c83d76b12d02b8ac5dd2c13e5c62c15270b23f6df0c \
+            package --config nfpm.yaml --packager deb --target /src/dist-pyinstaller/
+          docker run --rm \
+            -v "$(pwd)":/src -w /src \
+            -e VERSION \
+            goreleaser/nfpm@sha256:a662cb167d7b6d3a83920c83d76b12d02b8ac5dd2c13e5c62c15270b23f6df0c \
+            package --config nfpm.yaml --packager rpm --target /src/dist-pyinstaller/
+
+      # A built .deb/.rpm only proves nfpm wrote a file — not that
+      # installing it leaves a working `movie-planner` behind. The
+      # slim Docker variants exclude /usr/share/man by default (a
+      # Docker-image-only space-saving hack, not real Debian/Fedora
+      # behavior), so the full images are used here deliberately.
+      - name: Install-test the .deb
+        run: |
+          docker run --rm -v "$(pwd)/dist-pyinstaller":/pkgs \
+            debian:bookworm@sha256:6ebd97fa83deb272194a2cf015b3d26a4d538e9ad3a7a79d544c8af5b0a01443 bash -c '
+            set -eu
+            apt-get -qq update
+            apt-get -qq install -y man-db
+            dpkg -i /pkgs/movie-planner_*.deb
+            movie-planner --help
+            man -w movie-planner
+          '
+
+      - name: Install-test the .rpm
+        run: |
+          docker run --rm -v "$(pwd)/dist-pyinstaller":/pkgs \
+            fedora:41@sha256:f1a3fab47bcb3c3ddf3135d5ee7ba8b7b25f2e809a47440936212a3a50957f3d bash -c '
+            set -eu
+            dnf install -y -q man-db
+            rpm -i /pkgs/movie-planner-*.rpm
+            movie-planner --help
+            man -w movie-planner
+          '
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-packages
+          path: |
+            dist-pyinstaller/movie-planner_*.deb
+            dist-pyinstaller/movie-planner-*.rpm
+          if-no-files-found: error
+          retention-days: 7
