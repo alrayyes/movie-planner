@@ -39,39 +39,14 @@ duplicate log entries with fuzzy title matching.
 
 ## Installation
 
-For development, or to run from a checkout:
+See [`docs/INSTALL.md`](docs/INSTALL.md) for every install method — the
+AUR, `.deb`/`.rpm` release assets, Docker, and installing from a
+checkout. For development, or to run from a checkout:
 
 ```sh
 git clone https://github.com/alrayyes/movie-planner.git
 cd movie-planner
 uv sync
-```
-
-To just install the `movie-planner` command without a checkout — this
-project isn't published to PyPI, so install straight from the repo:
-
-```sh
-pipx install git+https://github.com/alrayyes/movie-planner.git
-```
-
-`pip install` works the same way in place of `pipx` if you'd rather manage
-the virtual environment yourself.
-
-A [Docker image](https://github.com/alrayyes/movie-planner/pkgs/container/movie-planner)
-is published on every release too — mount your config and data
-directories in, and run as your own user (not the image's built-in one)
-so it can write to them. The flags below drop every capability the tool
-doesn't need, block privilege escalation, make the root filesystem
-read-only (with a `tmpfs` for the one path that needs to write), and
-cap resource usage:
-
-```sh
-docker run --rm -it --user "$(id -u):$(id -g)" -e HOME=/home/movieplanner \
-  --cap-drop=ALL --security-opt=no-new-privileges --read-only \
-  --tmpfs /tmp --memory=256m --cpus=1 \
-  -v ~/.config/movie-planner:/home/movieplanner/.config/movie-planner \
-  -v ~/.local/share/movie-planner:/home/movieplanner/.local/share/movie-planner \
-  ghcr.io/alrayyes/movie-planner:latest --help
 ```
 
 ## Usage
