@@ -33,12 +33,12 @@
                 owner = "astral-sh";
                 repo = "uv";
                 tag = version;
-                hash = pkgs.lib.fakeHash;
+                hash = "sha256-RprHadjzR5LsiYYhryIGOiIQkRKVWJwyE63UXrzN62g=";
               };
               cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
                 inherit (old) pname;
                 inherit version src;
-                hash = pkgs.lib.fakeHash;
+                hash = "sha256-zEZNPEI7GLkWJ49jd8jS+VsuijaW8/ZMWyus3VFcZPo=";
               };
             });
           };
