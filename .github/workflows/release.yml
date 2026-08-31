@@ -115,3 +115,96 @@ jobs:
             dist-pyinstaller/movie-planner_*.deb \
             dist-pyinstaller/movie-planner-*.rpm \
             --repo "$GITHUB_REPOSITORY"
+
+  # Bumps this repo's own PKGBUILD to the new version, test-builds it
+  # for real against the actual release tarball (not a local stand-in
+  # the way ci.yml's dry run uses), and only then pushes to the
+  # separate, personally-owned AUR git repo. AUR has no per-package
+  # deploy keys — AUR_SSH_KEY is a shared key already used by other
+  # repos, scoped by AUR's own maintainer list on the movie-planner
+  # package, not by the key itself.
+  aur-package:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+      - name: Install build tooling
+        # archlinux:latest ships no git at all — actions/checkout
+        # falls back to the GitHub API to do the checkout without it,
+        # but every step after this one needs a real git binary.
+        run: |
+          pacman -Sy --noconfirm --needed \
+            base-devel git openssh sudo man-db \
+            python-build python-installer python-wheel python-uv-build \
+            python-caldav python-httpx python-icalendar python-rapidfuzz python-typer
+          # See ci.yml's aur job for why this line is removed.
+          sed -i '/^NoExtract.*man/d' /etc/pacman.conf
+          # See ci.yml's aur job for why this is needed in a
+          # `container:` job specifically.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          useradd -m builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+
+      - name: Bump pkgver and the release-tarball checksum
+        env:
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          pkgver="${TAG_NAME##*-v}"
+          url="https://github.com/${GITHUB_REPOSITORY}/archive/${TAG_NAME}.tar.gz"
+          sha256=$(curl -fsSL "$url" | sha256sum | cut -d' ' -f1)
+          sed -i \
+            -e "s/^pkgver=.*/pkgver=${pkgver}/" \
+            -e "s/^pkgrel=.*/pkgrel=1/" \
+            -e "s/^sha256sums=.*/sha256sums=('${sha256}')/" \
+            PKGBUILD
+
+      - name: Install AUR-only build dependencies
+        run: su builder -c "bash '$GITHUB_WORKSPACE/scripts/install-aur-builddeps.sh'"
+
+      - name: makepkg
+        run: su builder -c "cd '$GITHUB_WORKSPACE' && makepkg -s --noconfirm --nocheck"
+
+      # Same gate .deb/.rpm get in package-linux.yml: a package that
+      # builds but doesn't install, or installs but doesn't run, is
+      # otherwise only ever caught by an AUR user filing a comment.
+      - name: Install-test the built package
+        run: |
+          pacman -U --noconfirm "$GITHUB_WORKSPACE"/movie-planner-*-1-any.pkg.tar.zst
+          movie-planner --help
+          man -w movie-planner
+
+      - name: Push to the AUR
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+        run: |
+          su builder -c "
+            set -eu
+            mkdir -p ~/.ssh
+            echo \"\$AUR_SSH_KEY\" > ~/.ssh/aur
+            chmod 600 ~/.ssh/aur
+            # Fetched directly from aur.archlinux.org — AUR publishes
+            # no separate fingerprint page to cross-check against, so
+            # this is trust-on-first-use, pinned here rather than
+            # re-trusted on every run.
+            echo 'aur.archlinux.org ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDKF9vAFWdgm9Bi8uc+tYRBmXASBb5cB5iZsB7LOWWFeBrLp3r14w0/9S2vozjgqY5sJLDPONWoTTaVTbhe3vwO8CBKZTEt1AcWxuXNlRnk9FliR1/eNB9uz/7y1R0+c1Md+P98AJJSJWKN12nqIDIhjl2S1vOUvm7FNY43fU2knIhEbHybhwWeg+0wxpKwcAd/JeL5i92Uv03MYftOToUijd1pqyVFdJvQFhqD4v3M157jxS5FTOBrccAEjT+zYmFyD8WvKUa9vUclRddNllmBJdy4NyLB8SvVZULUPrP3QOlmzemeKracTlVOUG1wsDbxknF1BwSCU7CmU6UFP90kpWIyz66bP0bl67QAvlIc52Yix7pKJPbw85+zykvnfl2mdROsaT8p8R9nwCdFsBc9IiD0NhPEHcyHRwB8fokXTajk2QnGhL+zP5KnkmXnyQYOCUYo3EKMXIlVOVbPDgRYYT/XqvBuzq5S9rrU70KoI/S5lDnFfx/+lPLdtcnnEPk=' >> ~/.ssh/known_hosts
+            echo 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' >> ~/.ssh/known_hosts
+            export GIT_SSH_COMMAND='ssh -i ~/.ssh/aur -o UserKnownHostsFile=~/.ssh/known_hosts'
+
+            cd /tmp
+            git clone ssh://aur@aur.archlinux.org/movie-planner.git aur-movie-planner
+            cd aur-movie-planner
+            cp '$GITHUB_WORKSPACE/PKGBUILD' .
+            makepkg --printsrcinfo > .SRCINFO
+            git config user.name 'movie-planner release job'
+            git config user.email 'alrayyes@users.noreply.github.com'
+            git add PKGBUILD .SRCINFO
+            if ! git diff --cached --quiet; then
+              git commit -m \"release ${{ needs.release-please.outputs.tag_name }}\"
+              git push origin HEAD:master
+            fi
+          "
