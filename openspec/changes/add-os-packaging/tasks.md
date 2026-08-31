@@ -49,9 +49,13 @@
   confirmed on full (not `-slim`) debian/fedora images; the `-slim`
   variants exclude `/usr/share/man` by default and would have passed
   this check while shipping nothing
-- [ ] 4.3 Call the same script from the `PKGBUILD`'s `package()`
-  function and install it to the same path, and verify `man
-  movie-planner` works after a local `makepkg -si`
+- [x] 4.3 Generate the man pages in the `PKGBUILD`'s `package()`
+  function and install them to the same path, and verify `man
+  movie-planner` works after a local `makepkg -si` — invokes
+  `click-man` directly via `python -c`, not `scripts/generate-man.sh`
+  itself: that script needs `uv`, which isn't part of this build at
+  all (same reason `flake.nix` doesn't call it either); verified
+  locally end-to-end including the man page after `pacman -U`
 
 ## 5. Provenance
 
@@ -68,9 +72,13 @@
   `man -w movie-planner` both succeed afterward
 - [x] 6.2 Add the equivalent `rpm -i` step against a
   `fedora`/`rockylinux` container, with the same two verifications
-- [ ] 6.3 Add a step that runs `makepkg` against the `PKGBUILD` inside
+- [x] 6.3 Add a step that runs `makepkg` against the `PKGBUILD` inside
   an `archlinux` container and verifies it builds and installs
-  successfully, gating the AUR push in task 7 on this passing
+  successfully, gating the AUR push in task 7 on this passing — added
+  to both `ci.yml` (dry run, against a local `git archive` tarball)
+  and the release job (against the real release tarball); verified
+  locally end-to-end (build, install, `--help`, `man -w`) against
+  both a local dev tarball and the real v0.6.0 release tarball
 - [x] 6.4 Wire all three into the release job so a failure here blocks
   both the GitHub Release asset upload and the AUR push for that
   release, and verify by deliberately breaking one package locally
@@ -88,18 +96,27 @@
   and verify a workflow step can `ssh aur@aur.archlinux.org` with it —
   confirmed present via `gh secret list`; a workflow step using it is
   still to be written
-- [ ] 7.2 Write the `PKGBUILD` (source: tagged release tarball from
+- [x] 7.2 Write the `PKGBUILD` (source: tagged release tarball from
   `https://github.com/alrayyes/movie-planner/archive/movie-planner-vX.Y.Z.tar.gz`,
   real `depends=()` on Arch's `python-*` packages, build via
   `python -m build` + `python -m installer`, man page via task 4's
-  script) and verify `makepkg -si` installs a working `movie-planner`
-  locally
-- [ ] 7.3 Generate `.SRCINFO` (`makepkg --printsrcinfo`) and push both
+  approach) and verify `makepkg -si` installs a working
+  `movie-planner` locally — verified against both a local dev tarball
+  and the real v0.6.0 release tarball, `python-questionary` and
+  `python-click-man` (AUR-only deps) built from source via
+  `scripts/install-aur-builddeps.sh`
+- [x] 7.3 Generate `.SRCINFO` (`makepkg --printsrcinfo`) and push both
   files to the personal AUR git repo, and verify the package appears
-  on `aur.archlinux.org/packages/movie-planner`
-- [ ] 7.4 Add the release-job step that bumps `pkgver`/checksum,
+  on `aur.archlinux.org/packages/movie-planner` — wired into the
+  release job (clone, regenerate, commit, push over the shared
+  `aur-ci` key), not yet exercised against a real release (task 8.2);
+  AUR's host key is pinned in the workflow (fetched via `ssh-keyscan`
+  against the real host)
+- [x] 7.4 Add the release-job step that bumps `pkgver`/checksum,
   regenerates `.SRCINFO`, commits, and pushes to AUR on every release,
-  and verify it runs end-to-end on a real tagged release
+  and verify it runs end-to-end on a real tagged release — wired,
+  gated on the same install-test as task 6.3 passing first; the
+  end-to-end real-release run is task 8.2
 
 ## 8. Docs and verification
 
