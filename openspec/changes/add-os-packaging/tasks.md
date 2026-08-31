@@ -89,7 +89,7 @@
   confirmed present via `gh secret list`; a workflow step using it is
   still to be written
 - [ ] 7.2 Write the `PKGBUILD` (source: tagged release tarball from
-  `https://github.com/alrayyes/movie-planner/archive/vX.Y.Z.tar.gz`,
+  `https://github.com/alrayyes/movie-planner/archive/movie-planner-vX.Y.Z.tar.gz`,
   real `depends=()` on Arch's `python-*` packages, build via
   `python -m build` + `python -m installer`, man page via task 4's
   script) and verify `makepkg -si` installs a working `movie-planner`

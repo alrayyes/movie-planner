@@ -41,9 +41,18 @@ jobs:
         # generates ship in the package.
         run: uv sync --frozen
 
-      - name: Strip the tag's leading "v" for nfpm's version field
+      - name: Strip the tag's package-name/"v" prefix for nfpm's version field
+        # release-please's actual tag format is "movie-planner-v0.6.0"
+        # (package-name prefixed, confirmed live against a real
+        # release), not a bare "v0.6.0" — a plain `#v` strip left
+        # "movie-planner-v0.6.0" in nfpm's version field, which dpkg
+        # then refused outright: "version number does not start with
+        # digit". Stripping everything up to the last "-v" instead
+        # handles both that real tag shape and the dry run's plain
+        # "0.0.0-dev" (which has no "-v" to strip, so passes through
+        # unchanged).
         id: version
-        run: echo "value=${INPUT_VERSION#v}" >> "$GITHUB_OUTPUT"
+        run: echo "value=${INPUT_VERSION##*-v}" >> "$GITHUB_OUTPUT"
         env:
           INPUT_VERSION: ${{ inputs.version }}
 

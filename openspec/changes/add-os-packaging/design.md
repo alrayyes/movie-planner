@@ -60,10 +60,19 @@ is already clean.
 
 `release-please` already owns versioning
 (`release-please-config.json`, `include-v-in-tag: true`). The packaging
-step reads `needs.release-please.outputs.tag_name`, strips the leading
-`v` for `nfpm`'s `version:` field, and the same value drives the
+step reads `needs.release-please.outputs.tag_name`, strips the tag's
+prefix for `nfpm`'s `version:` field, and the same value drives the
 `PKGBUILD`'s `pkgver` and the release-tarball URL. Nothing about the
 version is decided in this change's own files.
+
+**The actual tag format is `movie-planner-vX.Y.Z`**, not a bare
+`vX.Y.Z` — confirmed against the real v0.6.0 release, the hard way: a
+naive `${VERSION#v}` strip left `movie-planner-v0.6.0` in nfpm's
+`version:` field, and dpkg refused it outright ("version number does
+not start with digit"). The fix strips everything up to the last
+`-v` instead (`${VERSION##*-v}`), which also passes the CI dry run's
+plain `0.0.0-dev` through unchanged. The AUR release-tarball URL
+needs the same prefix.
 
 ### AUR push happens from the same release job, not by hand
 

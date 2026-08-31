@@ -20,7 +20,7 @@ GitHub Releases for everything else — no apt/dnf repo to run, just
   uploads them as assets on the GitHub Release `release-please` already
   creates.
 - Add a `PKGBUILD` (and its generated `.SRCINFO`) that builds from a
-  tagged GitHub release tarball (`https://github.com/alrayyes/movie-planner/archive/vX.Y.Z.tar.gz`),
+  tagged GitHub release tarball (`https://github.com/alrayyes/movie-planner/archive/movie-planner-vX.Y.Z.tar.gz`),
   pushed to this package's own AUR git repo
   (`ssh://aur@aur.archlinux.org/movie-planner.git`) — not committed to
   this project's repo.
