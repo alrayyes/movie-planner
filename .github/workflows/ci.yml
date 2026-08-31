@@ -102,6 +102,26 @@ jobs:
         # release job publishes it to GHCR once a release actually cuts.
         run: docker build -t movie-planner:ci .
 
+  # No release-job counterpart, unlike package-linux — a flake has
+  # nothing to publish. `nix run github:alrayyes/movie-planner` (or
+  # `nix profile install`) resolves the flake straight from whatever
+  # commit is asked for; the commit itself is the distributable
+  # artifact, so this only ever needs to prove the flake still builds.
+  nix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: nix flake check
+        run: nix flake check --print-build-logs
+      - name: nix build
+        run: nix build --print-build-logs
+      - name: nix run
+        run: nix run . -- --help
+
   # Dry run of the same build package-linux.yml's release-job call does,
   # against a fixed dev version — proves the .deb/.rpm still build and
   # actually install before a change to the Dockerfile's pyinstaller

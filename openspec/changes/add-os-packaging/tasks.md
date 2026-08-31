@@ -117,26 +117,51 @@
   regenerates `.SRCINFO`, commits, and pushes to AUR on every release,
   and verify it runs end-to-end on a real tagged release — wired,
   gated on the same install-test as task 6.3 passing first; the
-  end-to-end real-release run is task 8.2, now done
+  end-to-end real-release run is task 9.2, now done
 
-## 8. Docs and verification
+## 8. Nix flake
 
-- [x] 8.1 Add `docs/INSTALL.md` covering every install method
+- [ ] 8.1 Add `flake.nix` building `movie-planner` via
+  `python3.pkgs.buildPythonApplication` (`pyproject = true`,
+  `build-system = [ python3.pkgs.uv-build ]`, `dependencies` against
+  nixpkgs' own `caldav`/`httpx`/`icalendar`/`questionary`/`rapidfuzz`/
+  `typer`) and man page via task 4's approach, and verify `nix build`
+  produces a working `movie-planner` — no local `nix` available in
+  this environment, so first verified in CI; blocked on nixpkgs'
+  `python3Packages.uv-build` (0.11.28) being older than this
+  project's own `build-system` requirement (`>=0.12.5,<0.13`) —
+  confirmed live in CI, not just the anticipated risk; `dotfiles` is
+  computing a working override
+- [ ] 8.2 Add a CI job that runs `nix build` and `nix run .# --
+  --help` on every push/PR (mirroring `package-linux.yml`'s dry run)
+  and verify it catches a deliberately broken flake — added; blocked
+  from actually passing by 8.1
+- [ ] 8.3 Commit the `flake.lock` CI generates once the build
+  succeeds, and verify `nix flake check` passes
+- [ ] 8.4 Report any nixpkgs-specific friction (the `uv-build` version
+  question in design.md's risks, or anything else) to whoever
+  maintains the shared Nix packaging conventions — done; reported to
+  `dotfiles`, along with the container-image man-page-exclusion and
+  git `safe.directory` findings from the AUR work
+
+## 9. Docs and verification
+
+- [x] 9.1 Add `docs/INSTALL.md` covering every install method
   (checkout, `pipx`/`pip`, Docker, AUR, `.deb`, `.rpm`), shrink
   `README.md`'s Installation section to a link plus what it already
   covers, and verify every command shown actually works against a real
   published release — verified against v0.7.0; found the AUR section's
   first draft was itself wrong (a bare `makepkg -si` can't resolve
   `python-questionary`'s own AUR-only dependency), fixed to lead with
-  an AUR helper
-- [x] 8.2 Tag a real release and confirm, for that one release: the
+  an AUR helper. Nix isn't in the doc yet - add it once 8.1 unblocks
+- [x] 9.2 Tag a real release and confirm, for that one release: the
   `.deb` and `.rpm` are attached and provenance-verifiable, the AUR
   package resolves the same version, `man movie-planner` works, and
   `movie-planner --help` runs after each install method — all
   confirmed against the real v0.7.0 release, including a from-scratch
   AUR install via the real published package (not a local stand-in).
-  The Nix flake (a separate, not-yet-merged change) isn't part of
-  this - closing the GitHub issue waits for that
-- [ ] 8.3 Once the Nix flake lands and is verified against a real
-  release too, close the GitHub issue referencing everything that
-  shipped
+  Nix isn't part of this yet - it's still blocked on task 8.1
+- [ ] 9.3 Once the Nix flake actually builds (task group 8 unblocked)
+  and is verified against a real release the same way, add it to
+  `docs/INSTALL.md` and close the GitHub issue referencing everything
+  that shipped

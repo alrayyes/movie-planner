@@ -206,6 +206,31 @@ no git at all.
 plain `0.0.0`, not `0.0.0-dev` the way `package-linux.yml`'s nfpm dry
 run uses (nfpm has no such restriction).
 
+### Nix builds "for real" too, against nixpkgs' own Python set
+
+Same reasoning as the AUR path: Nix's whole model is building
+reproducibly from source against pinned inputs, so an opaque
+PyInstaller binary in a `flake.nix` would be exactly as out of place
+there as it would be in a `PKGBUILD`. `flake.nix` uses
+`python3.pkgs.buildPythonApplication` with `pyproject = true` and
+`build-system = [ python3.pkgs.uv-build ]` (this project's own
+`uv_build` backend), depending on nixpkgs' own `caldav`/`httpx`/
+`icalendar`/`questionary`/`rapidfuzz`/`typer` packages rather than
+vendoring this repo's exact pins — nixpkgs versions those itself, the
+same tradeoff the AUR `depends=()` already makes.
+
+Real risk, not yet confirmed: nixpkgs' `python3Packages.uv-build` may
+lag behind the `uv-build>=0.12.5,<0.13` this project's own
+`[build-system]` requires (nixpkgs `master` had `0.11.28` as of this
+writing) — whether `uv_build` enforces that range strictly enough to
+break the build is genuinely unknown without trying it. First real
+attempt happens in CI (no local `nix` available in this environment
+to pre-test), and any friction gets reported to whoever maintains the
+shared Nix packaging conventions.
+
+No nixpkgs submission - that review process is a separate, heavier
+effort than "least resistance," and nothing here forecloses it later.
+
 ### Installation instructions move to their own doc
 
 README's Installation section already covers a checkout, `pipx`/`pip`,
@@ -245,13 +270,21 @@ the README.
   distro releases ship. → Document the practical floor (oldest distro
   release verified to run the binary) in the README once tested;
   revisit a musl/older-base build only if a real report comes in.
-- **[Two build paths to keep in sync]** The AUR package and the
-  `.deb`/`.rpm` are built by genuinely different mechanisms (real
-  Python build vs. frozen binary), so a dependency bump could pass one
-  and silently break the other. → Both are exercised by the same
+- **[Three build paths to keep in sync]** The AUR package, Nix flake,
+  and the `.deb`/`.rpm` are built by genuinely different mechanisms
+  (two real Python builds against two different distros' package
+  sets, plus a frozen binary), so a dependency bump could pass some
+  and silently break another. → All three are exercised by the same
   release; the "verify against one real tagged release before closing
   the ticket" step in the proposal is exactly this check, and it's
   worth re-running whenever `caldav`/`httpx`/`icalendar` are bumped.
+- **[nixpkgs' `uv-build` may not satisfy this project's own
+  `[build-system]` range]** Unconfirmed until actually tried in CI. →
+  If it breaks, the fallback is pinning a specific nixpkgs revision
+  known to carry a compatible `uv-build`, or (if genuinely
+  unsupported) building without `pyproject = true` via a hand-rolled
+  derivation instead - not decided here, resolved against the real
+  error.
 - **[New unattended-push surface]** Automating the AUR push from CI
   means a compromised or buggy workflow could push bad content to the
   AUR under Ryan's account - and unlike a repo-scoped deploy key, the

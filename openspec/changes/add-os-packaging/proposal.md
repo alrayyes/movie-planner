@@ -2,12 +2,13 @@
 
 Right now the only ways to get `movie-planner` are a checkout with `uv
 sync`, or `pipx install git+https://...` — nothing a package manager can
-resolve or a distro's update mechanism can track. Arch and
-Debian/RPM-based installs are the two most requested shapes for a CLI
-like this, and both can be covered with almost no extra hosting: an AUR
-`PKGBUILD` for Arch, plus `.deb`/`.rpm` files attached directly to
-GitHub Releases for everything else — no apt/dnf repo to run, just
-`dpkg -i`/`rpm -i` against a downloaded file.
+resolve or a distro's update mechanism can track. Arch, Debian/RPM-based,
+and Nix/NixOS installs are the most requested shapes for a CLI like
+this, and all three can be covered with almost no extra hosting: an AUR
+`PKGBUILD` for Arch, `.deb`/`.rpm` files attached directly to GitHub
+Releases for everything else, and a `flake.nix` in this repo itself for
+Nix/NixOS — no apt/dnf repo, no nixpkgs submission, just `dpkg -i`/
+`rpm -i`/`nix profile install` against something already published.
 
 ## What Changes
 
@@ -38,6 +39,13 @@ GitHub Releases for everything else — no apt/dnf repo to run, just
   produced files — a package that builds but doesn't install, or
   installs but doesn't run, is otherwise only caught by hand against a
   real release.
+- Add a `flake.nix` building `movie-planner` for real from source
+  against nixpkgs' own Python package set (same "build for real"
+  philosophy as the AUR path, for the same reason: Nix doesn't want an
+  opaque prebuilt binary any more than AUR does), installable via `nix
+  profile install github:alrayyes/movie-planner` or `nix run`. No
+  nixpkgs submission — that's a separate, heavier process this change
+  doesn't take on.
 - Add a new `docs/INSTALL.md` with per-format install instructions
   once each path is verified against a real tagged release, and shrink
   `README.md`'s Installation section to a link plus the checkout/
@@ -49,8 +57,9 @@ GitHub Releases for everything else — no apt/dnf repo to run, just
 
 - `packaging`: observable guarantees about how `movie-planner` can be
   installed — a `PKGBUILD` resolvable from the AUR, `.deb`/`.rpm`
-  files attached to every GitHub Release, a man page shipped with
-  every install method, and CI that verifies a built package actually
+  files attached to every GitHub Release, a `flake.nix` installable
+  via `nix profile install`/`nix run`, a man page shipped with every
+  install method, and CI that verifies a built package actually
   installs and runs before it's ever published.
 
 ### Modified Capabilities
@@ -64,6 +73,7 @@ None — no existing capability's requirements change.
 - New `nfpm` config file (e.g. `nfpm.yaml`) at the repo root.
 - New `PKGBUILD` + `.SRCINFO`, living in a separate, personally-owned
   AUR repo (not this repo).
+- New `flake.nix` (and `flake.lock`) at the repo root.
 - New `docs/INSTALL.md` covering every install method; `README.md`'s
   Installation section shrinks to a couple of lines plus a link.
 - `pyproject.toml` — the placeholder maintainer email
