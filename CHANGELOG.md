@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.5.0...movie-planner-v0.5.1) (2026-08-31)
+
+
+### Bug Fixes
+
+* bring repo in line with a few standing conventions ([#33](https://github.com/alrayyes/movie-planner/issues/33)) ([7fc5a05](https://github.com/alrayyes/movie-planner/commit/7fc5a05eb524ca388cb350c3bd63f45dd7be7039))
+
 ## [0.5.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.4.1...movie-planner-v0.5.0) (2026-08-30)
 
 
