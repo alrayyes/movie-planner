@@ -102,6 +102,16 @@ jobs:
         # release job publishes it to GHCR once a release actually cuts.
         run: docker build -t movie-planner:ci .
 
+  # Dry run of the same build package-linux.yml's release-job call does,
+  # against a fixed dev version — proves the .deb/.rpm still build and
+  # actually install before a change to the Dockerfile's pyinstaller
+  # stage, nfpm.yaml, or either script only gets exercised for real
+  # against a tagged release.
+  package-linux:
+    uses: ./.github/workflows/package-linux.yml
+    with:
+      version: 0.0.0-dev
+
   # Layout and structure. Style and mechanics are prose.yml — see its header
   # comment for why they're split out.
   prose:

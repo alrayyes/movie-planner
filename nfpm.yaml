@@ -1,0 +1,35 @@
+# .deb/.rpm packaging config for nfpm (https://nfpm.goreleaser.com).
+#
+# nfpm doesn't build Python — it only wraps files that already exist —
+# so this packages the PyInstaller-frozen binary from
+# scripts/build-binary.sh rather than depending on distro python3-*
+# packages, whose naming and available versions differ between Debian
+# and Fedora. The AUR PKGBUILD builds "for real" instead; see
+# openspec/changes/add-os-packaging/design.md for why the two paths
+# differ on purpose.
+#
+# VERSION is passed as an environment variable by whatever invokes
+# `nfpm package` (the release-please tag, with its leading "v"
+# stripped, or a fixed dev value for a CI dry run).
+name: movie-planner
+arch: amd64
+platform: linux
+version: ${VERSION}
+maintainer: alrayyes <alrayyes@users.noreply.github.com>
+description: |
+  CLI that logs watched movies and syncs them to a CalDAV calendar.
+homepage: https://github.com/alrayyes/movie-planner
+license: GPL-3.0-only
+
+contents:
+  - src: ./dist-pyinstaller/movie-planner
+    dst: /usr/bin/movie-planner
+    file_info:
+      mode: 0755
+  # One page per command and subcommand, from scripts/generate-man.sh.
+  - src: ./man/*.1.gz
+    dst: /usr/share/man/man1/
+  - src: ./LICENSE
+    dst: /usr/share/doc/movie-planner/LICENSE
+  - src: ./README.md
+    dst: /usr/share/doc/movie-planner/README.md
