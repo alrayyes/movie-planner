@@ -10,6 +10,17 @@ name: release
 on:
   push:
     branches: [main]
+  # A merge performed with the default GITHUB_TOKEN — which is what
+  # arms *-auto-merge.yml's `gh pr merge --auto` — never fires this
+  # workflow's own `push` trigger: GitHub suppresses events caused by
+  # GITHUB_TOKEN specifically to stop recursive runs, and that
+  # suppression covers the merge commit an auto-merged PR produces,
+  # not just a workflow's own direct push. Confirmed live: merging the
+  # release-please PR for 0.6.0 via auto-merge landed the commit on
+  # main with zero check-runs and zero statuses — this workflow simply
+  # never ran. workflow_dispatch is the manual escape hatch until
+  # *-auto-merge.yml carries a real-identity token instead.
+  workflow_dispatch:
 
 permissions:
   contents: read
