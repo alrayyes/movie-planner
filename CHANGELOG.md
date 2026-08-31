@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.6.0...movie-planner-v0.7.0) (2026-08-31)
+
+
+### Features
+
+* add an AUR PKGBUILD ([#45](https://github.com/alrayyes/movie-planner/issues/45)) ([1a548ad](https://github.com/alrayyes/movie-planner/commit/1a548ad4a7dbf200317026f012db1abf1a90fb2d))
+
+
+### Bug Fixes
+
+* **ci:** strip release-please's real tag prefix for nfpm ([#43](https://github.com/alrayyes/movie-planner/issues/43)) ([76751a7](https://github.com/alrayyes/movie-planner/commit/76751a7370be6523b2e7f4ce1a6cd298b320d80b))
+* **release:** add workflow_dispatch as a manual recovery trigger ([#41](https://github.com/alrayyes/movie-planner/issues/41)) ([363ad65](https://github.com/alrayyes/movie-planner/commit/363ad65562445e4550d079ad6008d281d927d06b))
+
 ## [0.6.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.5.1...movie-planner-v0.6.0) (2026-08-31)
 
 
