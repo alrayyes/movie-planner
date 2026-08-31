@@ -29,6 +29,7 @@ ruleset
 rulesets
 runbook
 repos?
+distros?
 isort
 subpackages?
 stdout

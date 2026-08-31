@@ -100,6 +100,15 @@ available as the `AUR_SSH_KEY` secret on `alrayyes/movie-planner`
 specifically - a repo-secret grant only Ryan can make, not a new
 credential to provision; see tasks.md.
 
+**A bare `makepkg -si` can't actually install this package** - found
+verifying the real, published AUR package end to end.
+`python-questionary` and `python-click-man` are themselves AUR-only, and
+plain `makepkg`/`pacman` have no mechanism to resolve an AUR-to-AUR
+dependency the way an AUR helper (`paru`, `yay`) does. `docs/INSTALL.md`
+leads with an AUR helper for exactly this reason, with the manual
+build-the-AUR-deps-first sequence as the fallback for someone without
+one.
+
 ### Provenance on the new artifacts, no cosign
 
 Add `actions/attest-build-provenance` to the packaging step, attesting
