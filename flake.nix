@@ -16,10 +16,36 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        python3 = pkgs.python3; # nixos-unstable's python3 is already 3.14
+        # nixos-unstable's python3 is already 3.14, but its uv-build
+        # (0.11.28 as of writing) is older than this project's own
+        # `[build-system] requires = ["uv-build>=0.12.5,<0.13"]` —
+        # confirmed live: `buildPythonApplication`'s pypa build hook
+        # enforces that range and refuses the older one outright
+        # ("Unmet dependencies ... found: 0.11.28"). Overridden here
+        # to the exact version this repo already pins uv itself to
+        # elsewhere, built the same way nixpkgs' own uv-build
+        # derivation is (rustPlatform + maturin), just at a newer tag.
+        python3 = pkgs.python3.override {
+          packageOverrides = _self: super: {
+            uv-build = super.uv-build.overrideAttrs (old: rec {
+              version = "0.12.7";
+              src = pkgs.fetchFromGitHub {
+                owner = "astral-sh";
+                repo = "uv";
+                tag = version;
+                hash = pkgs.lib.fakeHash;
+              };
+              cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+                inherit (old) pname;
+                inherit version src;
+                hash = pkgs.lib.fakeHash;
+              };
+            });
+          };
+        };
         # Kept in sync with pyproject.toml's [project].version by hand —
         # release-please owns that file, not this one.
-        version = "0.6.0";
+        version = "0.7.0";
 
         # Not in nixpkgs at all (confirmed: no click-man attribute in
         # python3Packages) — a small enough package (its only
