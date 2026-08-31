@@ -19,7 +19,23 @@
         python3 = pkgs.python3; # nixos-unstable's python3 is already 3.14
         # Kept in sync with pyproject.toml's [project].version by hand —
         # release-please owns that file, not this one.
-        version = "0.5.1";
+        version = "0.6.0";
+
+        # Not in nixpkgs at all (confirmed: no click-man attribute in
+        # python3Packages) — a small enough package (its only
+        # dependency is click, already in nixpkgs) to vendor directly
+        # rather than drop the man-page generation it enables.
+        clickMan = python3.pkgs.buildPythonPackage {
+          pname = "click-man";
+          version = "0.5.1";
+          format = "wheel";
+          src = pkgs.fetchurl {
+            url = "https://files.pythonhosted.org/packages/e1/37/34e03579eb583a587edba458599af6d82715a617e685dbe2ff30e4238930/click_man-0.5.1-py3-none-any.whl";
+            sha256 = "ed63caf6d6bf04f2b1fb198a1a764daea9785ad29f303b2962418a417541a6ce";
+          };
+          propagatedBuildInputs = [ python3.pkgs.click ];
+          doCheck = false;
+        };
       in
       {
         packages.default = python3.pkgs.buildPythonApplication {
@@ -48,7 +64,7 @@
           ];
 
           nativeBuildInputs = [
-            python3.pkgs.click-man
+            clickMan
             pkgs.installShellFiles
           ];
 
