@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.9.1...movie-planner-v0.9.2) (2026-09-01)
+
+
+### Documentation
+
+* add Nix/NixOS to docs/INSTALL.md, close out the Nix flake tasks ([#62](https://github.com/alrayyes/movie-planner/issues/62)) ([eaffb64](https://github.com/alrayyes/movie-planner/commit/eaffb6449d855158df9f7574d92a00945882a727))
+
 ## [0.9.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.9.0...movie-planner-v0.9.1) (2026-09-01)
 
 
