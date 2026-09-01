@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.8.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.8.0...movie-planner-v0.8.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* **nix:** disable checks on a flaky nixpkgs transitive test dependency ([#51](https://github.com/alrayyes/movie-planner/issues/51)) ([978b59f](https://github.com/alrayyes/movie-planner/commit/978b59f04119c221599d075a437fffd38f96c66c))
+* **nix:** fill in the real uv-build source hash ([#49](https://github.com/alrayyes/movie-planner/issues/49)) ([fdb30c1](https://github.com/alrayyes/movie-planner/commit/fdb30c13fc5ff5128f7bceeceb6a021785eaef05))
+* **release:** use a real-identity token for release-please and auto-merge ([#52](https://github.com/alrayyes/movie-planner/issues/52)) ([5e1066f](https://github.com/alrayyes/movie-planner/commit/5e1066f6cb1a164381e66e7fec0600137b50ccbf))
+
 ## [0.8.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.7.0...movie-planner-v0.8.0) (2026-08-31)
 
 
