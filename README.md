@@ -109,6 +109,18 @@ the same, interactively. All three sections are required; a missing file
 or a missing key fails with a message naming the problem, not a stack
 trace.
 
+Instead of `caldav.password` in plain text, `caldav.password_command` runs
+a command and uses its stdout as the password — a password manager CLI, for
+example. Set only one of the two.
+
+Every setting except the CalDAV password can also be set as a flag
+(`--caldav-url`, `--caldav-username`, `--omdb-api-key`, `--db-path`) or an
+environment variable (`MOVIE_PLANNER_CALDAV_URL` and so on), overriding the
+config file for one invocation — flags win over environment variables, which
+win over the config file. The password stays config-file-only (via
+`password` or `password_command`) rather than risk landing in shell history
+or a process list.
+
 ## Import examples
 
 [`examples/`](examples/) has three fictional viewings in CSV and JSON

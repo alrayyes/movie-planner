@@ -8,7 +8,7 @@ from typer.testing import CliRunner
 from movie_planner import config as config_module
 from movie_planner.calendar_sync import CalendarClient
 from movie_planner.cli import app
-from movie_planner.omdb import MovieRatings
+from movie_planner.omdb import MovieRatings, OmdbClient
 from movie_planner.store import Store
 
 runner = CliRunner()
@@ -666,3 +666,150 @@ def test_sync_retry_pushes_unsynced_entries(config_path: Path, no_omdb_match: No
     assert retried.caldav_uid is not None
     assert retried.caldav_uid in fake.events_by_uid
     store.close()
+
+
+# --- config overrides: flags and env vars take precedence over the config
+# file (rules/cli.md), except the CalDAV password, which never gets an
+# override surface (kept config-file-only) ---
+
+
+def test_db_path_flag_overrides_config_file(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    override_db_path = tmp_path / "override.db"
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "--db-path",
+            str(override_db_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = Store(override_db_path)
+    (entry,) = store.list_entries()
+    assert entry.title == "Dune"
+    store.close()
+
+
+def test_db_path_env_var_overrides_config_file(
+    config_path: Path,
+    calendar: FakeCalendar,
+    no_omdb_match: None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    override_db_path = tmp_path / "override.db"
+    monkeypatch.setenv("MOVIE_PLANNER_DB_PATH", str(override_db_path))
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = Store(override_db_path)
+    (entry,) = store.list_entries()
+    assert entry.title == "Dune"
+    store.close()
+
+
+def test_caldav_url_flag_overrides_config_file(
+    config_path: Path, no_omdb_match: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, str] = {}
+
+    def fake_connect(cls: type[CalendarClient], **kw: str) -> CalendarClient:
+        captured.update(kw)
+        return CalendarClient(FakeCalendar())
+
+    monkeypatch.setattr(CalendarClient, "connect", classmethod(fake_connect))
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "--caldav-url",
+            "https://override.example.com/calendars/movies/",
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["url"] == "https://override.example.com/calendars/movies/"
+
+
+def test_omdb_api_key_flag_overrides_config_file(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, str] = {}
+    original_init = OmdbClient.__init__
+
+    def capturing_init(self: OmdbClient, api_key: str, *args: object, **kwargs: object) -> None:
+        captured["api_key"] = api_key
+        original_init(self, api_key, *args, **kwargs)
+
+    monkeypatch.setattr(OmdbClient, "__init__", capturing_init)
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: None)
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "--omdb-api-key",
+            "override-key",
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["api_key"] == "override-key"
+
+
+def test_no_flag_or_env_override_exists_for_the_caldav_password() -> None:
+    result = runner.invoke(app, ["--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "--caldav-password" not in result.output

@@ -1,8 +1,10 @@
 """Loads the TOML config: CalDAV credentials, the OMDb API key, and the
-local SQLite database path. See design.md's "Config" decision.
+local SQLite database path.
 """
 
 import os
+import shlex
+import subprocess
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,6 +37,33 @@ def _require(table: dict, key: str, dotted_path: str) -> object:
     return table[key]
 
 
+def _resolve_password(caldav: dict) -> str:
+    has_password = "password" in caldav
+    has_command = "password_command" in caldav
+
+    if has_password and has_command:
+        raise ConfigError(
+            "config sets both 'caldav.password' and 'caldav.password_command' - use only one"
+        )
+    if has_command:
+        command = str(caldav["password_command"])
+        try:
+            result = subprocess.run(
+                shlex.split(command),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except (OSError, subprocess.CalledProcessError) as e:
+            raise ConfigError(f"caldav.password_command failed: {e}") from e
+        return result.stdout.splitlines()[0] if result.stdout.splitlines() else ""
+    if has_password:
+        return str(caldav["password"])
+    raise ConfigError(
+        "config is missing required key 'caldav.password' (or 'caldav.password_command')"
+    )
+
+
 def load_config(path: Path | None = None) -> Config:
     config_path = path or default_config_path()
 
@@ -54,7 +83,7 @@ def load_config(path: Path | None = None) -> Config:
     return Config(
         caldav_url=str(_require(caldav, "url", "caldav.url")),
         caldav_username=str(_require(caldav, "username", "caldav.username")),
-        caldav_password=str(_require(caldav, "password", "caldav.password")),
+        caldav_password=_resolve_password(caldav),
         omdb_api_key=str(_require(omdb, "api_key", "omdb.api_key")),
         db_path=Path(str(_require(storage, "db_path", "storage.db_path"))).expanduser(),
     )

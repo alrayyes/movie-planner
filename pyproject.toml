@@ -1,5 +1,8 @@
 [build-system]
 build-backend = "uv_build"
+# Range, not exact-pinned like every other dependency: this is uv's own
+# generated build-backend compatibility range, not a runtime dependency of
+# the project itself, and Renovate already watches it for updates.
 requires = [ "uv-build>=0.12.5,<0.13" ]
 
 [project]

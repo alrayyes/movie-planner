@@ -99,3 +99,67 @@ def test_load_config_default_path_uses_xdg_config_home(
     config = load_config()
 
     assert config.omdb_api_key == "abc123"
+
+
+PASSWORD_COMMAND_CONFIG = """
+[caldav]
+url = "https://baikal.example.com/dav.php/calendars/moviewatcher/movies/"
+username = "moviewatcher"
+password_command = "printf hunter2"
+
+[omdb]
+api_key = "abc123"
+
+[storage]
+db_path = "~/.local/share/movie-planner/movies.db"
+"""
+
+
+def test_load_config_runs_password_command(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(PASSWORD_COMMAND_CONFIG)
+
+    config = load_config(config_path)
+
+    assert config.caldav_password == "hunter2"
+
+
+def test_load_config_password_command_strips_one_trailing_newline(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(PASSWORD_COMMAND_CONFIG.replace('"printf hunter2"', '"echo hunter2"'))
+
+    config = load_config(config_path)
+
+    assert config.caldav_password == "hunter2"
+
+
+def test_load_config_rejects_both_password_and_password_command(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        PASSWORD_COMMAND_CONFIG.replace(
+            'password_command = "printf hunter2"',
+            'password_command = "printf hunter2"\npassword = "hunter2"',
+        )
+    )
+
+    with pytest.raises(ConfigError, match="password.*password_command"):
+        load_config(config_path)
+
+
+def test_load_config_missing_password_names_both_options(tmp_path: Path) -> None:
+    filtered = "\n".join(
+        line for line in VALID_CONFIG.splitlines() if not line.startswith("password = ")
+    )
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(filtered)
+
+    with pytest.raises(ConfigError, match="password.*password_command"):
+        load_config(config_path)
+
+
+def test_load_config_password_command_failure_raises_clear_error(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(PASSWORD_COMMAND_CONFIG.replace('"printf hunter2"', '"false"'))
+
+    with pytest.raises(ConfigError, match="password_command"):
+        load_config(config_path)
