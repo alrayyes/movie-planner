@@ -56,7 +56,7 @@
         };
         # Kept in sync with pyproject.toml's [project].version by hand —
         # release-please owns that file, not this one.
-        version = "0.7.0";
+        version = "0.8.1";
 
         # Not in nixpkgs at all (confirmed: no click-man attribute in
         # python3Packages) — a small enough package (its only
@@ -100,9 +100,24 @@
             typer
           ];
 
+          # nixos-unstable's icalendar (7.2.2) and typer (0.25.1) are both
+          # older than this project's own exact pins (icalendar==7.3,
+          # typer==0.27.1) — confirmed live: pythonRuntimeDepsCheckHook
+          # enforces the built wheel's own `==` metadata against what's
+          # actually resolved and fails outright otherwise ("icalendar==7.3
+          # not satisfied by version 7.2.2"). Relaxed rather than overridden
+          # to non-nixpkgs versions (the way uv-build is, above) — same
+          # "use nixpkgs' own versions" tradeoff the `dependencies` list
+          # just above already makes.
+          pythonRelaxDeps = [
+            "icalendar"
+            "typer"
+          ];
+
           nativeBuildInputs = [
             clickMan
             pkgs.installShellFiles
+            python3.pkgs.pythonRelaxDepsHook
           ];
 
           # One man page per command and subcommand, generated straight
