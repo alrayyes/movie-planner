@@ -109,25 +109,42 @@ jobs:
   # artifact, so this only ever needs to prove the flake still builds.
   nix:
     runs-on: ubuntu-24.04
+    # cache-nix-action's purge step needs this to delete its own stale
+    # cache entries; everything else it does fits the default read scope.
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
+      # Without this, every run rebuilds the whole dependency tree from
+      # source from scratch — 30+ minutes, confirmed live — since none of
+      # this flake's overridden derivations (uv-build compiled via cargo,
+      # httpcore2/paramiko/caldav rebuilt because they depend on those
+      # overrides) exist in nixpkgs' own binary cache. restore-prefixes
+      # -all-matches (rather than -first-match) so a pull request can see
+      # the cache a push to main already saved, not just its own branch's
+      # — GitHub Actions caches are otherwise ref-isolated.
+      - name: Cache the Nix store
+        uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-prefixes-all-matches: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 4G
+          purge: true
+          purge-prefixes: nix-${{ runner.os }}-
+          purge-created: 0
+          purge-last-accessed: P3D
+          purge-primary-key: never
       - name: nix flake check
         run: nix flake check --print-build-logs
       - name: nix build
         run: nix build --print-build-logs
       - name: nix run
         run: nix run . -- --help
-      # No local `nix` in this project's dev environment to run `nix flake
-      # lock` and commit the result directly — this is the pragmatic way to
-      # get the lock CI itself produces back into the repo once, by hand.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: flake-lock
-          path: flake.lock
 
   # Dry run of the same build package-linux.yml's release-job call does,
   # against a fixed dev version — proves the .deb/.rpm still build and

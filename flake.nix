@@ -26,44 +26,60 @@
         # elsewhere, built the same way nixpkgs' own uv-build
         # derivation is (rustPlatform + maturin), just at a newer tag.
         python3 = pkgs.python3.override {
-          packageOverrides = _self: super: {
-            uv-build = super.uv-build.overrideAttrs (old: rec {
-              version = "0.12.7";
-              src = pkgs.fetchFromGitHub {
-                owner = "astral-sh";
-                repo = "uv";
-                tag = version;
-                hash = "sha256-RprHadjzR5LsiYYhryIGOiIQkRKVWJwyE63UXrzN62g=";
-              };
-              cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
-                inherit (old) pname;
-                inherit version src;
-                hash = "sha256-zEZNPEI7GLkWJ49jd8jS+VsuijaW8/ZMWyus3VFcZPo=";
-              };
-            });
-
-            # A transitive checkInput of nixpkgs' own `caldav` (via
-            # niquests), unrelated to this project. Its own test suite
-            # has a flaky asyncio timing assertion
-            # (tests/httpcore2/test_cancellations.py::is_idle) that
-            # failed a real CI run here — nixpkgs' problem to fix, not
-            # this flake's; disabling checks on this one dependency is
-            # the least invasive way to stop depending on it passing.
-            httpcore2 = super.httpcore2.overrideAttrs (_: {
-              doCheck = false;
-            });
-
-            # Another transitive checkInput of nixpkgs' own `caldav`
-            # (via aiohttp -> proxy-py -> pytest-httpbin), unrelated to
-            # this project. Its test suite makes a real SSH connection
-            # (test_channel_can_be_used_as_context_manager), which times
-            # out in Nix's network-isolated build sandbox — confirmed
-            # live ("AuthenticationException: Authentication timeout"),
-            # same root cause and same fix as httpcore2 above.
-            paramiko = super.paramiko.overrideAttrs (_: {
-              doCheck = false;
-            });
-          };
+          packageOverrides = _self: super:
+            # Every one of nixpkgs' own Python packages runs its own
+            # upstream test suite while building, by default — caldav
+            # alone cost ~15 minutes (895.55s, confirmed live), and
+            # aiohttp's parser/codec matrix cost more on top of that,
+            # discovered one CI run at a time as each new transitive
+            # dependency's turn came up (httpcore2 flaky, paramiko
+            # tries a real SSH connection Nix's sandbox blocks, caldav
+            # and aiohttp just slow). None of that tests movie-planner
+            # itself — this project's own doCheck below already says CI
+            # runs the real suite outside Nix — so this disables checks
+            # across the whole set at once instead of chasing the next
+            # slow/flaky one individually. `mapAttrs` is lazy: only
+            # packages actually pulled into this build ever get their
+            # overrideAttrs evaluated, so this is cheap despite mapping
+            # nixpkgs' entire python3Packages set.
+            (pkgs.lib.mapAttrs (
+              _name: pkg:
+              if pkgs.lib.isDerivation pkg && pkg ? overrideAttrs then
+                pkg.overrideAttrs (_: {
+                  doCheck = false;
+                })
+              else
+                pkg
+            ) super)
+            // {
+              # nixos-unstable's python3 is already 3.14, but its
+              # uv-build (0.11.28 as of writing) is older than this
+              # project's own `[build-system] requires =
+              # ["uv-build>=0.12.5,<0.13"]` — confirmed live:
+              # `buildPythonApplication`'s pypa build hook enforces
+              # that range and refuses the older one outright ("Unmet
+              # dependencies ... found: 0.11.28"). Overridden here to
+              # the exact version this repo already pins uv itself to
+              # elsewhere, built the same way nixpkgs' own uv-build
+              # derivation is (rustPlatform + maturin), just at a
+              # newer tag. Listed after the mapAttrs above (`//`
+              # overrides earlier keys) since this needs the real
+              # version bump, not just doCheck disabled.
+              uv-build = super.uv-build.overrideAttrs (old: rec {
+                version = "0.12.7";
+                src = pkgs.fetchFromGitHub {
+                  owner = "astral-sh";
+                  repo = "uv";
+                  tag = version;
+                  hash = "sha256-RprHadjzR5LsiYYhryIGOiIQkRKVWJwyE63UXrzN62g=";
+                };
+                cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+                  inherit (old) pname;
+                  inherit version src;
+                  hash = "sha256-zEZNPEI7GLkWJ49jd8jS+VsuijaW8/ZMWyus3VFcZPo=";
+                };
+              });
+            };
         };
         # Kept in sync with pyproject.toml's [project].version by hand —
         # release-please owns that file, not this one.
