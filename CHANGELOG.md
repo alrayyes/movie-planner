@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.8.1...movie-planner-v0.8.2) (2026-09-01)
+
+
+### Bug Fixes
+
+* **nix:** relax the exact-pin runtime deps check for icalendar/typer ([#54](https://github.com/alrayyes/movie-planner/issues/54)) ([d8968de](https://github.com/alrayyes/movie-planner/commit/d8968de7d749835ef3d556611b3c92e5663f8a67))
+
 ## [0.8.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.8.0...movie-planner-v0.8.1) (2026-09-01)
 
 
