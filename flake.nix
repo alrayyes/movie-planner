@@ -52,6 +52,17 @@
             httpcore2 = super.httpcore2.overrideAttrs (_: {
               doCheck = false;
             });
+
+            # Another transitive checkInput of nixpkgs' own `caldav`
+            # (via aiohttp -> proxy-py -> pytest-httpbin), unrelated to
+            # this project. Its test suite makes a real SSH connection
+            # (test_channel_can_be_used_as_context_manager), which times
+            # out in Nix's network-isolated build sandbox — confirmed
+            # live ("AuthenticationException: Authentication timeout"),
+            # same root cause and same fix as httpcore2 above.
+            paramiko = super.paramiko.overrideAttrs (_: {
+              doCheck = false;
+            });
           };
         };
         # Kept in sync with pyproject.toml's [project].version by hand —
