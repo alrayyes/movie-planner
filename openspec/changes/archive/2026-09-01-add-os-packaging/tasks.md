@@ -170,7 +170,9 @@
   confirmed against the real v0.7.0 release, including a from-scratch
   AUR install via the real published package (not a local stand-in).
   Nix isn't part of this yet - it's still blocked on task 8.1
-- [ ] 9.3 Once the Nix flake actually builds (task group 8 unblocked)
+- [x] 9.3 Once the Nix flake actually builds (task group 8 unblocked)
   and is verified against a real release the same way, add it to
   `docs/INSTALL.md` and close the GitHub issue referencing everything
-  that shipped
+  that shipped — `nix build`/`nix run . -- --help` verified green in
+  CI against real tagged releases (0.9.x) once the release-please
+  auto-merge fix landed; added to `docs/INSTALL.md`, issue #38 closed
