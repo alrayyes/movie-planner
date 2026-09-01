@@ -29,6 +29,20 @@ Builds for real against Arch's own `python-*` packages — see the
 here for reference and review; the actual AUR package lives in its own
 git repo, updated by this project's release job).
 
+## Nix and NixOS
+
+```sh
+nix run github:alrayyes/movie-planner
+# or, to keep the command around:
+nix profile install github:alrayyes/movie-planner
+```
+
+Builds for real against the Python packages already in nixpkgs, the same
+no-opaque-binary reasoning as the AUR install method — see
+[`flake.nix`](../flake.nix) in this repo. There's no separate package
+manager to resolve anything: the flake is the distributable artifact,
+resolved straight from this repo by commit or tag.
+
 ## Debian, Ubuntu and other `.deb`-based distros
 
 Download the `.deb` from the
