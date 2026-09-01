@@ -25,8 +25,13 @@ jobs:
     steps:
       # ci.yml is the gate; this only arms the merge and lets GitHub wait
       # for that gate itself, rather than polling it from inside the job.
+      # RELEASE_TOKEN, not the default GITHUB_TOKEN: GitHub suppresses the
+      # push event a GITHUB_TOKEN-performed merge produces (to stop
+      # recursive runs), which otherwise left release.yml's own `push`
+      # trigger never firing after an auto-merged release PR landed on
+      # main — see release.yml's `on:` block.
       - name: Enable auto-merge
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
