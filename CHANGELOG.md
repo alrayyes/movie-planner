@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.8.2...movie-planner-v0.8.3) (2026-09-01)
+
+
+### Bug Fixes
+
+* **nix:** commit flake.lock and cache the nix store between CI runs ([#56](https://github.com/alrayyes/movie-planner/issues/56)) ([aa7b411](https://github.com/alrayyes/movie-planner/commit/aa7b41184b00991ae4777e22aa97e47c11aaff0e))
+
 ## [0.8.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.8.1...movie-planner-v0.8.2) (2026-09-01)
 
 
