@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.8.3...movie-planner-v0.9.0) (2026-09-01)
+
+
+### Features
+
+* **config:** flag/env overrides, password_command, and audit follow-up ([#58](https://github.com/alrayyes/movie-planner/issues/58)) ([f58a32b](https://github.com/alrayyes/movie-planner/commit/f58a32bcbb98ef562169b280d2b3613721738eb0))
+
 ## [0.8.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.8.2...movie-planner-v0.8.3) (2026-09-01)
 
 
