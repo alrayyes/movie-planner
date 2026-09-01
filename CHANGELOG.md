@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.9.0...movie-planner-v0.9.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* **nix:** revert the broad mapAttrs doCheck override, add aiohttp ([#60](https://github.com/alrayyes/movie-planner/issues/60)) ([393991d](https://github.com/alrayyes/movie-planner/commit/393991d5272ac5473847605d393300a655487ebf))
+
 ## [0.9.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.8.3...movie-planner-v0.9.0) (2026-09-01)
 
 
