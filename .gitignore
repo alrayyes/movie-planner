@@ -27,9 +27,6 @@ htmlcov/
 node_modules/
 .bun-cache/
 
-# Written by the release job, not by hand.
-CHANGELOG.md
-
 # Vale's style packages, downloaded by `vale sync`.
 /styles/Google/
 /styles/proselint/
