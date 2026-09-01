@@ -2,7 +2,9 @@
 metadata, duplicate-detection, import) into commands.
 """
 
+import dataclasses
 import sys
+from dataclasses import dataclass
 from datetime import date, time
 from pathlib import Path
 from typing import Annotated
@@ -27,19 +29,55 @@ app.add_typer(locations_app, name="locations")
 app.add_typer(sync_app, name="sync")
 
 
-@app.callback()
+@dataclass(frozen=True)
+class _ConfigOverrides:
+    """Flags/env vars that override the config file for one invocation —
+    every field except the CalDAV password, which stays config-file-only
+    (via `caldav.password` or `caldav.password_command`) rather than risk
+    landing in shell history or a process list.
+    """
+
+    config_path: Path | None
+    caldav_url: str | None = None
+    caldav_username: str | None = None
+    omdb_api_key: str | None = None
+    db_path: Path | None = None
+
+
+# Click derives each env var from its option name under this prefix, e.g.
+# --caldav-url becomes MOVIE_PLANNER_CALDAV_URL. rules/cli.md: flags >
+# environment variables > config file > built-in defaults.
+@app.callback(context_settings={"auto_envvar_prefix": "MOVIE_PLANNER"})
 def callback(
     ctx: typer.Context,
     config: Annotated[
         Path | None,
         typer.Option(help="Path to config.toml. Defaults to the XDG config location."),
     ] = None,
+    caldav_url: Annotated[
+        str | None, typer.Option(help="Override caldav.url from the config file.")
+    ] = None,
+    caldav_username: Annotated[
+        str | None, typer.Option(help="Override caldav.username from the config file.")
+    ] = None,
+    omdb_api_key: Annotated[
+        str | None, typer.Option(help="Override omdb.api_key from the config file.")
+    ] = None,
+    db_path: Annotated[
+        Path | None, typer.Option(help="Override storage.db_path from the config file.")
+    ] = None,
 ) -> None:
     """movie-planner: log watched movies and sync them to a calendar."""
-    # Stores the raw path rather than loading it here: loading eagerly in
-    # the group callback runs even for `movie-planner <command> --help`,
-    # so a missing config file would break --help itself.
-    ctx.obj = config
+    # Stores the raw overrides rather than loading the config here: loading
+    # eagerly in the group callback runs even for `movie-planner <command>
+    # --help`, so a missing config file would break --help itself.
+    ctx.obj = _ConfigOverrides(
+        config_path=config,
+        caldav_url=caldav_url,
+        caldav_username=caldav_username,
+        omdb_api_key=omdb_api_key,
+        db_path=db_path,
+    )
 
 
 _STARTER_CONFIG = """\
@@ -47,6 +85,9 @@ _STARTER_CONFIG = """\
 url = "https://baikal.example.com/dav.php/calendars/moviewatcher/movies/"
 username = "moviewatcher"
 password = "..."
+# Or, instead of a plaintext password above, run a command that prints
+# it to stdout (e.g. a password manager) - set only one of the two:
+# password_command = "pass show caldav/movie-planner"
 
 [omdb]
 api_key = "..."
@@ -65,8 +106,21 @@ def _write_starter_config(config_path: Path) -> None:
     config_path.write_text(_STARTER_CONFIG)
 
 
+def _apply_overrides(
+    cfg: config_module.Config, overrides: _ConfigOverrides
+) -> config_module.Config:
+    return dataclasses.replace(
+        cfg,
+        caldav_url=overrides.caldav_url or cfg.caldav_url,
+        caldav_username=overrides.caldav_username or cfg.caldav_username,
+        omdb_api_key=overrides.omdb_api_key or cfg.omdb_api_key,
+        db_path=overrides.db_path or cfg.db_path,
+    )
+
+
 def _cfg(ctx: typer.Context) -> config_module.Config:
-    config_path = ctx.obj or config_module.default_config_path()
+    overrides: _ConfigOverrides = ctx.obj
+    config_path = overrides.config_path or config_module.default_config_path()
 
     if not config_path.is_file():
         if _is_interactive() and typer.confirm(
@@ -88,10 +142,11 @@ def _cfg(ctx: typer.Context) -> config_module.Config:
         raise typer.Exit(code=1)
 
     try:
-        return config_module.load_config(config_path)
+        cfg = config_module.load_config(config_path)
     except config_module.ConfigError as e:
         typer.secho(str(e), fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from e
+    return _apply_overrides(cfg, overrides)
 
 
 @app.command()
@@ -102,7 +157,8 @@ def init(
     ] = False,
 ) -> None:
     """Write a starter config.toml, ready to edit."""
-    config_path = ctx.obj or config_module.default_config_path()
+    overrides: _ConfigOverrides = ctx.obj
+    config_path = overrides.config_path or config_module.default_config_path()
     if config_path.is_file() and not force:
         typer.secho(
             f"{config_path} already exists. Pass --force to overwrite it.",
