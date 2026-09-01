@@ -41,6 +41,17 @@
                 hash = "sha256-zEZNPEI7GLkWJ49jd8jS+VsuijaW8/ZMWyus3VFcZPo=";
               };
             });
+
+            # A transitive checkInput of nixpkgs' own `caldav` (via
+            # niquests), unrelated to this project. Its own test suite
+            # has a flaky asyncio timing assertion
+            # (tests/httpcore2/test_cancellations.py::is_idle) that
+            # failed a real CI run here — nixpkgs' problem to fix, not
+            # this flake's; disabling checks on this one dependency is
+            # the least invasive way to stop depending on it passing.
+            httpcore2 = super.httpcore2.overrideAttrs (_: {
+              doCheck = false;
+            });
           };
         };
         # Kept in sync with pyproject.toml's [project].version by hand —
