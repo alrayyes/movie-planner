@@ -18,8 +18,10 @@ on:
   # not just a workflow's own direct push. Confirmed live: merging the
   # release-please PR for 0.6.0 via auto-merge landed the commit on
   # main with zero check-runs and zero statuses — this workflow simply
-  # never ran. workflow_dispatch is the manual escape hatch until
-  # *-auto-merge.yml carries a real-identity token instead.
+  # never ran. Fixed by giving release-please-action and
+  # release-auto-merge.yml's merge step RELEASE_TOKEN (a real-identity
+  # PAT) instead of GITHUB_TOKEN; workflow_dispatch stays as a manual
+  # recovery trigger regardless.
   workflow_dispatch:
 
 permissions:
@@ -41,9 +43,17 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      # RELEASE_TOKEN (a fine-grained PAT, not the default GITHUB_TOKEN) so
+      # the release pull request is authored by a real account rather than
+      # github-actions[bot] — a bot-authored PR gets treated like a
+      # first-time contributor's, gating every check on that PR behind
+      # "This workflow requires approval from a maintainer" on every single
+      # release. Confirmed live: three separate release-please PRs (0.7.0,
+      # 0.8.0, 0.8.1) all stuck at action_required until this token existed.
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:
+          token: ${{ secrets.RELEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
