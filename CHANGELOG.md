@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.9.2...movie-planner-v0.9.3) (2026-09-01)
+
+
+### Documentation
+
+* **openspec:** archive add-os-packaging, sync the packaging spec ([#64](https://github.com/alrayyes/movie-planner/issues/64)) ([a186283](https://github.com/alrayyes/movie-planner/commit/a18628388fb31d24f135ef8acdbb274e5608aaff))
+
 ## [0.9.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.9.1...movie-planner-v0.9.2) (2026-09-01)
 
 
