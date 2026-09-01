@@ -63,6 +63,21 @@
             paramiko = super.paramiko.overrideAttrs (_: {
               doCheck = false;
             });
+
+            # nixpkgs' own `caldav` runs its own upstream test suite as
+            # part of building the package — ~15 minutes
+            # (`895.55s`/`0:14:55`, confirmed live), on every build that
+            # can't restore it from a binary cache. It's testing caldav
+            # itself, not this project, and movie-planner's own doCheck
+            # below already says CI runs the real suite outside Nix — the
+            # same reasoning applies one level up the dependency tree.
+            # This is also the umbrella case the httpcore2/paramiko
+            # overrides above are carving exceptions out of one at a
+            # time; disabling it here directly is more direct than
+            # chasing each of caldav's own flaky checkInputs individually.
+            caldav = super.caldav.overrideAttrs (_: {
+              doCheck = false;
+            });
           };
         };
         # Kept in sync with pyproject.toml's [project].version by hand —
