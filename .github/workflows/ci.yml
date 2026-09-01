@@ -121,6 +121,13 @@ jobs:
         run: nix build --print-build-logs
       - name: nix run
         run: nix run . -- --help
+      # No local `nix` in this project's dev environment to run `nix flake
+      # lock` and commit the result directly — this is the pragmatic way to
+      # get the lock CI itself produces back into the repo once, by hand.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flake-lock
+          path: flake.lock
 
   # Dry run of the same build package-linux.yml's release-job call does,
   # against a fixed dev version — proves the .deb/.rpm still build and
