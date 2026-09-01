@@ -121,24 +121,33 @@
 
 ## 8. Nix flake
 
-- [ ] 8.1 Add `flake.nix` building `movie-planner` via
+- [x] 8.1 Add `flake.nix` building `movie-planner` via
   `python3.pkgs.buildPythonApplication` (`pyproject = true`,
   `build-system = [ python3.pkgs.uv-build ]`, `dependencies` against
   nixpkgs' own `caldav`/`httpx`/`icalendar`/`questionary`/`rapidfuzz`/
   `typer`) and man page via task 4's approach, and verify `nix build`
-  produces a working `movie-planner` — no local `nix` available in
-  this environment, so first verified in CI; blocked on nixpkgs'
-  `python3Packages.uv-build` (0.11.28) being older than this
-  project's own `build-system` requirement (`>=0.12.5,<0.13`) —
-  confirmed live in CI, not just the anticipated risk; `dotfiles` is
-  computing a working override
-- [ ] 8.2 Add a CI job that runs `nix build` and `nix run .# --
+  produces a working `movie-planner` — the `uv-build` version blocker
+  resolved via an explicit version-bump override (nixpkgs'
+  `python3Packages.uv-build` overridden to this project's own pinned
+  version, built the same way nixpkgs' own derivation is); the
+  `icalendar`/`typer` exact-pin mismatch against nixpkgs' own versions
+  resolved via `pythonRelaxDepsHook`; four of nixpkgs' own transitive
+  Python packages (`httpcore2`, `paramiko`, `caldav`, `aiohttp`) had
+  their own `doCheck` disabled after each one's upstream test suite
+  failed or ran long inside Nix's build sandbox in turn — none of it
+  tests movie-planner itself, and CI already runs the real suite
+  outside Nix. `nix build`/`nix run . -- --help` both verified green
+  in CI.
+- [x] 8.2 Add a CI job that runs `nix build` and `nix run .# --
   --help` on every push/PR (mirroring `package-linux.yml`'s dry run)
-  and verify it catches a deliberately broken flake — added; blocked
-  from actually passing by 8.1
-- [ ] 8.3 Commit the `flake.lock` CI generates once the build
-  succeeds, and verify `nix flake check` passes
-- [ ] 8.4 Report any nixpkgs-specific friction (the `uv-build` version
+  and verify it catches a deliberately broken flake — verified green
+  in CI once 8.1 unblocked
+- [x] 8.3 Commit the `flake.lock` CI generates once the build
+  succeeds, and verify `nix flake check` passes — no local `nix` in
+  this project's dev environment to run `nix flake lock` directly, so
+  downloaded from a green CI run's uploaded artifact and committed
+  by hand instead; `nix flake check` verified green in CI
+- [x] 8.4 Report any nixpkgs-specific friction (the `uv-build` version
   question in design.md's risks, or anything else) to whoever
   maintains the shared Nix packaging conventions — done; reported to
   `dotfiles`, along with the container-image man-page-exclusion and

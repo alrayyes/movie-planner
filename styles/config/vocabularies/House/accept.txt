@@ -47,3 +47,4 @@ Baikal
 hadolint
 GHCR
 pipx
+nixpkgs
