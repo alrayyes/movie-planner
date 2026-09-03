@@ -54,7 +54,7 @@ uv run pytest --cov=movie_planner --cov-report=term-missing
 uv run ruff check          # the linter
 uv run ruff check --fix    # its fixer
 uv run ruff format         # the formatter; add --check for the check-only form
-uv run mypy                # strict type checking, scoped to src/ (see below)
+uv run mypy                # strict type checking, src/ and tests/
 uv run bandit -r src/movie_planner   # static security scan
 uv run mutmut run          # mutation testing, then `uv run mutmut results`
 
@@ -64,8 +64,7 @@ bun run lint:prose         # vale
 bun run lint:mechanics     # ltex-cli-plus
 ```
 
-`mypy` runs in `strict` mode but is scoped to `src/` only — `tests/` isn't
-type-strict yet, tracked as its own follow-up rather than folded in here.
+`mypy` runs in `strict` mode across both `src/` and `tests/`.
 `mutmut` is non-blocking everywhere it runs (`pre-push`, CI): a surviving
 mutant is a missing test case worth picking up, not a merge blocker for a
 suite that wasn't built mutation-clean from day one. It skips

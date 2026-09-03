@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from datetime import date, time
+from datetime import date, datetime, time
 from pathlib import Path
 
 import icalendar
@@ -21,7 +21,18 @@ from movie_planner.store import Entry, Store
 def _parse(ical_text: str) -> icalendar.Event:
     cal = icalendar.Calendar.from_ical(ical_text)
     (event,) = [c for c in cal.subcomponents if c.name == "VEVENT"]
+    assert isinstance(event, icalendar.Event)
     return event
+
+
+def _dt(event: icalendar.Event, name: str) -> date | datetime:
+    # event[name] is typed as icalendar's big property-value union - only
+    # the DATE/DATE-TIME wrapper actually has .dt, which is what
+    # build_vevent always sets dtstart/dtend to.
+    value = event[name]
+    assert isinstance(value, icalendar.vDDDTypes)
+    assert isinstance(value.dt, date)
+    return value.dt
 
 
 def test_build_vevent_date_only_is_all_day() -> None:
@@ -35,7 +46,7 @@ def test_build_vevent_date_only_is_all_day() -> None:
     )
 
     event = _parse(ical_text)
-    assert event["dtstart"].dt == date(2024, 1, 20)
+    assert _dt(event, "dtstart") == date(2024, 1, 20)
     assert "dtend" not in event
 
 
@@ -50,9 +61,7 @@ def test_build_vevent_start_only_has_no_dtend() -> None:
     )
 
     event = _parse(ical_text)
-    from datetime import datetime
-
-    assert event["dtstart"].dt == datetime(2024, 6, 2, 16, 10)
+    assert _dt(event, "dtstart") == datetime(2024, 6, 2, 16, 10)
     assert "dtend" not in event
     assert str(event["location"]) == "Riverside Multiplex"
 
@@ -68,10 +77,8 @@ def test_build_vevent_full_range_has_dtstart_and_dtend() -> None:
     )
 
     event = _parse(ical_text)
-    from datetime import datetime
-
-    assert event["dtstart"].dt == datetime(2024, 3, 15, 14, 0)
-    assert event["dtend"].dt == datetime(2024, 3, 15, 16, 32)
+    assert _dt(event, "dtstart") == datetime(2024, 3, 15, 14, 0)
+    assert _dt(event, "dtend") == datetime(2024, 3, 15, 16, 32)
 
 
 def test_build_vevent_uid_and_title_carried_through() -> None:
@@ -170,14 +177,17 @@ def test_build_description_with_only_some_fields() -> None:
 
 
 def test_calendar_client_connect_wires_up_the_dav_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls = {}
+    init_calls: dict[str, str] = {}
+    calendar_urls: list[str] = []
 
     class FakeDAVClient:
         def __init__(self, url: str, username: str, password: str) -> None:
-            calls["init"] = {"url": url, "username": username, "password": password}
+            init_calls["url"] = url
+            init_calls["username"] = username
+            init_calls["password"] = password
 
         def calendar(self, url: str) -> FakeCalendar:
-            calls["calendar_url"] = url
+            calendar_urls.append(url)
             return FakeCalendar()
 
     monkeypatch.setattr("movie_planner.calendar_sync.DAVClient", FakeDAVClient)
@@ -189,8 +199,8 @@ def test_calendar_client_connect_wires_up_the_dav_client(monkeypatch: pytest.Mon
     )
 
     assert isinstance(client, CalendarClient)
-    assert calls["init"]["username"] == "moviewatcher"
-    assert calls["calendar_url"] == "https://baikal.example.com/calendars/movies/"
+    assert init_calls["username"] == "moviewatcher"
+    assert calendar_urls == ["https://baikal.example.com/calendars/movies/"]
 
 
 def test_calendar_client_check_connection_succeeds() -> None:
@@ -295,6 +305,7 @@ def test_push_new_includes_ratings_in_the_description(store: Store) -> None:
 
     synced = sync.push_new(entry, venue=None)
 
+    assert synced.caldav_uid is not None
     assert "IMDb: 8.5/10" in calendar.events_by_uid[synced.caldav_uid].data
 
 
@@ -308,6 +319,7 @@ def test_push_new_includes_screening_details_in_the_description(store: Store) ->
         entry, venue=None, screening_details="Auditorium 1 DOLBY - Row 5 Seat 17"
     )
 
+    assert synced.caldav_uid is not None
     assert "Auditorium 1 DOLBY - Row 5 Seat 17" in calendar.events_by_uid[synced.caldav_uid].data
 
 
@@ -321,6 +333,7 @@ def test_push_update_refreshes_the_description(store: Store) -> None:
 
     sync.push_update(entry, venue=None)
 
+    assert entry.caldav_uid is not None
     assert "IMDb: 8.5/10" in calendar.events_by_uid[entry.caldav_uid].data
 
 
@@ -334,6 +347,7 @@ def test_push_update_changes_the_linked_event(store: Store) -> None:
 
     sync.push_update(entry, venue=None)
 
+    assert entry.caldav_uid is not None
     assert "Dune Part Two" in calendar.events_by_uid[entry.caldav_uid].data
 
 
@@ -346,6 +360,7 @@ def test_push_delete_removes_the_linked_event(store: Store) -> None:
 
     sync.push_delete(entry)
 
+    assert entry.caldav_uid is not None
     assert calendar.events_by_uid[entry.caldav_uid].deleted is True
 
 

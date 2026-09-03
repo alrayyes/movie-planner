@@ -62,9 +62,7 @@ lint.ignore = [
 ]
 
 [tool.mypy]
-# tests/ isn't type-strict yet - scoped to src/ here and in every hook/CI
-# invocation; see the follow-up issue for extending this to tests/.
-files = [ "src" ]
+files = [ "src", "tests" ]
 python_version = "3.14"
 strict = true
 

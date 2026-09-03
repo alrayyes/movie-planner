@@ -1,10 +1,10 @@
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import date
 from pathlib import Path
 
 import httpx
 import pytest
-from test_calendar_sync import FakeCalendar
+from fakes import FakeCalendar
 
 from movie_planner.calendar_sync import CalendarClient, CalendarSync
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings
@@ -25,7 +25,7 @@ MATCH_RESPONSE = {
 NO_MATCH_RESPONSE = {"Response": "False", "Error": "Movie not found!"}
 
 
-def _client(handler) -> OmdbClient:
+def _client(handler: Callable[[httpx.Request], httpx.Response]) -> OmdbClient:
     http_client = httpx.Client(
         transport=httpx.MockTransport(handler), base_url="https://www.omdbapi.com/"
     )
@@ -84,6 +84,7 @@ def test_lookup_missing_rating_source_is_none() -> None:
 
     ratings = client.lookup(title="Some Movie")
 
+    assert ratings is not None
     assert ratings.imdb == "8.0/10"
     assert ratings.rotten_tomatoes is None
     assert ratings.metacritic is None

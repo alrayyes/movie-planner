@@ -1,7 +1,7 @@
-from collections.abc import Iterator
 from datetime import time
 from pathlib import Path
 
+import httpx
 import pytest
 from fakes import FakeCalendar
 from fixtures import PATHE_BOOKING_REF, PATHE_EMAIL_PLAIN
@@ -80,7 +80,7 @@ def omdb_match(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: ratings)
 
 
-def _store(config_path: Path) -> Iterator[Store]:
+def _store(config_path: Path) -> Store:
     import tomllib
 
     with config_path.open("rb") as f:
@@ -456,6 +456,7 @@ def test_update_changes_entry_and_propagates_to_calendar(
     store = _store(config_path)
     updated = store.get_entry(entry.id)
     assert updated.title == "Dune Part Two"
+    assert updated.caldav_uid is not None
     assert "Dune Part Two" in calendar.events_by_uid[updated.caldav_uid].data
     store.close()
 
@@ -479,6 +480,7 @@ def test_delete_removes_entry_and_calendar_event(
     )
     store = _store(config_path)
     (entry,) = store.list_entries()
+    assert entry.caldav_uid is not None
     uid = entry.caldav_uid
     store.close()
 
@@ -817,6 +819,7 @@ def test_from_pathe_email_description_includes_screening_details(
     assert result.exit_code == 0, result.output
     store = _store(config_path)
     (entry,) = store.list_entries()
+    assert entry.caldav_uid is not None
     assert "Auditorium 1 DOLBY - Row 5 Seat 17" in calendar.events_by_uid[entry.caldav_uid].data
     store.close()
 
@@ -900,6 +903,7 @@ def test_refresh_backfills_missing_ratings_and_pushes(
     store = _store(config_path)
     (refreshed,) = store.list_entries()
     assert refreshed.imdb_rating == "8.5/10"
+    assert refreshed.caldav_uid is not None
     assert "IMDb: 8.5/10" in calendar.events_by_uid[refreshed.caldav_uid].data
     store.close()
 
@@ -1079,7 +1083,7 @@ def test_caldav_url_flag_overrides_config_file(
 ) -> None:
     captured: dict[str, str] = {}
 
-    def fake_connect(cls: type[CalendarClient], **kw: str) -> CalendarClient:
+    def fake_connect(cls: type[CalendarClient], /, **kw: str) -> CalendarClient:
         captured.update(kw)
         return CalendarClient(FakeCalendar())
 
@@ -1114,9 +1118,11 @@ def test_omdb_api_key_flag_overrides_config_file(
     captured: dict[str, str] = {}
     original_init = OmdbClient.__init__
 
-    def capturing_init(self: OmdbClient, api_key: str, *args: object, **kwargs: object) -> None:
+    def capturing_init(
+        self: OmdbClient, api_key: str, http_client: httpx.Client | None = None
+    ) -> None:
         captured["api_key"] = api_key
-        original_init(self, api_key, *args, **kwargs)
+        original_init(self, api_key, http_client)
 
     monkeypatch.setattr(OmdbClient, "__init__", capturing_init)
     monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: None)

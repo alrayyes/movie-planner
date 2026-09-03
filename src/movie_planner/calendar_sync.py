@@ -4,6 +4,7 @@ decisions. Nothing here ever reads the calendar back into the store.
 """
 
 import uuid
+from collections.abc import Sequence
 from datetime import date, datetime, time
 from typing import Protocol, cast
 
@@ -99,7 +100,11 @@ class _CalDAVCalendar(Protocol):
     that a test double can satisfy it without touching the real library.
     """
 
-    def events(self) -> list[object]: ...
+    # Sequence, not list: list[T] is invariant, so a concrete implementation
+    # returning list[FakeEvent] (the test double) or list[caldav.CalendarObjectResource]
+    # (the real one) wouldn't structurally satisfy list[object] - Sequence[T]
+    # is covariant, and nothing here needs list-specific mutation anyway.
+    def events(self) -> Sequence[object]: ...
     def add_event(self, ical: str) -> object: ...
     def event_by_uid(self, uid: str) -> _CalDAVEvent: ...
 
