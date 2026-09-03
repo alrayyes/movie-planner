@@ -358,3 +358,81 @@ def test_get_or_create_venue_creates_when_missing(store: Store) -> None:
 
 def test_close_does_not_raise(store: Store) -> None:
     store.close()
+
+
+def test_new_entry_has_no_booking_ref(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+
+    entry = store.create_entry(title="The Dog Stars", date=date(2026, 8, 29), medium_id=medium.id)
+
+    assert entry.booking_ref is None
+
+
+def test_update_entry_sets_booking_ref(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="The Dog Stars", date=date(2026, 8, 29), medium_id=medium.id)
+
+    updated = store.update_entry(entry.id, booking_ref="N°WWBXKM8")
+
+    assert updated.booking_ref == "N°WWBXKM8"
+    assert store.get_entry(entry.id).booking_ref == "N°WWBXKM8"
+
+
+def test_get_entry_by_booking_ref_finds_a_match(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="The Dog Stars", date=date(2026, 8, 29), medium_id=medium.id)
+    store.update_entry(entry.id, booking_ref="N°WWBXKM8")
+
+    found = store.get_entry_by_booking_ref("N°WWBXKM8")
+
+    assert found is not None
+    assert found.id == entry.id
+
+
+def test_get_entry_by_booking_ref_no_match_returns_none(store: Store) -> None:
+    assert store.get_entry_by_booking_ref("N°NOMATCH") is None
+
+
+def test_booking_ref_is_not_required_to_be_unique(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    first = store.create_entry(title="The Dog Stars", date=date(2026, 8, 29), medium_id=medium.id)
+    second = store.create_entry(title="The Dog Stars", date=date(2026, 8, 30), medium_id=medium.id)
+
+    store.update_entry(first.id, booking_ref="N°WWBXKM8")
+    store.update_entry(second.id, booking_ref="N°WWBXKM8")  # does not raise
+
+    assert store.get_entry(first.id).booking_ref == store.get_entry(second.id).booking_ref
+
+
+def test_migrates_a_database_created_before_booking_ref_existed(tmp_path: Path) -> None:
+    import sqlite3
+
+    db_path = tmp_path / "movies.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE media (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            is_physical_place INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE venues (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+        CREATE TABLE entries (
+            id INTEGER PRIMARY KEY, title TEXT NOT NULL, date TEXT NOT NULL,
+            start_time TEXT, end_time TEXT,
+            medium_id INTEGER NOT NULL REFERENCES media(id),
+            venue_id INTEGER REFERENCES venues(id)
+        );
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    s = Store(db_path)
+    try:
+        medium = s.add_medium("cinema", is_physical_place=True)
+        entry = s.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+        assert entry.booking_ref is None
+        updated = s.update_entry(entry.id, booking_ref="N°WWBXKM8")
+        assert updated.booking_ref == "N°WWBXKM8"
+    finally:
+        s.close()
