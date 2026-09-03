@@ -57,6 +57,36 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      # release-please only bumps [project].version in pyproject.toml -
+      # uv.lock separately records that same version in its own
+      # [[package]] name = "movie-planner" block, and nothing else
+      # updates it. Left alone, every uv sync/uv run after a release
+      # rewrites the lockfile as a side effect, which is what this fixes:
+      # a follow-up commit, directly to main (the same exception
+      # release-please's own commit already is), regenerating uv.lock so
+      # the two agree again. [skip ci] so this doesn't retrigger the
+      # workflow's own push trigger - a real PAT push otherwise would.
+      - if: steps.release.outputs.release_created == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          token: ${{ secrets.RELEASE_TOKEN }}
+      - if: steps.release.outputs.release_created == 'true'
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.7"
+      - if: steps.release.outputs.release_created == 'true'
+        name: Sync uv.lock's recorded version
+        run: |
+          uv lock
+          if ! git diff --quiet -- uv.lock; then
+            git config user.name 'movie-planner release job'
+            git config user.email 'alrayyes@users.noreply.github.com'
+            git add uv.lock
+            git commit -m "chore(deps): sync uv.lock's recorded version [skip ci]"
+            git push origin HEAD:main
+          fi
+
   docker-publish:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
