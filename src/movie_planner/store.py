@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS entries (
     metacritic_rating TEXT,
     letterboxd_url TEXT,
     letterboxd_rating TEXT,
-    imdb_url TEXT
+    imdb_url TEXT,
+    booking_ref TEXT
 );
 """
 
@@ -52,6 +53,7 @@ _MIGRATED_COLUMNS = (
     "letterboxd_url",
     "letterboxd_rating",
     "imdb_url",
+    "booking_ref",
 )
 
 
@@ -91,6 +93,7 @@ class Entry:
     letterboxd_url: str | None = None
     letterboxd_rating: str | None = None
     imdb_url: str | None = None
+    booking_ref: str | None = None
 
 
 _ENTRY_COLUMNS = (
@@ -108,6 +111,7 @@ _ENTRY_COLUMNS = (
     "letterboxd_url",
     "letterboxd_rating",
     "imdb_url",
+    "booking_ref",
 )
 
 
@@ -130,6 +134,7 @@ def _row_to_entry(row: tuple) -> Entry:
         letterboxd_url=values["letterboxd_url"],
         letterboxd_rating=values["letterboxd_rating"],
         imdb_url=values["imdb_url"],
+        booking_ref=values["booking_ref"],
     )
 
 
@@ -155,6 +160,12 @@ class Store:
         for column in _MIGRATED_COLUMNS:
             if column not in columns:
                 self._conn.execute(f"ALTER TABLE entries ADD COLUMN {column} TEXT")
+        # Not UNIQUE: Pathé's own uniqueness guarantee for booking numbers
+        # is unconfirmed - a plain index plus the caller's own confirmation
+        # step is the safety net instead of a write that can fail outright.
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_entries_booking_ref ON entries(booking_ref)"
+        )
 
     def close(self) -> None:
         self._conn.close()
@@ -307,6 +318,7 @@ class Store:
         letterboxd_url: str | None = _UNSET,
         letterboxd_rating: str | None = _UNSET,
         imdb_url: str | None = _UNSET,
+        booking_ref: str | None = _UNSET,
     ) -> Entry:
         current = self.get_entry(entry_id)
         changes = {
@@ -323,6 +335,7 @@ class Store:
             "letterboxd_url": letterboxd_url,
             "letterboxd_rating": letterboxd_rating,
             "imdb_url": imdb_url,
+            "booking_ref": booking_ref,
         }
         updated = replace(current, **{k: v for k, v in changes.items() if v is not _UNSET})
         columns = _ENTRY_COLUMNS[1:]  # everything but id
@@ -334,6 +347,13 @@ class Store:
         )
         self._conn.commit()
         return self.get_entry(entry_id)
+
+    def get_entry_by_booking_ref(self, booking_ref: str) -> Entry | None:
+        row = self._conn.execute(
+            f"SELECT {', '.join(_ENTRY_COLUMNS)} FROM entries WHERE booking_ref = ?",
+            (booking_ref,),
+        ).fetchone()
+        return _row_to_entry(row) if row else None
 
     def delete_entry(self, entry_id: int) -> None:
         cur = self._conn.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
