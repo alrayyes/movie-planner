@@ -52,6 +52,7 @@ def test_parse_csv_optional_fields_blank(tmp_path: Path) -> None:
     rows = parse_csv(csv_path)
 
     entry = rows[0].entry
+    assert entry is not None
     assert entry.start_time is None
     assert entry.end_time is None
     assert entry.venue is None
@@ -122,6 +123,7 @@ def test_parse_json_missing_optional_keys(tmp_path: Path) -> None:
     rows = parse_json(json_path)
 
     entry = rows[0].entry
+    assert entry is not None
     assert entry.start_time is None
     assert entry.venue is None
 
