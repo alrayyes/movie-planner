@@ -16,9 +16,14 @@ __pycache__/
 /man/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 .coverage
 coverage.txt
 htmlcov/
+
+# mutmut's mutated copy of the tree and its result cache.
+/mutants/
+.mutmut-cache
 
 # uv's project virtualenv. uv.lock is committed; the environment it builds
 # from that lock is not.

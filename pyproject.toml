@@ -28,7 +28,9 @@ scripts.movie-planner = "movie_planner:main"
 
 [dependency-groups]
 dev = [
+  "bandit==1.9.4",
   "click-man==0.5.1",
+  "mypy==2.3.1",
   "pip-audit==2.10.1",
   "pyinstaller==6.22.2",
   "pyproject-fmt==2.28.1",
@@ -58,5 +60,19 @@ lint.ignore = [
   "E501", # line too long (handled by the formatter)
 ]
 
+[tool.mypy]
+# tests/ isn't type-strict yet - scoped to src/ here and in every hook/CI
+# invocation; see the follow-up issue for extending this to tests/.
+files = [ "src" ]
+python_version = "3.14"
+strict = true
+
 [tool.pytest]
 ini_options.testpaths = [ "tests" ]
+
+[tool.mutmut]
+source_paths = [ "src" ]
+# test_e2e.py spins up a real Baikal Docker container per module - fine
+# once for the real suite, ruinous rerun per mutant. Everything it covers
+# is also covered against FakeCalendar in test_cli.py/test_calendar_sync.py.
+pytest_add_cli_args_test_selection = [ "--ignore=tests/test_e2e.py" ]
