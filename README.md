@@ -69,6 +69,23 @@ uv run movie-planner log --title "Dune" --date 2026-01-01 --medium cinema \
 A likely duplicate (same normalized title, same day) asks for confirmation
 before adding — pass `--force` to skip that, or to add it non-interactively.
 
+Log a Pathé cinema booking straight from its confirmation email instead —
+pipe the raw email in, or point at a saved copy:
+
+```sh
+cat ticket.eml | uv run movie-planner from-pathe-email
+uv run movie-planner from-pathe-email ticket.eml
+```
+
+Either way it parses the title, date, times, cinema, and booking number,
+shows what it found, and asks for confirmation before writing — piping
+the email doesn't skip that; the confirmation is read from the
+controlling terminal, not from the piped input. A re-sent confirmation
+for a booking already logged (same booking number) updates that entry
+instead of creating a second one. Pass `--yes` to skip the prompt (for a
+mail-pipe automation with no terminal attached) or `--no-metadata` to
+skip the OMDb lookup.
+
 Other commands:
 
 ```sh
@@ -79,11 +96,19 @@ uv run movie-planner locations media add cinema --physical
 uv run movie-planner locations venues add "Grand Vista Cinema"
 uv run movie-planner import movies.csv --force
 uv run movie-planner sync retry
+uv run movie-planner sync refresh
 ```
 
 `import` accepts a `.csv` or `.json` file with the same fields as
-`examples/`; `sync retry` re-pushes any entry that failed to sync when it
-was logged or imported.
+`examples/`, and fetches OMDb ratings the same as `log` does. `sync retry`
+re-pushes any entry that failed to sync when it was logged or imported —
+cheap, and safe to run any time, since it never calls OMDb and only
+touches entries that were never synced. `sync refresh` is the heavier
+counterpart: it walks every entry, fetches OMDb ratings for any that are
+still missing them, and re-pushes every calendar event so its description
+reflects current data — worth running after upgrading, or to backfill
+ratings for entries imported before this existed, not something to run
+reflexively the way `retry` is.
 
 ## Configuration
 
