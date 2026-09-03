@@ -16,6 +16,7 @@ from movie_planner.calendar_sync import CalendarClient, CalendarSync
 from movie_planner.duplicates import find_duplicate
 from movie_planner.importers import parse_csv, parse_json, run_import
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings
+from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
 from movie_planner.store import Entry, Store, StoreError
 
 app = typer.Typer(help="movie-planner: log watched movies and sync them to a calendar.")
@@ -99,6 +100,31 @@ db_path = "~/.local/share/movie-planner/movies.db"
 
 def _is_interactive() -> bool:
     return sys.stdin.isatty()
+
+
+def _confirm_via_tty(message: str) -> bool:
+    """Reads a yes/no confirmation from the controlling terminal directly,
+    for when stdin is occupied by piped content (a piped email). See
+    design.md's "Confirmation reads from /dev/tty" decision.
+    """
+    try:
+        with open("/dev/tty") as tty_in, open("/dev/tty", "w") as tty_out:
+            tty_out.write(f"{message} [y/N] ")
+            tty_out.flush()
+            answer = tty_in.readline()
+    except OSError as e:
+        typer.secho(
+            "No controlling terminal available to confirm. Pass --yes to skip confirmation.",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1) from e
+    return answer.strip().lower() in ("y", "yes")
+
+
+def _confirm(message: str, *, from_stdin: bool) -> bool:
+    if from_stdin:
+        return _confirm_via_tty(message)
+    return typer.confirm(message)
 
 
 def _write_starter_config(config_path: Path) -> None:
@@ -200,31 +226,72 @@ def _connect_calendar(cfg: config_module.Config) -> CalendarClient:
 
 
 def _push_new_or_warn(
-    cfg: config_module.Config, store: Store, entry: Entry, *, venue: str | None
-) -> None:
+    cfg: config_module.Config,
+    store: Store,
+    entry: Entry,
+    *,
+    venue: str | None,
+    screening_details: str | None = None,
+) -> Entry:
     try:
         client = _connect_calendar(cfg)
-        CalendarSync(store, client).push_new(entry, venue=venue)
+        return CalendarSync(store, client).push_new(
+            entry, venue=venue, screening_details=screening_details
+        )
     except Exception as e:  # noqa: BLE001 - any connect/push failure is a warning
         typer.secho(
             f"Warning: could not sync '{entry.title}' to the calendar: {e}",
             fg=typer.colors.YELLOW,
         )
+        return entry
 
 
 def _push_update_or_warn(
-    cfg: config_module.Config, store: Store, entry: Entry, *, venue: str | None
+    cfg: config_module.Config,
+    store: Store,
+    entry: Entry,
+    *,
+    venue: str | None,
+    screening_details: str | None = None,
 ) -> None:
     if entry.caldav_uid is None:
         return
     try:
         client = _connect_calendar(cfg)
-        CalendarSync(store, client).push_update(entry, venue=venue)
+        CalendarSync(store, client).push_update(
+            entry, venue=venue, screening_details=screening_details
+        )
     except Exception as e:  # noqa: BLE001
         typer.secho(
             f"Warning: could not sync the update to '{entry.title}' to the calendar: {e}",
             fg=typer.colors.YELLOW,
         )
+
+
+def _finalize_entry(
+    cfg: config_module.Config,
+    store: Store,
+    entry: Entry,
+    *,
+    venue: str | None,
+    fetch_metadata: bool,
+    imdb_id: str | None = None,
+    screening_details: str | None = None,
+) -> Entry:
+    """Metadata fetch (optional), then a calendar push - create if the
+    entry has never been synced, update otherwise. The one orchestration
+    sequence shared by every command that ends with "an entry now
+    exists/changed locally, make the calendar agree" - see design.md's
+    "One shared orchestration helper" decision.
+    """
+    if fetch_metadata:
+        entry = _fetch_metadata_or_warn(cfg, store, entry, imdb_id=imdb_id)
+    if entry.caldav_uid is None:
+        return _push_new_or_warn(
+            cfg, store, entry, venue=venue, screening_details=screening_details
+        )
+    _push_update_or_warn(cfg, store, entry, venue=venue, screening_details=screening_details)
+    return entry
 
 
 def _push_delete_or_warn(cfg: config_module.Config, store: Store, entry: Entry) -> None:
@@ -360,10 +427,9 @@ def log(
                 entry.id, letterboxd_url=letterboxd_url, letterboxd_rating=letterboxd_rating
             )
 
-        if not no_metadata:
-            entry = _fetch_metadata_or_warn(cfg, store, entry, imdb_id=imdb_id)
-
-        _push_new_or_warn(cfg, store, entry, venue=venue)
+        entry = _finalize_entry(
+            cfg, store, entry, venue=venue, fetch_metadata=not no_metadata, imdb_id=imdb_id
+        )
 
         typer.echo(f"Logged '{title}' as entry {entry.id}.")
     finally:
@@ -617,7 +683,7 @@ def import_command(
     try:
         summary = run_import(store, rows, force=force)
         for imported in summary.imported_entries:
-            _push_new_or_warn(cfg, store, imported.entry, venue=imported.venue)
+            _finalize_entry(cfg, store, imported.entry, venue=imported.venue, fetch_metadata=True)
 
         typer.echo(
             f"{summary.imported} imported, {summary.skipped_duplicates} skipped, "
@@ -627,6 +693,117 @@ def import_command(
             typer.echo(f"  skipped: {detail}")
         for detail in summary.failed_details:
             typer.echo(f"  failed: {detail}")
+    finally:
+        store.close()
+
+
+# --- from-pathe-email: requirements in specs/pathe-email-import ---
+
+
+def _echo_parsed_booking(booking: PatheBooking) -> None:
+    typer.echo(f"Booking {booking.booking_ref}:")
+    typer.echo(f"  {booking.title}")
+    typer.echo(f"  {booking.date} {booking.start_time}-{booking.end_time}")
+    typer.echo(f"  {booking.cinema}")
+    if booking.screening_details:
+        typer.echo(f"  {booking.screening_details}")
+
+
+@app.command(name="from-pathe-email")
+def from_pathe_email(
+    ctx: typer.Context,
+    path: Annotated[
+        Path | None,
+        typer.Argument(
+            help="Pathé booking confirmation email (raw .eml or plain text). "
+            "Omit to read from stdin."
+        ),
+    ] = None,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip the confirmation prompt.")] = False,
+    no_metadata: Annotated[
+        bool, typer.Option("--no-metadata", help="Skip the OMDb lookup.")
+    ] = False,
+) -> None:
+    """Parse a Pathé booking confirmation email and log or update the
+    matching entry. Reads from the given file, or from stdin when no path
+    is given - e.g. `cat ticket.eml | movie-planner from-pathe-email`.
+    """
+    cfg = _cfg(ctx)
+    from_stdin = path is None
+    raw = sys.stdin.read() if path is None else path.read_text(encoding="utf-8")
+
+    try:
+        booking = parse_pathe_email(raw)
+    except PatheEmailParseError as e:
+        typer.secho(str(e), fg=typer.colors.RED)
+        raise typer.Exit(code=1) from e
+
+    store = _open_store(cfg)
+    try:
+        target = store.get_entry_by_booking_ref(booking.booking_ref)
+        duplicate = (
+            None
+            if target is not None
+            else find_duplicate(booking.title, booking.date, store.list_entries())
+        )
+        match = target or duplicate
+
+        _echo_parsed_booking(booking)
+        if target is not None:
+            prompt = (
+                f"Booking {booking.booking_ref} is already logged as entry {target.id} "
+                f"('{target.title}', {target.date} {target.start_time}-{target.end_time}). "
+                "Update it to match this email?"
+            )
+        elif duplicate is not None:
+            prompt = (
+                f"'{booking.title}' looks like a duplicate of entry {duplicate.id} "
+                f"('{duplicate.title}', logged {duplicate.date}). Attach this booking to "
+                "that entry instead of creating a new one?"
+            )
+        else:
+            prompt = f"Log '{booking.title}' on {booking.date}?"
+
+        if not (yes or _confirm(prompt, from_stdin=from_stdin)):
+            typer.echo("Not added.")
+            raise typer.Exit(code=1)
+
+        medium_row = store.get_or_create_medium("cinema", is_physical_place=True)
+        venue_row = store.get_or_create_venue(booking.cinema)
+
+        if match is not None:
+            entry = store.update_entry(
+                match.id,
+                title=booking.title,
+                date=booking.date,
+                start_time=booking.start_time,
+                end_time=booking.end_time,
+                medium_id=medium_row.id,
+                venue_id=venue_row.id,
+                booking_ref=booking.booking_ref,
+            )
+        else:
+            entry = store.create_entry(
+                title=booking.title,
+                date=booking.date,
+                start_time=booking.start_time,
+                end_time=booking.end_time,
+                medium_id=medium_row.id,
+                venue_id=venue_row.id,
+            )
+            entry = store.update_entry(entry.id, booking_ref=booking.booking_ref)
+
+        entry = _finalize_entry(
+            cfg,
+            store,
+            entry,
+            venue=booking.cinema,
+            fetch_metadata=not no_metadata,
+            screening_details=booking.screening_details,
+        )
+
+        verb = "Updated" if match is not None else "Logged"
+        typer.echo(f"{verb} '{booking.title}' as entry {entry.id}.")
     finally:
         store.close()
 
@@ -645,9 +822,50 @@ def sync_retry(ctx: typer.Context) -> None:
             typer.echo("Nothing to retry.")
             return
         for entry in unsynced:
-            _push_new_or_warn(cfg, store, entry, venue=_venue_name(store, entry))
+            _finalize_entry(
+                cfg, store, entry, venue=_venue_name(store, entry), fetch_metadata=False
+            )
         retried = sum(1 for e in unsynced if store.get_entry(e.id).caldav_uid is not None)
         typer.echo(f"Retried {len(unsynced)} entries, {retried} synced successfully.")
+    finally:
+        store.close()
+
+
+# --- sync refresh: design.md's "refresh stays separate from sync retry" ---
+
+
+@sync_app.command("refresh")
+def sync_refresh(ctx: typer.Context) -> None:
+    """Backfill missing OMDb ratings and re-push every entry's calendar
+    event, so its description reflects current data. Kept separate from
+    `sync retry` - this touches every entry and can make many OMDb calls
+    on a first run; `retry` stays the cheap, unsynced-only, no-OMDb path.
+    """
+    cfg = _cfg(ctx)
+    store = _open_store(cfg)
+    try:
+        entries = store.list_entries()
+        if not entries:
+            typer.echo("No entries to refresh.")
+            return
+
+        missing_metadata = [e for e in entries if e.imdb_rating is None]
+        if missing_metadata:
+            typer.echo(
+                f"About to look up OMDb ratings for {len(missing_metadata)} of "
+                f"{len(entries)} entries."
+            )
+
+        fetched = 0
+        for entry in entries:
+            fetch_metadata = entry.imdb_rating is None
+            refreshed = _finalize_entry(
+                cfg, store, entry, venue=_venue_name(store, entry), fetch_metadata=fetch_metadata
+            )
+            if fetch_metadata and refreshed.imdb_rating is not None:
+                fetched += 1
+
+        typer.echo(f"Refreshed {len(entries)} entries ({fetched} metadata fetches).")
     finally:
         store.close()
 

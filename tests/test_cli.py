@@ -1,8 +1,10 @@
 from collections.abc import Iterator
+from datetime import time
 from pathlib import Path
 
 import pytest
 from fakes import FakeCalendar
+from fixtures import PATHE_BOOKING_REF, PATHE_EMAIL_PLAIN
 from typer.testing import CliRunner
 
 from movie_planner import config as config_module
@@ -572,6 +574,21 @@ def test_import_csv_persists_rows_and_syncs_to_calendar(
     store.close()
 
 
+def test_import_csv_fetches_omdb_ratings(
+    config_path: Path, calendar: FakeCalendar, omdb_match: None, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium\nDune,2026-01-01,cinema\n")
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.imdb_rating == "8.5/10"
+    store.close()
+
+
 def test_import_reports_skipped_duplicates_in_summary(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
 ) -> None:
@@ -630,6 +647,180 @@ def test_import_force_persists_duplicates(
     store.close()
 
 
+# --- from-pathe-email: tasks 5.1-5.4 ---
+
+
+def test_from_pathe_email_via_file_creates_new_entry(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    email_path = tmp_path / "ticket.eml"
+    email_path.write_text(PATHE_EMAIL_PLAIN)
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "from-pathe-email", str(email_path)], input="y\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.title == "The Dog Stars"
+    assert entry.booking_ref == PATHE_BOOKING_REF
+    assert entry.caldav_uid in calendar.events_by_uid
+    store.close()
+
+
+def test_from_pathe_email_via_stdin_uses_tty_confirmation(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("movie_planner.cli._confirm_via_tty", lambda message: True)
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "from-pathe-email"], input=PATHE_EMAIL_PLAIN
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.booking_ref == PATHE_BOOKING_REF
+    store.close()
+
+
+def test_from_pathe_email_declined_confirmation_creates_nothing(
+    config_path: Path, calendar: FakeCalendar, tmp_path: Path
+) -> None:
+    email_path = tmp_path / "ticket.eml"
+    email_path.write_text(PATHE_EMAIL_PLAIN)
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "from-pathe-email", str(email_path)], input="n\n"
+    )
+
+    assert result.exit_code != 0
+    store = _store(config_path)
+    assert store.list_entries() == []
+    store.close()
+
+
+def test_from_pathe_email_yes_flag_skips_confirmation(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    email_path = tmp_path / "ticket.eml"
+    email_path.write_text(PATHE_EMAIL_PLAIN)
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "from-pathe-email", str(email_path), "--yes"]
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    assert len(store.list_entries()) == 1
+    store.close()
+
+
+def test_from_pathe_email_matches_by_booking_ref_updates_existing(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    first_path = tmp_path / "first.eml"
+    first_path.write_text(PATHE_EMAIL_PLAIN)
+    runner.invoke(app, ["--config", str(config_path), "from-pathe-email", str(first_path), "--yes"])
+
+    rescheduled = PATHE_EMAIL_PLAIN.replace(
+        "Saturday 29/08/26, 12:40 Expected to end at 14:58",
+        "Saturday 29/08/26, 15:00 Expected to end at 17:18",
+    )
+    second_path = tmp_path / "second.eml"
+    second_path.write_text(rescheduled)
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "from-pathe-email", str(second_path), "--yes"]
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.start_time == time(15, 0)
+    assert entry.booking_ref == PATHE_BOOKING_REF
+    store.close()
+
+
+def test_from_pathe_email_falls_back_to_fuzzy_match(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "The Dog Stars",
+            "--date",
+            "2026-08-29",
+            "--medium",
+            "cinema",
+        ],
+    )
+    email_path = tmp_path / "ticket.eml"
+    email_path.write_text(PATHE_EMAIL_PLAIN)
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "from-pathe-email", str(email_path), "--yes"]
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    assert len(store.list_entries()) == 1  # attached, not duplicated
+    (entry,) = store.list_entries()
+    assert entry.booking_ref == PATHE_BOOKING_REF
+    store.close()
+
+
+def test_from_pathe_email_parse_failure_reports_error(config_path: Path, tmp_path: Path) -> None:
+    bad_path = tmp_path / "garbage.eml"
+    bad_path.write_text("this is not a Pathé booking confirmation at all")
+
+    result = runner.invoke(app, ["--config", str(config_path), "from-pathe-email", str(bad_path)])
+
+    assert result.exit_code != 0
+    store = _store(config_path)
+    assert store.list_entries() == []
+    store.close()
+
+
+def test_from_pathe_email_fetches_omdb_ratings(
+    config_path: Path, calendar: FakeCalendar, omdb_match: None, tmp_path: Path
+) -> None:
+    email_path = tmp_path / "ticket.eml"
+    email_path.write_text(PATHE_EMAIL_PLAIN)
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "from-pathe-email", str(email_path), "--yes"]
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.imdb_rating == "8.5/10"
+    store.close()
+
+
+def test_from_pathe_email_description_includes_screening_details(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    email_path = tmp_path / "ticket.eml"
+    email_path.write_text(PATHE_EMAIL_PLAIN)
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "from-pathe-email", str(email_path), "--yes"]
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert "Auditorium 1 DOLBY - Row 5 Seat 17" in calendar.events_by_uid[entry.caldav_uid].data
+    store.close()
+
+
 # --- sync retry ---
 
 
@@ -666,6 +857,151 @@ def test_sync_retry_pushes_unsynced_entries(config_path: Path, no_omdb_match: No
     assert retried.caldav_uid is not None
     assert retried.caldav_uid in fake.events_by_uid
     store.close()
+
+
+# --- sync refresh: tasks 6.1, 6.2 ---
+
+
+def test_refresh_backfills_missing_ratings_and_pushes(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: None)
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.imdb_rating is None
+    store.close()
+
+    calls = {"n": 0}
+
+    def lookup(self: OmdbClient, **kw: object) -> MovieRatings:
+        calls["n"] += 1
+        return MovieRatings(imdb="8.5/10", rotten_tomatoes="91%", metacritic="80")
+
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lookup)
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert result.exit_code == 0, result.output
+    assert calls["n"] == 1
+    store = _store(config_path)
+    (refreshed,) = store.list_entries()
+    assert refreshed.imdb_rating == "8.5/10"
+    assert "IMDb: 8.5/10" in calendar.events_by_uid[refreshed.caldav_uid].data
+    store.close()
+
+
+def test_refresh_does_not_refetch_entries_that_already_have_ratings(
+    config_path: Path, calendar: FakeCalendar, omdb_match: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.imdb_rating == "8.5/10"
+    store.close()
+
+    calls = {"n": 0}
+
+    def lookup(self: OmdbClient, **kw: object) -> MovieRatings:
+        calls["n"] += 1
+        return MovieRatings(imdb="8.5/10", rotten_tomatoes="91%", metacritic="80")
+
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lookup)
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert result.exit_code == 0, result.output
+    assert calls["n"] == 0
+
+
+def test_refresh_creates_event_for_a_never_synced_entry(
+    config_path: Path, no_omdb_match: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid is None
+    store.close()
+
+    fake = FakeCalendar()
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(CalendarClient, "connect", classmethod(lambda cls, **kw: CalendarClient(fake)))
+        result = runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    assert store.get_entry(entry.id).caldav_uid is not None
+    store.close()
+
+
+def test_refresh_reports_a_summary(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert result.exit_code == 0, result.output
+    assert "1" in result.output
+
+
+def test_refresh_with_no_entries_reports_nothing_to_do(config_path: Path) -> None:
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert result.exit_code == 0, result.output
+    assert "no entries" in result.output.lower()
 
 
 # --- config overrides: flags and env vars take precedence over the config
