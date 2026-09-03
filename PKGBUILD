@@ -6,7 +6,8 @@
 # flake.nix does, and Arch's python-* packages track upstream closely
 # enough that the naming/version-skew problem the .deb/.rpm path
 # sidesteps with a frozen binary doesn't apply here. See
-# openspec/changes/add-os-packaging/design.md for the full reasoning.
+# openspec/changes/archive/2026-09-01-add-os-packaging/design.md for the
+# full reasoning.
 #
 # Lives in this repo only for reference/review — the actual AUR
 # package is maintained in its own git repo
