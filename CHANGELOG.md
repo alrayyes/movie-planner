@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.10.0...movie-planner-v0.10.1) (2026-09-03)
+
+
+### Documentation
+
+* **openspec:** archive add-pathe-email-import, sync its specs ([#73](https://github.com/alrayyes/movie-planner/issues/73)) ([0fed883](https://github.com/alrayyes/movie-planner/commit/0fed883eb74073f6817150063e9befdaf674ef0b))
+
 ## [0.10.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.9.3...movie-planner-v0.10.0) (2026-09-03)
 
 
