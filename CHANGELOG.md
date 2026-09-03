@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.9.3...movie-planner-v0.10.0) (2026-09-03)
+
+
+### Features
+
+* parse Pathé booking emails, and give calendar events real content ([#70](https://github.com/alrayyes/movie-planner/issues/70)) ([4660387](https://github.com/alrayyes/movie-planner/commit/4660387b0f33486c1632f5b4d6e49b3da97589c2))
+
 ## [0.9.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.9.2...movie-planner-v0.9.3) (2026-09-01)
 
 
