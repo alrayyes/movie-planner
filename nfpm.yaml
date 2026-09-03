@@ -5,8 +5,8 @@
 # scripts/build-binary.sh rather than depending on distro python3-*
 # packages, whose naming and available versions differ between Debian
 # and Fedora. The AUR PKGBUILD builds "for real" instead; see
-# openspec/changes/add-os-packaging/design.md for why the two paths
-# differ on purpose.
+# openspec/changes/archive/2026-09-01-add-os-packaging/design.md for why
+# the two paths differ on purpose.
 #
 # VERSION is passed as an environment variable by whatever invokes
 # `nfpm package` (the release-please tag, with its leading "v"

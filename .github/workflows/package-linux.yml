@@ -2,8 +2,9 @@
 # version) and again, identically, from the release job once a release
 # actually cuts — a reusable workflow so the two callers can't build
 # the package differently. See
-# openspec/changes/add-os-packaging/design.md for why this exists as
-# a frozen binary rather than depending on distro python3-* packages.
+# openspec/changes/archive/2026-09-01-add-os-packaging/design.md for why
+# this exists as a frozen binary rather than depending on distro
+# python3-* packages.
 #
 # Deliberately asks for nothing beyond the default `contents: read` a
 # checkout needs — attesting provenance and uploading release assets

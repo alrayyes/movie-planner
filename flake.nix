@@ -130,7 +130,7 @@
           # vendoring pyproject.toml's exact pins — nixpkgs versions its
           # Python packages itself, the same tradeoff the AUR PKGBUILD's
           # depends=() already makes for the same reason (see
-          # openspec/changes/add-os-packaging/design.md).
+          # openspec/changes/archive/2026-09-01-add-os-packaging/design.md).
           dependencies = with python3.pkgs; [
             caldav
             httpx
