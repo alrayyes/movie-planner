@@ -76,6 +76,24 @@ def test_load_config_missing_section_names_it(
         load_config(config_path)
 
 
+def test_load_config_section_not_a_table_raises_clear_error(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        """
+        caldav = "oops, not a table"
+
+        [omdb]
+        api_key = "abc123"
+
+        [storage]
+        db_path = "~/.local/share/movie-planner/movies.db"
+        """
+    )
+
+    with pytest.raises(ConfigError, match="caldav"):
+        load_config(config_path)
+
+
 def test_load_config_missing_key_within_section_names_dotted_path(tmp_path: Path) -> None:
     filtered = "\n".join(
         line for line in VALID_CONFIG.splitlines() if not line.startswith("url = ")

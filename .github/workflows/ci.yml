@@ -37,6 +37,10 @@ jobs:
         run: uv run ruff format --check
       - name: pyproject-fmt --check
         run: uv run pyproject-fmt --check pyproject.toml
+      - name: mypy
+        run: uv run mypy
+      - name: bandit
+        run: uv run bandit -q -r src/movie_planner
       - name: pip-audit
         run: uv run pip-audit
 
@@ -71,6 +75,32 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+
+  # Mutation testing: mutates src/ (excluding test_e2e.py's real-Baikal-
+  # container coverage from the rerun set - ruinous to repeat per mutant,
+  # see pyproject.toml's [tool.mutmut] comment) and reruns the rest of the
+  # suite against each mutant. Non-blocking by design: `mutmut run` exits 0
+  # regardless of survivor count, so this reports rather than gates - a
+  # surviving mutant is a missing test case to pick up later, not a merge
+  # blocker for a codebase that wasn't built mutation-clean from day one.
+  mutmut:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.7"
+      - run: uv sync --frozen
+      - name: mutmut run
+        run: |
+          uv run mutmut run
+          {
+            echo '### Mutation testing'
+            echo
+            echo '```'
+            uv run mutmut results
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   build:
     runs-on: ubuntu-24.04

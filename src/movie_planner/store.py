@@ -115,7 +115,10 @@ _ENTRY_COLUMNS = (
 )
 
 
-def _row_to_entry(row: tuple) -> Entry:
+def _row_to_entry(row: tuple[Any, ...]) -> Entry:
+    # A sqlite3 row is dynamically typed - Any is the honest boundary here,
+    # not object; the schema (not mypy) is what guarantees each column's
+    # real type below.
     values = dict(zip(_ENTRY_COLUMNS, row, strict=True))
     return Entry(
         id=values["id"],
@@ -139,10 +142,10 @@ def _row_to_entry(row: tuple) -> Entry:
 
 
 def _serialize_entry_field(name: str, value: object) -> object:
-    if name == "date":
+    if name == "date" and isinstance(value, datetime.date):
         return value.isoformat()
     if name in ("start_time", "end_time"):
-        return value.isoformat() if value else None
+        return value.isoformat() if isinstance(value, datetime.time) else None
     return value
 
 
@@ -181,7 +184,8 @@ class Store:
         except sqlite3.IntegrityError as e:
             raise StoreError(f"medium '{name}' already exists") from e
         self._conn.commit()
-        assert cur.lastrowid is not None
+        # Invariant: sqlite always sets lastrowid on a successful INSERT.
+        assert cur.lastrowid is not None  # nosec B101
         return Medium(id=cur.lastrowid, name=name, is_physical_place=is_physical_place)
 
     def list_media(self) -> list[Medium]:
@@ -214,7 +218,8 @@ class Store:
         except sqlite3.IntegrityError as e:
             raise StoreError(f"venue '{name}' already exists") from e
         self._conn.commit()
-        assert cur.lastrowid is not None
+        # Invariant: sqlite always sets lastrowid on a successful INSERT.
+        assert cur.lastrowid is not None  # nosec B101
         return Venue(id=cur.lastrowid, name=name)
 
     def list_venues(self) -> list[Venue]:
@@ -264,12 +269,14 @@ class Store:
             ),
         )
         self._conn.commit()
-        assert cur.lastrowid is not None
+        # Invariant: sqlite always sets lastrowid on a successful INSERT.
+        assert cur.lastrowid is not None  # nosec B101
         return self.get_entry(cur.lastrowid)
 
     def get_entry(self, entry_id: int) -> Entry:
         row = self._conn.execute(
-            f"SELECT {', '.join(_ENTRY_COLUMNS)} FROM entries WHERE id = ?",
+            # _ENTRY_COLUMNS is a fixed internal tuple, never user input; the value is parameterized below
+            f"SELECT {', '.join(_ENTRY_COLUMNS)} FROM entries WHERE id = ?",  # nosec B608
             (entry_id,),
         ).fetchone()
         if row is None:
@@ -283,7 +290,8 @@ class Store:
         date_to: datetime.date | None = None,
         medium_id: int | None = None,
     ) -> list[Entry]:
-        query = f"SELECT {', '.join(_ENTRY_COLUMNS)} FROM entries"
+        # _ENTRY_COLUMNS is a fixed internal tuple, never user input; every filter value below is parameterized
+        query = f"SELECT {', '.join(_ENTRY_COLUMNS)} FROM entries"  # nosec B608
         clauses = []
         params: list[object] = []
         if date_from is not None:
@@ -337,12 +345,20 @@ class Store:
             "imdb_url": imdb_url,
             "booking_ref": booking_ref,
         }
-        updated = replace(current, **{k: v for k, v in changes.items() if v is not _UNSET})
+        # changes is a heterogeneous dict by design (the _UNSET-sentinel
+        # pattern needs one dict covering every field) - mypy can't verify
+        # dataclasses.replace's **kwargs against that without a per-field
+        # TypedDict, which isn't worth the ceremony for one call site.
+        updated = replace(
+            current,
+            **{k: v for k, v in changes.items() if v is not _UNSET},  # type: ignore[arg-type]
+        )
         columns = _ENTRY_COLUMNS[1:]  # everything but id
         set_clause = ", ".join(f"{column}=?" for column in columns)
         values = [_serialize_entry_field(column, getattr(updated, column)) for column in columns]
         self._conn.execute(
-            f"UPDATE entries SET {set_clause} WHERE id=?",
+            # set_clause is built purely from _ENTRY_COLUMNS, never user input; every value is parameterized
+            f"UPDATE entries SET {set_clause} WHERE id=?",  # nosec B608
             (*values, entry_id),
         )
         self._conn.commit()
@@ -350,7 +366,8 @@ class Store:
 
     def get_entry_by_booking_ref(self, booking_ref: str) -> Entry | None:
         row = self._conn.execute(
-            f"SELECT {', '.join(_ENTRY_COLUMNS)} FROM entries WHERE booking_ref = ?",
+            # _ENTRY_COLUMNS is a fixed internal tuple, never user input; the value is parameterized below
+            f"SELECT {', '.join(_ENTRY_COLUMNS)} FROM entries WHERE booking_ref = ?",  # nosec B608
             (booking_ref,),
         ).fetchone()
         return _row_to_entry(row) if row else None

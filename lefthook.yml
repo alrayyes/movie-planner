@@ -21,6 +21,18 @@ pre-commit:
       run: uv run ruff check --fix {staged_files}
       stage_fixed: true
 
+    # Whole-program tools, not per-file - mypy needs the rest of src/ to
+    # resolve imports, and bandit's scan is cheap enough (well under a
+    # second) that scoping it to {staged_files} would only add complexity
+    # for no real saving. Neither writes, so there's nothing to restage.
+    - name: mypy
+      glob: "*.py"
+      run: uv run mypy
+
+    - name: bandit
+      glob: "*.py"
+      run: uv run bandit -q -r src/movie_planner
+
     # Unlike ruff, pyproject-fmt exits non-zero the moment it rewrites the
     # file, even outside --check. `|| true` swallows that so the job reads
     # as passed and stage_fixed restages the write, instead of lefthook
@@ -98,8 +110,25 @@ pre-push:
     - name: pyproject-fmt-check
       run: uv run pyproject-fmt --check pyproject.toml
 
+    - name: mypy
+      run: uv run mypy
+
+    - name: bandit
+      run: uv run bandit -q -r src/movie_planner
+
     - name: pip-audit
       run: uv run pip-audit
+
+    # A full run across src/ is ~25s (measured), well inside "can carry the
+    # linter that takes twenty" above - cheap enough for pre-push, and CI
+    # runs the identical command. Non-blocking on its own exit code: a
+    # surviving mutant is a missing test case to pick up later, per
+    # python.md, not a merge-blocking failure for a codebase that wasn't
+    # built mutation-clean from day one - `mutmut run` already exits 0
+    # regardless of how many mutants survive, so this reports rather than
+    # gates. `results` prints what's left so it's visible in the log.
+    - name: mutmut
+      run: uv run mutmut run && uv run mutmut results
 
     # These are `package.json` scripts rather than the commands spelled out,
     # because CI runs the same ones and a literal copied into two files drifts

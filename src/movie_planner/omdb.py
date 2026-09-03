@@ -18,10 +18,11 @@ class MovieRatings:
     metacritic: str | None
 
 
-def _rating(ratings: list[dict], source: str) -> str | None:
+def _rating(ratings: list[dict[str, object]], source: str) -> str | None:
     for entry in ratings:
         if entry.get("Source") == source:
-            return entry.get("Value")
+            value = entry.get("Value")
+            return value if isinstance(value, str) else None
     return None
 
 
@@ -38,12 +39,13 @@ class OmdbClient:
             raise ValueError("lookup needs a title or imdb_id")
 
         cache_key = imdb_id or title
-        assert cache_key is not None
+        # Validated above: at least one of imdb_id/title is set.
+        assert cache_key is not None  # nosec B101
         if cache_key in self._cache:
             return self._cache[cache_key]
 
-        params = {"apikey": self._api_key}
-        params["i" if imdb_id else "t"] = imdb_id or title
+        params: dict[str, str] = {"apikey": self._api_key}
+        params["i" if imdb_id else "t"] = cache_key
 
         response = self._http.get("/", params=params)
         response.raise_for_status()
