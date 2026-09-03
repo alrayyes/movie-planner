@@ -20,6 +20,29 @@ class CalendarSyncError(Exception):
     """
 
 
+def build_description(entry: Entry, *, screening_details: str | None = None) -> str | None:
+    """Builds the text for a VEVENT's description from whatever metadata
+    an entry has - ratings, Letterboxd, and, for a Pathé-sourced entry,
+    the screening format/seat text - or None when there's nothing to show.
+    Nothing here is persisted on `Entry`; screening details are provenance
+    for the calendar event only. See design.md's "Description content"
+    decision.
+    """
+    lines: list[str] = []
+    if entry.imdb_rating:
+        lines.append(f"IMDb: {entry.imdb_rating}")
+    if entry.rotten_tomatoes_rating:
+        lines.append(f"Rotten Tomatoes: {entry.rotten_tomatoes_rating}")
+    if entry.metacritic_rating:
+        lines.append(f"Metacritic: {entry.metacritic_rating}")
+    if entry.letterboxd_url:
+        suffix = f" ({entry.letterboxd_rating})" if entry.letterboxd_rating else ""
+        lines.append(f"Letterboxd: {entry.letterboxd_url}{suffix}")
+    if screening_details:
+        lines.append(screening_details)
+    return "\n".join(lines) if lines else None
+
+
 def build_vevent(
     *,
     uid: str,
@@ -28,6 +51,7 @@ def build_vevent(
     start_time: time | None,
     end_time: time | None,
     venue: str | None,
+    description: str | None = None,
 ) -> str:
     """Maps a movie-log entry's date/time completeness to a VEVENT:
     date-only -> all-day, start-only -> DTSTART with no DTEND, both -> a
@@ -42,6 +66,8 @@ def build_vevent(
     event.add("summary", title)
     if venue:
         event.add("location", venue)
+    if description:
+        event.add("description", description)
 
     if start_time is None:
         event.add("dtstart", entry_date)
@@ -95,7 +121,9 @@ class CalendarSync:
         self._store = store
         self._client = client
 
-    def push_new(self, entry: Entry, *, venue: str | None) -> Entry:
+    def push_new(
+        self, entry: Entry, *, venue: str | None, screening_details: str | None = None
+    ) -> Entry:
         uid = str(uuid.uuid4())
         ical_text = build_vevent(
             uid=uid,
@@ -104,6 +132,7 @@ class CalendarSync:
             start_time=entry.start_time,
             end_time=entry.end_time,
             venue=venue,
+            description=build_description(entry, screening_details=screening_details),
         )
         try:
             self._client.create_event(ical_text)
@@ -111,7 +140,9 @@ class CalendarSync:
             raise CalendarSyncError(f"could not sync '{entry.title}' to the calendar: {e}") from e
         return self._store.update_entry(entry.id, caldav_uid=uid)
 
-    def push_update(self, entry: Entry, *, venue: str | None) -> None:
+    def push_update(
+        self, entry: Entry, *, venue: str | None, screening_details: str | None = None
+    ) -> None:
         if entry.caldav_uid is None:
             raise CalendarSyncError(f"'{entry.title}' has never been synced to the calendar")
         ical_text = build_vevent(
@@ -121,6 +152,7 @@ class CalendarSync:
             start_time=entry.start_time,
             end_time=entry.end_time,
             venue=venue,
+            description=build_description(entry, screening_details=screening_details),
         )
         try:
             self._client.update_event(entry.caldav_uid, ical_text)
