@@ -180,7 +180,7 @@ def test_calendar_client_connect_wires_up_the_dav_client(monkeypatch: pytest.Mon
             calls["calendar_url"] = url
             return FakeCalendar()
 
-    monkeypatch.setattr("movie_planner.calendar_sync.caldav.DAVClient", FakeDAVClient)
+    monkeypatch.setattr("movie_planner.calendar_sync.DAVClient", FakeDAVClient)
 
     client = CalendarClient.connect(
         url="https://baikal.example.com/calendars/movies/",

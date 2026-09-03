@@ -4,7 +4,9 @@ local SQLite database path.
 
 import os
 import shlex
-import subprocess
+
+# password_command intentionally shells out.
+import subprocess  # nosec B404
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,13 +33,20 @@ def default_config_path() -> Path:
     return Path(xdg_config_home).expanduser() / "movie-planner" / "config.toml"
 
 
-def _require(table: dict, key: str, dotted_path: str) -> object:
+def _require(table: dict[str, object], key: str, dotted_path: str) -> object:
     if key not in table:
         raise ConfigError(f"config is missing required key '{dotted_path}'")
     return table[key]
 
 
-def _resolve_password(caldav: dict) -> str:
+def _require_table(data: dict[str, object], key: str) -> dict[str, object]:
+    value = _require(data, key, key)
+    if not isinstance(value, dict):
+        raise ConfigError(f"config's '{key}' section must be a table")
+    return value
+
+
+def _resolve_password(caldav: dict[str, object]) -> str:
     has_password = "password" in caldav
     has_command = "password_command" in caldav
 
@@ -48,7 +57,8 @@ def _resolve_password(caldav: dict) -> str:
     if has_command:
         command = str(caldav["password_command"])
         try:
-            result = subprocess.run(
+            # No shell=True; command is user-configured, not untrusted input.
+            result = subprocess.run(  # nosec B603
                 shlex.split(command),
                 capture_output=True,
                 text=True,
@@ -76,9 +86,9 @@ def load_config(path: Path | None = None) -> Config:
     except tomllib.TOMLDecodeError as e:
         raise ConfigError(f"{config_path} is not valid TOML: {e}") from e
 
-    caldav = _require(data, "caldav", "caldav")
-    omdb = _require(data, "omdb", "omdb")
-    storage = _require(data, "storage", "storage")
+    caldav = _require_table(data, "caldav")
+    omdb = _require_table(data, "omdb")
+    storage = _require_table(data, "storage")
 
     return Config(
         caldav_url=str(_require(caldav, "url", "caldav.url")),

@@ -5,10 +5,10 @@ decisions. Nothing here ever reads the calendar back into the store.
 
 import uuid
 from datetime import date, datetime, time
-from typing import Protocol
+from typing import Protocol, cast
 
-import caldav
 import icalendar
+from caldav.davclient import DAVClient
 
 from movie_planner.store import Entry, Store
 
@@ -78,7 +78,20 @@ def build_vevent(
         event.add("dtend", datetime.combine(entry_date, end_time))
 
     calendar.add_component(event)
-    return calendar.to_ical().decode("utf-8")
+    # icalendar ships no return-type annotations; to_ical() always returns
+    # bytes at runtime.
+    return cast(bytes, calendar.to_ical()).decode("utf-8")
+
+
+class _CalDAVEvent(Protocol):
+    """The slice of a caldav.Event (or the test double standing in for
+    one) this module needs.
+    """
+
+    data: str
+
+    def save(self) -> None: ...
+    def delete(self) -> None: ...
 
 
 class _CalDAVCalendar(Protocol):
@@ -88,7 +101,7 @@ class _CalDAVCalendar(Protocol):
 
     def events(self) -> list[object]: ...
     def add_event(self, ical: str) -> object: ...
-    def event_by_uid(self, uid: str) -> object: ...
+    def event_by_uid(self, uid: str) -> _CalDAVEvent: ...
 
 
 class CalendarClient:
@@ -97,8 +110,11 @@ class CalendarClient:
 
     @classmethod
     def connect(cls, *, url: str, username: str, password: str) -> CalendarClient:
-        client = caldav.DAVClient(url=url, username=username, password=password)
-        return cls(client.calendar(url=url))
+        client = DAVClient(url=url, username=username, password=password)
+        # caldav.DAVClient.calendar() ships no annotations at all - cast
+        # covers the return type, but the call itself still needs the
+        # ignore for strict mode's disallow_untyped_calls.
+        return cls(cast(_CalDAVCalendar, client.calendar(url=url)))  # type: ignore[no-untyped-call]
 
     def check_connection(self) -> None:
         self._calendar.events()

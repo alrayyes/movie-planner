@@ -8,6 +8,7 @@ import datetime
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from movie_planner.duplicates import find_duplicate
 from movie_planner.store import Entry, Store
@@ -60,7 +61,9 @@ def _parse_time(value: str | None) -> datetime.time | None:
     return datetime.time.fromisoformat(value) if value else None
 
 
-def _row_from_dict(row_number: int, raw: dict) -> ParsedRow:
+def _row_from_dict(row_number: int, raw: dict[str, Any]) -> ParsedRow:
+    # A parsed CSV/JSON row is dynamically typed - Any is the honest
+    # boundary here; the try/except below is what actually validates it.
     try:
         title = raw.get("title") or None
         if not title:
@@ -115,7 +118,8 @@ def run_import(
             failed_details.append(f"row {row.row_number}: {row.error}")
             continue
 
-        assert row.entry is not None
+        # Invariant: error is None here.
+        assert row.entry is not None  # nosec B101
         r = row.entry
         duplicate = find_duplicate(r.title, r.date, existing, threshold=threshold)
         if duplicate is not None and not force:
