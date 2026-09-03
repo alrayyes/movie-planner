@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.10.1...movie-planner-v0.10.2) (2026-09-03)
+
+
+### Documentation
+
+* fix stale openspec change paths after archiving add-os-packaging ([#75](https://github.com/alrayyes/movie-planner/issues/75)) ([404bc6d](https://github.com/alrayyes/movie-planner/commit/404bc6dd587ced8e9a0605894c11aec02c39afc9))
+
 ## [0.10.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.10.0...movie-planner-v0.10.1) (2026-09-03)
 
 
