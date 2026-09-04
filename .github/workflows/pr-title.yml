@@ -17,6 +17,13 @@ permissions:
   pull-requests: read
   statuses: write
 
+# github.ref on pull_request_target is the base branch, not the PR head —
+# every open pull request would share one group. Keyed on the PR number
+# instead, so only that PR's own runs cancel each other.
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-24.04
