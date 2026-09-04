@@ -36,6 +36,7 @@ concurrency:
 jobs:
   release-please:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: write # tags the release and writes it
       pull-requests: write # keeps the release pull request up to date
@@ -91,6 +92,7 @@ jobs:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: write # pushes the image to GHCR
@@ -135,6 +137,7 @@ jobs:
   package-linux-publish:
     needs: [release-please, package-linux]
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: write # uploads the release assets
       attestations: write # attaches build provenance to them
@@ -168,6 +171,7 @@ jobs:
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-24.04
     container: archlinux:latest
+    timeout-minutes: 20
     steps:
       # See ci.yml's aur job for why this has to happen before
       # checkout, not just before the steps that call git directly.

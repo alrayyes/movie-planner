@@ -22,6 +22,7 @@ jobs:
     # identity runs googleapis/release-please-action, not a bot account.
     if: "contains(github.event.pull_request.labels.*.name, 'autorelease: pending')"
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       # ci.yml is the gate; this only arms the merge and lets GitHub wait
       # for that gate itself, rather than polling it from inside the job.
