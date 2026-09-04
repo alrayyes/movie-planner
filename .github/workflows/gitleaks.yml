@@ -22,6 +22,7 @@ env:
 jobs:
   secrets:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       # fetch-depth: 0, or there's no history to walk and the job passes
       # having scanned nothing.

@@ -20,6 +20,7 @@ concurrency:
 jobs:
   lint:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -46,6 +47,7 @@ jobs:
 
   test:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -85,6 +87,7 @@ jobs:
   # blocker for a codebase that wasn't built mutation-clean from day one.
   mutmut:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -104,6 +107,7 @@ jobs:
 
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -119,6 +123,7 @@ jobs:
 
   docker:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: hadolint
@@ -139,6 +144,10 @@ jobs:
   # artifact, so this only ever needs to prove the flake still builds.
   nix:
     runs-on: ubuntu-24.04
+    # Cold cache rebuilds the whole dependency tree from source — 30+
+    # minutes, confirmed live (see the Cache the Nix store step below) — so
+    # this has to stay well above the warm-cache run time.
+    timeout-minutes: 45
     # cache-nix-action's purge step needs this to delete its own stale
     # cache entries; everything else it does fits the default read scope.
     permissions:
@@ -195,6 +204,7 @@ jobs:
   aur:
     runs-on: ubuntu-24.04
     container: archlinux:latest
+    timeout-minutes: 20
     steps:
       # archlinux:latest ships no git at all. Confirmed live: with git
       # missing, actions/checkout falls back to downloading a tarball
@@ -255,6 +265,7 @@ jobs:
   # comment for why they're split out.
   prose:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -274,6 +285,7 @@ jobs:
   commits:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
