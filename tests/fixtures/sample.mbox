@@ -1,0 +1,34 @@
+From MAILER-DAEMON Sat Jul 04 19:00:00 2026
+From: Cinema Chain <noreply@example-chain.com>
+To: someone@example.com
+Subject: Your booking confirmation
+Date: Sat, 04 Jul 2026 19:00:00 +0200
+Content-Type: text/plain; charset=utf-8
+
+Good Boy
+=========
+
+Booking number
+AB1CD23
+
+From MAILER-DAEMON Sun Jul 05 10:00:00 2026
+From: Newsletter <news@unrelated-sender.com>
+To: someone@example.com
+Subject: This week in cinema
+Date: Sun, 05 Jul 2026 10:00:00 +0200
+Content-Type: text/plain; charset=utf-8
+
+Not a booking confirmation, just a newsletter.
+
+From MAILER-DAEMON Mon Jul 06 08:00:00 2026
+From: Cinema Chain <noreply@example-chain.com>
+To: someone@example.com
+Subject: A second booking confirmation
+Date: Mon, 06 Jul 2026 08:00:00 +0200
+Content-Type: text/plain; charset=utf-8
+
+Solstice Run
+=========
+
+Booking number
+XY9ZZ99

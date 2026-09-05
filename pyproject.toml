@@ -25,6 +25,7 @@ dependencies = [
   "typer==0.27.1",
 ]
 scripts.movie-planner = "movie_planner:main"
+scripts.pathe-mail-import = "movie_planner.mail_import.cli:main"
 
 [dependency-groups]
 dev = [
