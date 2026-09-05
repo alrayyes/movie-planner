@@ -26,6 +26,7 @@ dependencies = [
 ]
 scripts.movie-planner = "movie_planner:main"
 scripts.pathe-mail-import = "movie_planner.mail_import.cli:main"
+scripts.pathe-translate = "movie_planner.mail_import.pathe_translate:main"
 
 [dependency-groups]
 dev = [
@@ -80,7 +81,11 @@ source_paths = [ "src" ]
 # test_examples_schema.py reads examples/, which mutmut's mutant sandbox
 # doesn't mirror (only source_paths and tests/ are copied in) - it never
 # imports movie_planner itself, so it has no mutation to catch anyway.
+# test_mail_import_imap_e2e.py: same reasoning as test_e2e.py - a real
+# GreenMail Docker container per module, ruinous rerun per mutant.
+# Covered against a fake connection in test_mail_import_imap_client.py.
 pytest_add_cli_args_test_selection = [
   "--ignore=tests/test_e2e.py",
   "--ignore=tests/test_examples_schema.py",
+  "--ignore=tests/test_mail_import_imap_e2e.py",
 ]

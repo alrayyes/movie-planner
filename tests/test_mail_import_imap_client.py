@@ -100,7 +100,7 @@ def test_search_criteria_single_domain() -> None:
 
     list(_client(conn).fetch(["pathe.nl"]))
 
-    assert conn.search_calls == [(None, ('FROM "pathe.nl"',))]
+    assert conn.search_calls == [(None, ('HEADER FROM "pathe.nl"',))]
 
 
 def test_search_criteria_multiple_domains_are_ored() -> None:
@@ -108,7 +108,7 @@ def test_search_criteria_multiple_domains_are_ored() -> None:
 
     list(_client(conn).fetch(["pathe.nl", "example.com"]))
 
-    assert conn.search_calls == [(None, ('OR FROM "pathe.nl" FROM "example.com"',))]
+    assert conn.search_calls == [(None, ('OR HEADER FROM "pathe.nl" HEADER FROM "example.com"',))]
 
 
 def test_search_criteria_includes_since_and_until() -> None:
@@ -119,5 +119,5 @@ def test_search_criteria_includes_since_and_until() -> None:
     list(_client(conn).fetch(["pathe.nl"], since=since, until=until))
 
     assert conn.search_calls == [
-        (None, ('FROM "pathe.nl" SINCE "01-Jul-2026" BEFORE "31-Jul-2026"',))
+        (None, ('HEADER FROM "pathe.nl" SINCE "01-Jul-2026" BEFORE "31-Jul-2026"',))
     ]
