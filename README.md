@@ -16,7 +16,10 @@ Prefer a browser to a terminal? [movie-planner-web](https://github.com/alrayyes/
 is a static web client for the same CalDAV calendar and OMDb setup — no
 install, no shared server, your browser talks straight to your CalDAV
 server. The two tools share movie-planner's own field names, so a CSV/JSON
-export from one imports straight into the other.
+export from one imports straight into the other. See
+[`docs/architecture.md`](docs/architecture.md) for how movie-planner,
+movie-planner-web, OMDb, the calendar, and the optional
+[`pathe-mail-import`](docs/pathe-mail-import.md) tool all fit together.
 
 ## Requirements
 
@@ -215,6 +218,15 @@ or a process list.
 [`examples/`](examples/) has three fictional viewings in CSV and JSON
 form, plus a [JSON Schema](examples/movies.schema.json) for the row shape
 both formats share.
+
+## Importing Pathé booking confirmations in bulk
+
+[`pathe-mail-import`](docs/pathe-mail-import.md) is a separate tool
+(installed alongside `movie-planner` from this same checkout) that
+reads an IMAP mailbox or a local mbox file, finds Pathé booking
+confirmations, and emits a JSON file this `import` command accepts -
+`movie-planner` itself never has to know what Pathé's emails look
+like, or what IMAP is.
 
 ## Contributing
 
