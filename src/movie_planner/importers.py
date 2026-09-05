@@ -32,9 +32,9 @@ class ImportRow:
     actors: str | None = None
     genre: str | None = None
     release_year: int | None = None
-    booking_ref: str | None = None
     letterboxd_url: str | None = None
     letterboxd_rating: str | None = None
+    source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -108,9 +108,9 @@ def _row_from_dict(row_number: int, raw: dict[str, Any]) -> ParsedRow:
             actors=raw.get("actors") or None,
             genre=raw.get("genre") or None,
             release_year=_parse_release_year(raw.get("release_year")),
-            booking_ref=raw.get("booking_ref") or None,
             letterboxd_url=raw.get("letterboxd_url") or None,
             letterboxd_rating=raw.get("letterboxd_rating") or None,
+            source=raw.get("source") or None,
         )
     except (KeyError, ValueError) as e:
         return ParsedRow(row_number=row_number, entry=None, error=str(e))
@@ -183,9 +183,9 @@ def run_import(
             "actors": r.actors,
             "genre": r.genre,
             "release_year": r.release_year,
-            "booking_ref": r.booking_ref,
             "letterboxd_url": r.letterboxd_url,
             "letterboxd_rating": r.letterboxd_rating,
+            "source": r.source,
         }
         supplied_fields = {k: v for k, v in supplied_fields.items() if v is not None}
         if supplied_fields:
