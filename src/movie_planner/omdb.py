@@ -105,8 +105,16 @@ class OmdbClient:
         if cache_key in self._cache:
             return self._cache[cache_key]
 
+        # A bare title is ambiguous - OMDb may resolve it to a TV series of
+        # the same name - so title searches are restricted to movies both
+        # server-side (the `type` param) and again below on the response,
+        # in case OMDb's own filter lets one through anyway. An imdb_id is
+        # already an exact, deliberate match and isn't filtered.
+        title_search = title is not None and imdb_id is None
         params: dict[str, str] = {"apikey": self._api_key}
         params["i" if imdb_id else "t"] = cache_key_base
+        if title_search:
+            params["type"] = "movie"
         if year is not None:
             params["y"] = str(year)
 
@@ -115,6 +123,10 @@ class OmdbClient:
         data = response.json()
 
         if data.get("Response") == "False":
+            self._cache[cache_key] = None
+            return None
+
+        if title_search and data.get("Type") not in (None, "movie"):
             self._cache[cache_key] = None
             return None
 
