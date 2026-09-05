@@ -1008,6 +1008,134 @@ def test_refresh_with_no_entries_reports_nothing_to_do(config_path: Path) -> Non
     assert "no entries" in result.output.lower()
 
 
+def _log(config_path: Path, title: str, entry_date: str) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            title,
+            "--date",
+            entry_date,
+            "--medium",
+            "cinema",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_refresh_from_and_to_only_touches_entries_in_range(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    _log(config_path, "Before", "2025-12-31")
+    _log(config_path, "Dune", "2026-01-15")
+    _log(config_path, "After", "2026-02-01")
+
+    calls = {"n": 0}
+
+    def lookup(self: OmdbClient, **kw: object) -> MovieRatings | None:
+        calls["n"] += 1
+        return None
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("movie_planner.cli.OmdbClient.lookup", lookup)
+        result = runner.invoke(
+            app,
+            [
+                "--config",
+                str(config_path),
+                "sync",
+                "refresh",
+                "--from",
+                "2026-01-01",
+                "--to",
+                "2026-01-31",
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    assert "Refreshed 1 " in result.output
+    assert calls["n"] == 1
+
+
+def test_refresh_date_only_touches_that_single_day(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    _log(config_path, "Dune", "2026-01-15")
+    _log(config_path, "Other Day", "2026-01-16")
+
+    calls = {"n": 0}
+
+    def lookup(self: OmdbClient, **kw: object) -> MovieRatings | None:
+        calls["n"] += 1
+        return None
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("movie_planner.cli.OmdbClient.lookup", lookup)
+        result = runner.invoke(
+            app,
+            ["--config", str(config_path), "sync", "refresh", "--date", "2026-01-15"],
+        )
+
+    assert result.exit_code == 0, result.output
+    assert "Refreshed 1 " in result.output
+    assert calls["n"] == 1
+
+
+def test_refresh_date_combined_with_from_is_rejected(config_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "sync",
+            "refresh",
+            "--date",
+            "2026-01-15",
+            "--from",
+            "2026-01-01",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--date" in result.output
+
+
+def test_refresh_date_combined_with_to_is_rejected(config_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "sync",
+            "refresh",
+            "--date",
+            "2026-01-15",
+            "--to",
+            "2026-01-31",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--date" in result.output
+
+
+def test_refresh_range_with_no_matching_entries_reports_nothing_to_do(
+    config_path: Path,
+) -> None:
+    _log(config_path, "Dune", "2026-01-15")
+
+    result = runner.invoke(
+        app,
+        ["--config", str(config_path), "sync", "refresh", "--date", "2026-06-01"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "no entries" in result.output.lower()
+
+
 # --- config overrides: flags and env vars take precedence over the config
 # file (rules/cli.md), except the CalDAV password, which never gets an
 # override surface (kept config-file-only) ---

@@ -98,3 +98,22 @@ current data.
 #### Scenario: Refreshing a never-synced entry
 - **WHEN** refresh runs against an entry with no linked calendar event
 - **THEN** a calendar event is created for it, the same as a first sync
+
+### Requirement: Refresh can be scoped to a date range or a single date
+The system SHALL accept `--from`/`--to` options to limit a refresh to
+entries dated on or after/before the given date, and a `--date` option
+to limit it to entries on that exact date. `--date` SHALL be rejected
+when combined with either `--from` or `--to`. With no date option, every
+entry is refreshed.
+
+#### Scenario: Refreshing a date range
+- **WHEN** refresh runs with `--from` and `--to`
+- **THEN** only entries dated within that inclusive range are refreshed
+
+#### Scenario: Refreshing a single date
+- **WHEN** refresh runs with `--date`
+- **THEN** only entries dated on that exact day are refreshed
+
+#### Scenario: Combining --date with --from or --to
+- **WHEN** refresh runs with `--date` and either `--from` or `--to`
+- **THEN** the command exits with an error instead of refreshing anything
