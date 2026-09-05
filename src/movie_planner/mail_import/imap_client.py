@@ -82,7 +82,12 @@ class ImapMailClient:
 def _search_criteria(
     sender_domains: Sequence[str], *, since: datetime | None, until: datetime | None
 ) -> str:
-    clauses = [f'FROM "{domain}"' for domain in sender_domains]
+    # HEADER FROM, not the bare FROM search key: verified against a real
+    # server (GreenMail) that FROM's substring matching isn't reliable
+    # there - only an exact address matches. HEADER FROM is the same
+    # RFC 3501 substring semantics FROM promises, explicit about which
+    # header, and confirmed working there.
+    clauses = [f'HEADER FROM "{domain}"' for domain in sender_domains]
     from_clause = clauses[0]
     for clause in clauses[1:]:
         from_clause = f"OR {from_clause} {clause}"

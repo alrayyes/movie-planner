@@ -1,6 +1,9 @@
+import json
+import sys
 import tomllib
 from pathlib import Path
 
+import jsonschema
 import pytest
 from typer.testing import CliRunner
 
@@ -21,6 +24,7 @@ def test_init_non_interactive_with_all_flags_writes_config(tmp_path: Path) -> No
     result = runner.invoke(
         app,
         [
+            "init",
             "--config",
             str(config_path),
             "--source",
@@ -53,7 +57,7 @@ def test_init_non_interactive_mbox_source(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--config", str(config_path), "--source", "mbox", "--mbox-path", str(mbox_path)],
+        ["init", "--config", str(config_path), "--source", "mbox", "--mbox-path", str(mbox_path)],
     )
 
     assert result.exit_code == 0, result.output
@@ -65,7 +69,7 @@ def test_init_non_interactive_mbox_source(tmp_path: Path) -> None:
 def test_init_non_interactive_missing_required_value_fails_clearly(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
 
-    result = runner.invoke(app, ["--config", str(config_path), "--source", "imap"])
+    result = runner.invoke(app, ["init", "--config", str(config_path), "--source", "imap"])
 
     assert result.exit_code != 0
     assert "--imap-host" in result.output
@@ -79,6 +83,7 @@ def test_init_refuses_to_overwrite_without_force(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
+            "init",
             "--config",
             str(config_path),
             "--source",
@@ -99,6 +104,7 @@ def test_init_force_overwrites(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
+            "init",
             "--config",
             str(config_path),
             "--force",
@@ -122,7 +128,7 @@ def test_init_interactive_prompts_for_missing_values(
 
     result = runner.invoke(
         app,
-        ["--config", str(config_path)],
+        ["init", "--config", str(config_path)],
         # source, host, port(default), username, use-password-command?(no), sender_domain(default), translate(default)
         input="imap\n127.0.0.1\n\nme@example.com\nn\n\n\n",
     )
@@ -144,7 +150,7 @@ def test_init_interactive_password_command_path(
 
     result = runner.invoke(
         app,
-        ["--config", str(config_path)],
+        ["init", "--config", str(config_path)],
         input="imap\n127.0.0.1\n\nme@example.com\ny\npass show imap\n\n\n",
     )
 
@@ -152,3 +158,156 @@ def test_init_interactive_password_command_path(
     data = tomllib.loads(config_path.read_text())
     assert data["mail"]["imap"]["password_command"] == "pass show imap"
     assert "password" not in data["mail"]["imap"]
+
+
+# --- fetch: task groups 3-4 ---
+
+FIXTURE_MBOX = Path(__file__).parent / "fixtures" / "sample.mbox"
+
+_SELECTIVE_SCRIPT = """\
+import json
+import sys
+
+envelope = json.load(sys.stdin)
+if "confirmation" not in envelope["subject"].lower():
+    print(f"not a booking: {envelope['subject']}", file=sys.stderr)
+    sys.exit(1)
+print(json.dumps({{"title": envelope["subject"], "date": "2026-07-04", "medium": "cinema"}}))
+"""
+
+
+def _mbox_config(
+    tmp_path: Path, translate: str, *, sender_domain: str = "example-chain.com"
+) -> Path:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f"""\
+[mail]
+source = "mbox"
+
+[mail.mbox]
+path = "{FIXTURE_MBOX}"
+
+[[chains]]
+sender_domain = "{sender_domain}"
+translate = "{translate}"
+"""
+    )
+    return config_path
+
+
+def _selective_translate_script(tmp_path: Path) -> str:
+    script_path = tmp_path / "fake-translate.py"
+    script_path.write_text(_SELECTIVE_SCRIPT.replace("{{", "{").replace("}}", "}"))
+    return f"{sys.executable} {script_path}"
+
+
+def test_fetch_writes_recognized_rows_and_reports_unrecognized(tmp_path: Path) -> None:
+    # Both fixture senders configured, so both get fetched; the
+    # translate script itself only recognizes ones with "confirmation"
+    # in the subject - the newsletter, same as a real chain sending
+    # both booking confirmations and marketing mail, ends up in the
+    # review table rather than being excluded from the fetch entirely.
+    translate = _selective_translate_script(tmp_path)
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f"""\
+[mail]
+source = "mbox"
+
+[mail.mbox]
+path = "{FIXTURE_MBOX}"
+
+[[chains]]
+sender_domain = "example-chain.com"
+translate = "{translate}"
+
+[[chains]]
+sender_domain = "unrelated-sender.com"
+translate = "{translate}"
+"""
+    )
+    output_path = tmp_path / "import.json"
+
+    result = runner.invoke(
+        app, ["fetch", "--config", str(config_path), "--output", str(output_path)]
+    )
+
+    assert result.exit_code == 0, result.output
+    rows = json.loads(output_path.read_text())
+    assert len(rows) == 2
+    assert {row["title"] for row in rows} == {
+        "Your booking confirmation",
+        "A second booking confirmation",
+    }
+    assert all(row["source"] == "example-chain.com" for row in rows)
+    assert "1 email(s) not recognized" in result.output
+    assert "unrelated-sender.com" in result.output
+    assert "This week in cinema" in result.output
+
+
+def test_fetch_with_no_matches_writes_an_empty_array(tmp_path: Path) -> None:
+    translate = _selective_translate_script(tmp_path)
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f"""\
+[mail]
+source = "mbox"
+
+[mail.mbox]
+path = "{FIXTURE_MBOX}"
+
+[[chains]]
+sender_domain = "nobody-sends-from-here.example"
+translate = "{translate}"
+"""
+    )
+    output_path = tmp_path / "import.json"
+
+    result = runner.invoke(
+        app, ["fetch", "--config", str(config_path), "--output", str(output_path)]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(output_path.read_text()) == []
+
+
+def test_fetch_invalid_config_fails_clearly(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["fetch", "--config", str(tmp_path / "does-not-exist.toml")])
+
+    assert result.exit_code != 0
+
+
+def test_fetch_output_validates_against_movies_schema(tmp_path: Path) -> None:
+    schema_path = Path(__file__).parent.parent / "examples" / "movies.schema.json"
+    schema = json.loads(schema_path.read_text())
+
+    translate = _selective_translate_script(tmp_path)
+    config_path = _mbox_config(tmp_path, translate)
+    output_path = tmp_path / "import.json"
+
+    result = runner.invoke(
+        app, ["fetch", "--config", str(config_path), "--output", str(output_path)]
+    )
+
+    assert result.exit_code == 0, result.output
+    rows = json.loads(output_path.read_text())
+    jsonschema.validate(rows, schema)
+
+
+def test_fetch_run_twice_against_an_unchanged_mailbox_is_identical(tmp_path: Path) -> None:
+    translate = _selective_translate_script(tmp_path)
+    config_path = _mbox_config(tmp_path, translate)
+    first_output = tmp_path / "first.json"
+    second_output = tmp_path / "second.json"
+
+    first = runner.invoke(
+        app, ["fetch", "--config", str(config_path), "--output", str(first_output)]
+    )
+    second = runner.invoke(
+        app, ["fetch", "--config", str(config_path), "--output", str(second_output)]
+    )
+
+    assert first.exit_code == 0, first.output
+    assert second.exit_code == 0, second.output
+    assert first_output.read_text() == second_output.read_text()

@@ -58,33 +58,33 @@
 
 ## 3. Chain dispatch and translation scripts
 
-- [ ] 3.1 Implement sender-domain → configured script lookup and
+- [x] 3.1 Implement sender-domain → configured script lookup and
   subprocess invocation (envelope as JSON on stdin, one parsed row as
   JSON on stdout, exit 0; non-zero/empty stdout means "not recognized");
   verify with a fake script (a small test fixture executable)
-- [ ] 3.2 Implement the Pathé translation script's envelope-in/row-out
+- [x] 3.2 Implement the Pathé translation script's envelope-in/row-out
   contract: call `parse_pathe_email` on the envelope body, map
   `PatheBooking` to a `movies.schema.json` row (title, date, medium=
   "cinema", venue=cinema, start_time, end_time - no `notes`, no
   `booking_ref`); verify against `tests/fixtures.py`'s existing Pathé
   email fixtures, both success and `PatheEmailParseError` cases
-- [ ] 3.3 Stamp every emitted row's `source` with the matched sender
+- [x] 3.3 Stamp every emitted row's `source` with the matched sender
   domain after the translation script returns, overwriting whatever the
   script itself set; verify a script that omits or sets a different
   `source` value still ends up tagged correctly in the output
-- [ ] 3.4 Route "no configured chain for this sender" and "script exited
+- [x] 3.4 Route "no configured chain for this sender" and "script exited
   non-zero" both into the same unrecognized-email path; verify both
   cases land in the review table, not the output file
 
 ## 4. Output
 
-- [ ] 4.1 Write every recognized row into one output JSON file, valid
+- [x] 4.1 Write every recognized row into one output JSON file, valid
   against `examples/movies.schema.json`; verify with a schema-validation
   test (`jsonschema`, same pattern as `tests/test_examples_schema.py`)
-- [ ] 4.2 Print the unrecognized-email review table (from, subject,
+- [x] 4.2 Print the unrecognized-email review table (from, subject,
   date); verify its content against a fixture set of unrecognized
   messages
-- [ ] 4.3 Verify the whole tool is stateless: running it twice against
+- [x] 4.3 Verify the whole tool is stateless: running it twice against
   an unchanged fake mailbox produces identical output both times
 
 ## 5. Remove `booking_ref` and add `source` to the generic import contract

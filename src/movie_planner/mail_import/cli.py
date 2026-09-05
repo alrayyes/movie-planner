@@ -5,13 +5,29 @@ mentions any of this.
 """
 
 import getpass
+import json
 import sys
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from movie_planner.mail_import.config import default_config_path
+from movie_planner.mail_import.config import (
+    ImapSource,
+    MailConfigError,
+    MboxSource,
+    default_config_path,
+    load_config,
+)
+from movie_planner.mail_import.dispatch import dispatch_all
+from movie_planner.mail_import.envelope import (
+    MailClient,
+    MailEnvelope,
+    MailFetchError,
+    extract_envelope,
+)
+from movie_planner.mail_import.imap_client import ImapMailClient
+from movie_planner.mail_import.mbox_client import MboxMailClient
 
 app = typer.Typer(help="Fetches cinema booking confirmations from a mailbox and emits import.json.")
 
@@ -177,6 +193,78 @@ def init(
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(source_block + chains_block)
     typer.echo(f"Wrote a starter config to {config_path}.")
+
+
+def _build_client(source: ImapSource | MboxSource) -> MailClient:
+    if isinstance(source, ImapSource):
+        return ImapMailClient(
+            host=source.host, port=source.port, username=source.username, password=source.password
+        )
+    return MboxMailClient(source.path)
+
+
+def _print_review_table(envelopes: list[MailEnvelope]) -> None:
+    rows = [(e.from_address, e.subject, e.date.date().isoformat()) for e in envelopes]
+    headers = ("From", "Subject", "Date")
+    widths = [max(len(row[i]) for row in [headers, *rows]) for i in range(3)]
+
+    def _line(row: tuple[str, str, str]) -> str:
+        return "  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True))
+
+    typer.echo(_line(headers))
+    typer.echo(_line(tuple("-" * w for w in widths)))  # type: ignore[arg-type]
+    for row in rows:
+        typer.echo(_line(row))
+
+
+@app.command()
+def fetch(
+    config: Annotated[
+        Path | None, typer.Option(help="Path to config.toml. Defaults to the XDG location.")
+    ] = None,
+    output: Annotated[Path, typer.Option(help="Where to write the import-ready JSON.")] = Path(
+        "import.json"
+    ),
+) -> None:
+    """Fetches every configured chain's booking confirmations from the
+    configured mail source and writes them to --output as import-ready
+    JSON. An email no configured chain's translation script recognizes
+    is shown in a review table instead - never written to --output.
+    """
+    config_path = config or default_config_path()
+    try:
+        cfg = load_config(config_path)
+    except MailConfigError as e:
+        typer.secho(str(e), fg=typer.colors.RED)
+        raise typer.Exit(code=1) from e
+
+    client = _build_client(cfg.source)
+    domains = [chain.sender_domain for chain in cfg.chains]
+    try:
+        raw_messages = list(client.fetch(domains))
+    except MailFetchError as e:
+        typer.secho(str(e), fg=typer.colors.RED)
+        raise typer.Exit(code=1) from e
+
+    envelopes: list[MailEnvelope] = []
+    for raw in raw_messages:
+        try:
+            envelopes.append(extract_envelope(raw))
+        except MailFetchError:
+            # Not even a well-formed email - nothing to show in a
+            # from/subject/date review table, so it's dropped rather
+            # than reported.
+            continue
+
+    rows, unrecognized = dispatch_all(envelopes, cfg.chains)
+
+    output.write_text(json.dumps(rows, indent=2))
+    typer.echo(f"Wrote {len(rows)} row(s) to {output}.")
+
+    if unrecognized:
+        typer.echo("")
+        typer.echo(f"{len(unrecognized)} email(s) not recognized by any configured chain:")
+        _print_review_table(unrecognized)
 
 
 def main() -> None:
