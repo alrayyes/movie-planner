@@ -75,9 +75,14 @@ password = "..."
 # path = "~/Mail/INBOX"
 
 [[chains]]
-sender_domain = "pathe.nl"
+sender_domain = "service.pathe.nl"
 translate = "pathe-translate"
 ```
+
+Real Pathé booking confirmations come from `service.pathe.nl`, not the
+bare `pathe.nl` domain - other Pathé mail (the newsletter, a club
+membership invoice) uses other subdomains and is correctly left
+unrecognized by a chain scoped this narrowly.
 
 Run `pathe-mail-import init` to write a starter copy interactively -
 it prompts for anything not given as a flag, or fails clearly (rather
