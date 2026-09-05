@@ -4,7 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from movie_planner.importers import ImportRow, ParsedRow, parse_csv, parse_json, run_import
+from movie_planner.importers import (
+    ImportRow,
+    ParsedRow,
+    parse_csv,
+    parse_json,
+    parse_json_text,
+    run_import,
+)
 from movie_planner.store import Store
 
 
@@ -219,6 +226,23 @@ def test_parse_json_missing_medium_is_a_failed_row(tmp_path: Path) -> None:
 
     assert rows[0].entry is None
     assert rows[0].error is not None
+
+
+def test_parse_json_text_accepts_an_array() -> None:
+    rows = parse_json_text('[{"title": "Solstice Run", "date": "2024-06-02", "medium": "cinema"}]')
+
+    assert len(rows) == 1
+    assert rows[0].entry is not None
+    assert rows[0].entry.title == "Solstice Run"
+
+
+def test_parse_json_text_accepts_a_bare_object_as_one_row() -> None:
+    rows = parse_json_text('{"title": "Solstice Run", "date": "2024-06-02", "medium": "cinema"}')
+
+    assert len(rows) == 1
+    assert rows[0].entry is not None
+    assert rows[0].entry.title == "Solstice Run"
+    assert rows[0].row_number == 1
 
 
 # --- run_import: tasks 6.1, 6.4, duplicate handling and the summary ---

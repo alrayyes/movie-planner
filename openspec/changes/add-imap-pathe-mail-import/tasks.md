@@ -145,20 +145,31 @@
 
 ## 8. Piped composition (fetch | translate | import)
 
-- [ ] 8.1 Add an envelope-only output mode to the fetch tool (one JSON
+- [x] 8.1 Add an envelope-only output mode to the fetch tool (one JSON
   envelope per line on stdout, no dispatch to any translation script);
   verify its output is valid input to the Pathé translation script run
   standalone
-- [ ] 8.2 Update the Pathé translation script (and the dispatch
+- [x] 8.2 Update the Pathé translation script (and the dispatch
   contract generally) so "doesn't recognize this envelope" writes a
   diagnostic to stderr and emits nothing to stdout when run standalone,
   distinct from the exit-code signal used when invoked internally by
-  the fetch tool's single-command mode; verify both call shapes
-- [ ] 8.3 `movie-planner import`: accept no file path, reading JSON
+  the fetch tool's single-command mode; verify both call shapes.
+  **Turned out to need one more change while implementing**: the
+  translation script now reads/writes NDJSON (one envelope/row per
+  line) rather than one object per invocation, since
+  `--envelopes-only` emits many envelopes on one stream and the script
+  has to consume all of them, not just the first - dispatch.py's
+  internal single-envelope invocation still works unchanged, since a
+  single `json.dumps(...)` call is always exactly one line.
+- [x] 8.3 `movie-planner import`: accept no file path, reading JSON
   from stdin instead - a bare object (one row) or an array; verify
   both shapes, and that a file path argument still works unchanged
   with stdin untouched
-- [ ] 8.4 End-to-end: verify `fetch --envelopes-only | pathe-translate
+- [x] 8.4 End-to-end: verify `fetch --envelopes-only | pathe-translate
   | movie-planner import` on a fixture mailbox produces the same
   entries as running the fetch tool as one command against the same
-  fixture and then importing its output file
+  fixture and then importing its output file. Verified as three real
+  OS processes piped together (not simulated) producing the expected
+  entry; equivalence with the single-command path is established via
+  that path's own separately-passing tests rather than a literal
+  side-by-side diff in one test

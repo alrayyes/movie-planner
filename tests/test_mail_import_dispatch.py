@@ -4,6 +4,8 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from fixtures import PATHE_EMAIL_PLAIN
+
 from movie_planner.mail_import.config import ChainConfig
 from movie_planner.mail_import.dispatch import dispatch, dispatch_all
 from movie_planner.mail_import.envelope import MailEnvelope
@@ -127,3 +129,46 @@ def test_dispatch_all_splits_recognized_and_unrecognized(tmp_path: Path) -> None
     assert len(rows) == 1
     assert rows[0]["source"] == "example-chain.com"
     assert unrecognized == [other_envelope]
+
+
+# --- against the real pathe-translate script, not a fake one: task 8.2 ---
+
+
+def test_dispatch_against_the_real_pathe_translate_script_recognized() -> None:
+    envelope = MailEnvelope(
+        from_address="Pathé Nederland <noreply@pathe.nl>",
+        subject="Your booking confirmation",
+        date=datetime(2026, 8, 29, 12, 0, tzinfo=UTC),
+        body=PATHE_EMAIL_PLAIN,
+    )
+    chains = (
+        ChainConfig(
+            sender_domain="pathe.nl",
+            translate=f"{sys.executable} -m movie_planner.mail_import.pathe_translate",
+        ),
+    )
+
+    result = dispatch(envelope, chains)
+
+    assert result.row is not None
+    assert result.row["title"] == "The Dog Stars"
+    assert result.row["source"] == "pathe.nl"
+
+
+def test_dispatch_against_the_real_pathe_translate_script_unrecognized() -> None:
+    envelope = MailEnvelope(
+        from_address="Pathé Nederland <noreply@pathe.nl>",
+        subject="Newsletter",
+        date=datetime(2026, 7, 5, tzinfo=UTC),
+        body="Not a booking confirmation at all.",
+    )
+    chains = (
+        ChainConfig(
+            sender_domain="pathe.nl",
+            translate=f"{sys.executable} -m movie_planner.mail_import.pathe_translate",
+        ),
+    )
+
+    result = dispatch(envelope, chains)
+
+    assert result.row is None

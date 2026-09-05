@@ -24,6 +24,7 @@ from movie_planner.mail_import.envelope import (
     MailClient,
     MailEnvelope,
     MailFetchError,
+    envelope_to_json,
     extract_envelope,
 )
 from movie_planner.mail_import.imap_client import ImapMailClient
@@ -225,6 +226,16 @@ def fetch(
     output: Annotated[Path, typer.Option(help="Where to write the import-ready JSON.")] = Path(
         "import.json"
     ),
+    envelopes_only: Annotated[
+        bool,
+        typer.Option(
+            "--envelopes-only",
+            help="Print each fetched message as one JSON envelope per line on stdout "
+            "instead of dispatching and writing --output - for composing by hand as "
+            "`fetch --envelopes-only | pathe-translate | movie-planner import` instead "
+            "of running this as one self-contained command.",
+        ),
+    ] = False,
 ) -> None:
     """Fetches every configured chain's booking confirmations from the
     configured mail source and writes them to --output as import-ready
@@ -255,6 +266,11 @@ def fetch(
             # from/subject/date review table, so it's dropped rather
             # than reported.
             continue
+
+    if envelopes_only:
+        for envelope in envelopes:
+            typer.echo(json.dumps(envelope_to_json(envelope)))
+        return
 
     rows, unrecognized = dispatch_all(envelopes, cfg.chains)
 
