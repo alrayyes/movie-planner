@@ -7,7 +7,7 @@ requires = [ "uv-build>=0.12.5,<0.13" ]
 
 [project]
 name = "movie-planner"
-version = "1.4.0"
+version = "1.5.0"
 description = "CLI that logs watched movies and syncs them to a CalDAV calendar"
 readme = "README.md"
 authors = [ { name = "alrayyes", email = "alrayyes@users.noreply.github.com" } ]
