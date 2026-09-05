@@ -91,6 +91,63 @@ def test_remove_unknown_venue_raises(store: Store) -> None:
         store.remove_venue("Grand Vista Cinema")
 
 
+def test_add_venue_matching_known_chain_gets_location(store: Store) -> None:
+    venue = store.add_venue("Tuschinski")
+
+    assert venue.chain == "Pathé"
+    assert venue.city == "Amsterdam"
+    assert venue.country == "Netherlands"
+
+
+def test_add_venue_matching_known_independent_gets_no_chain(store: Store) -> None:
+    venue = store.add_venue("Eye")
+
+    assert venue.chain is None
+    assert venue.city == "Amsterdam"
+    assert venue.country == "Netherlands"
+
+
+def test_add_venue_not_in_the_known_table_gets_no_location(store: Store) -> None:
+    venue = store.add_venue("Grand Vista Cinema")
+
+    assert venue.chain is None
+    assert venue.city is None
+    assert venue.country is None
+
+
+def test_migration_backfills_location_for_an_existing_known_venue(tmp_path: Path) -> None:
+    import sqlite3
+
+    db_path = tmp_path / "movies.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE media (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            is_physical_place INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE venues (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+        CREATE TABLE entries (
+            id INTEGER PRIMARY KEY, title TEXT NOT NULL, date TEXT NOT NULL,
+            start_time TEXT, end_time TEXT,
+            medium_id INTEGER NOT NULL REFERENCES media(id),
+            venue_id INTEGER REFERENCES venues(id)
+        );
+        """
+    )
+    conn.execute("INSERT INTO venues (name) VALUES ('Tuschinski')")
+    conn.commit()
+    conn.close()
+
+    s = Store(db_path)
+    try:
+        (venue,) = s.list_venues()
+        assert venue.chain == "Pathé"
+        assert venue.city == "Amsterdam"
+    finally:
+        s.close()
+
+
 def test_remove_venue_not_in_use(store: Store) -> None:
     store.add_venue("Grand Vista Cinema")
 

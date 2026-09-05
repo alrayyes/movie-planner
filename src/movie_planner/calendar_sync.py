@@ -21,13 +21,17 @@ class CalendarSyncError(Exception):
     """
 
 
-def build_description(entry: Entry, *, screening_details: str | None = None) -> str | None:
+def build_description(
+    entry: Entry, *, chain: str | None = None, screening_details: str | None = None
+) -> str | None:
     """Builds the text for a VEVENT's description from whatever metadata
-    an entry has - ratings, Letterboxd, and, for a Pathé-sourced entry,
-    the screening format/seat text - or None when there's nothing to show.
-    Nothing here is persisted on `Entry`; screening details are provenance
-    for the calendar event only. See design.md's "Description content"
-    decision.
+    an entry has - ratings, Letterboxd, the venue's chain, and, for a
+    Pathé-sourced entry, the screening format/seat text - or None when
+    there's nothing to show. Nothing here is persisted on `Entry`; chain
+    comes from the venue, and screening details are provenance for the
+    calendar event only. See design.md's "Description content" decision.
+    City/country go on LOCATION instead, not here - see `_venue_location`
+    in cli.py.
     """
     lines: list[str] = []
     if entry.imdb_rating and entry.imdb_url:
@@ -43,6 +47,8 @@ def build_description(entry: Entry, *, screening_details: str | None = None) -> 
     if entry.letterboxd_url:
         suffix = f" ({entry.letterboxd_rating})" if entry.letterboxd_rating else ""
         lines.append(f"Letterboxd: {entry.letterboxd_url}{suffix}")
+    if chain:
+        lines.append(f"Chain: {chain}")
     if entry.notes:
         lines.append(f"Notes: {entry.notes}")
     if screening_details:
@@ -149,7 +155,12 @@ class CalendarSync:
         self._client = client
 
     def push_new(
-        self, entry: Entry, *, venue: str | None, screening_details: str | None = None
+        self,
+        entry: Entry,
+        *,
+        venue: str | None,
+        chain: str | None = None,
+        screening_details: str | None = None,
     ) -> Entry:
         uid = str(uuid.uuid4())
         ical_text = build_vevent(
@@ -159,7 +170,7 @@ class CalendarSync:
             start_time=entry.start_time,
             end_time=entry.end_time,
             venue=venue,
-            description=build_description(entry, screening_details=screening_details),
+            description=build_description(entry, chain=chain, screening_details=screening_details),
         )
         try:
             self._client.create_event(ical_text)
@@ -168,7 +179,12 @@ class CalendarSync:
         return self._store.update_entry(entry.id, caldav_uid=uid)
 
     def push_update(
-        self, entry: Entry, *, venue: str | None, screening_details: str | None = None
+        self,
+        entry: Entry,
+        *,
+        venue: str | None,
+        chain: str | None = None,
+        screening_details: str | None = None,
     ) -> None:
         if entry.caldav_uid is None:
             raise CalendarSyncError(f"'{entry.title}' has never been synced to the calendar")
@@ -179,7 +195,7 @@ class CalendarSync:
             start_time=entry.start_time,
             end_time=entry.end_time,
             venue=venue,
-            description=build_description(entry, screening_details=screening_details),
+            description=build_description(entry, chain=chain, screening_details=screening_details),
         )
         try:
             self._client.update_event(entry.caldav_uid, ical_text)

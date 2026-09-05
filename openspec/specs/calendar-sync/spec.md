@@ -69,11 +69,11 @@ local entry and SHALL report the sync failure to the user for retry.
 ### Requirement: Include metadata in the event description
 When pushing a VEVENT, whether creating or updating it, the system SHALL
 set its description from the entry's available ratings, Letterboxd
-link/rating, and notes, and, when the entry came from a Pathé booking
-confirmation, the screening format and seat. An entry with no such data
-SHALL still be pushed, with no description set. Unlike screening
-details, notes are stored on the entry, so they persist across every
-subsequent push.
+link/rating, notes, and the venue's chain (when known), and, when the
+entry came from a Pathé booking confirmation, the screening format and
+seat. An entry with no such data SHALL still be pushed, with no
+description set. Unlike screening details, notes are stored on the
+entry, so they persist across every subsequent push.
 
 #### Scenario: Entry with ratings and a Letterboxd link
 - **WHEN** an entry with IMDb, Rotten Tomatoes, and Metacritic ratings and
@@ -84,6 +84,24 @@ subsequent push.
 - **WHEN** an entry with no ratings, Letterboxd data, or screening details
   is pushed
 - **THEN** the pushed VEVENT has no description
+
+### Requirement: Venue location on the pushed event
+When a venue has a known city and country (from the hardcoded
+chain/location table), the system SHALL set the pushed VEVENT's
+LOCATION to "venue name, city, country" instead of just the venue
+name, and SHALL include the venue's chain, when known, as a line in the
+description.
+
+#### Scenario: Pushing an entry at a venue with a known location
+- **WHEN** an entry at a venue with a known chain, city, and country is
+  pushed
+- **THEN** the pushed VEVENT's LOCATION includes the city and country,
+  and its description includes the chain
+
+#### Scenario: Pushing an entry at a venue with no known location
+- **WHEN** an entry at a venue not in the hardcoded table is pushed
+- **THEN** the pushed VEVENT's LOCATION is just the venue name, and the
+  description has no chain line
 
 ### Requirement: IMDb link is fetched and included automatically
 When an OMDb lookup matches, the system SHALL derive `imdb_url` from the

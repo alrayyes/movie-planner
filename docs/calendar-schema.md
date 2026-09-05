@@ -19,9 +19,17 @@ either.
   to update or delete it; a reader shouldn't assume any other structure
   from it.
 - **SUMMARY** — the movie title, verbatim.
-- **LOCATION** — the venue name, present only when the entry has one.
-  Only a physical-place medium (a cinema, not `netflix`/`youtube`/etc.)
-  can have a venue.
+- **LOCATION** — present only when the entry has a venue (only a
+  physical-place medium - a cinema, not `netflix`/`youtube`/etc. - can
+  have one). One of:
+  - `{venue name}` — a venue not in the hardcoded chain/location table
+    (see below)
+  - `{venue name}, {city}, {country}` — a venue that matches the
+    table, deliberately shaped as a real, geocodable address string:
+    most calendar clients (Google Calendar, Apple Calendar) already
+    try to map from `LOCATION`. Commas inside it are backslash-escaped
+    per RFC 5545 `TEXT` escaping, same as any other `TEXT` value with a
+    literal comma.
 - `DTSTART`/`DTEND`, depending on how much time data the entry has:
   - date only → `DTSTART` is a `DATE` value (an all-day event), no
     `DTEND`.
@@ -49,14 +57,18 @@ included only when its underlying field is set:
 4. **Letterboxd** — `Letterboxd: {letterboxd_url}`, or
    `Letterboxd: {letterboxd_url} ({letterboxd_rating})` when a rating
    is set
-5. **Notes** — `Notes: {notes}`. Personal context about the viewing
+5. **Chain** — `Chain: {chain}`, for example `Chain: Pathé`. Only
+   present when the venue matches the hardcoded chain/location table
+   (see below); city/country for that same venue go on `LOCATION`
+   instead, not here.
+6. **Notes** — `Notes: {notes}`. Personal context about the viewing
    (who it was watched with, a reaction) - stored on `notes` and
    unlike screening details, does persist across a `sync refresh` or
    `update` that changes nothing else. Labelled, unlike screening
    details below, specifically so the two can't be confused when an
    entry has both: nothing but position would otherwise tell them
    apart, since both are free text.
-6. **Screening details** — free text, no label prefix. Only present
+7. **Screening details** — free text, no label prefix. Only present
    for an entry sourced from a Pathé booking confirmation email
    (auditorium/format/seat, parsed from that email). Provenance for
    the calendar event, not a stored field on the entry itself.
@@ -70,6 +82,19 @@ day.
 set by hand, which is never overwritten — see
 [`src/movie_planner/omdb.py`](../src/movie_planner/omdb.py)'s
 `fetch_and_store_ratings`.
+
+## Venue chain/location
+
+A venue's chain, city, and country come from a hardcoded table in
+[`src/movie_planner/venue_locations.py`](../src/movie_planner/venue_locations.py),
+not dynamic geocoding — a venue name not listed there gets none of
+this, never a guess. It's applied when the venue is first created
+(`log`, `import`, `locations venues add`) and backfilled for an
+existing venue the first time the store opens after an upgrade. A
+consumer reading the calendar only ever sees the result on
+`LOCATION`/the `Chain:` line above - it has no way to tell "no chain
+data available" apart from "not in the table at all"; both just omit
+the fields.
 
 Screening details aren't stored anywhere on the entry itself — only
 `from-pathe-email` ever supplies them for a push. `sync refresh`,

@@ -39,13 +39,12 @@ class ParsedRow:
 
 @dataclass(frozen=True)
 class ImportedEntry:
-    """An entry created by `run_import`, paired with the venue name used to
-    create it - the venue's own name isn't on `Entry`, and the calendar
-    sync push needs it to build the VEVENT's location field.
+    """An entry created by `run_import`. The calendar sync push looks up
+    the venue (chain, city, country included) straight from `entry.venue_id`
+    itself, so nothing extra needs to travel alongside it here.
     """
 
     entry: Entry
-    venue: str | None
 
 
 @dataclass(frozen=True)
@@ -147,7 +146,7 @@ def run_import(
         if r.notes:
             entry = store.update_entry(entry.id, notes=r.notes)
         existing.append(entry)
-        imported_entries.append(ImportedEntry(entry=entry, venue=r.venue))
+        imported_entries.append(ImportedEntry(entry=entry))
         imported += 1
 
     return ImportSummary(

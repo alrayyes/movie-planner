@@ -173,6 +173,14 @@ def test_build_description_includes_notes() -> None:
     assert description == "Notes: Enjoyed the soundtrack"
 
 
+def test_build_description_includes_chain() -> None:
+    entry = _entry()
+
+    description = build_description(entry, chain="Pathé")
+
+    assert description == "Chain: Pathé"
+
+
 def test_build_description_with_only_some_fields() -> None:
     entry = _entry(imdb_rating="8.5/10")
 
@@ -331,6 +339,21 @@ def test_push_new_includes_ratings_in_the_description(store: Store) -> None:
 
     assert synced.caldav_uid is not None
     assert "IMDb: 8.5/10" in calendar.events_by_uid[synced.caldav_uid].data
+
+
+def test_push_new_includes_chain_in_the_description(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue="Tuschinski, Amsterdam, Netherlands", chain="Pathé")
+
+    assert synced.caldav_uid is not None
+    assert "Chain: Pathé" in calendar.events_by_uid[synced.caldav_uid].data
+    assert (
+        "Tuschinski\\, Amsterdam\\, Netherlands" in calendar.events_by_uid[synced.caldav_uid].data
+    )
 
 
 def test_push_new_includes_screening_details_in_the_description(store: Store) -> None:

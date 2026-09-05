@@ -9,6 +9,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS
+
 _UNSET: Any = object()
 
 SCHEMA = """
@@ -20,7 +22,10 @@ CREATE TABLE IF NOT EXISTS media (
 
 CREATE TABLE IF NOT EXISTS venues (
     id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE
+    name TEXT NOT NULL UNIQUE,
+    chain TEXT,
+    city TEXT,
+    country TEXT
 );
 
 CREATE TABLE IF NOT EXISTS entries (
@@ -58,6 +63,12 @@ _MIGRATED_COLUMNS = (
     "notes",
 )
 
+_MIGRATED_VENUE_COLUMNS = (
+    "chain",
+    "city",
+    "country",
+)
+
 
 class StoreError(Exception):
     """Raised for a store-level constraint violation - a duplicate name,
@@ -77,6 +88,9 @@ class Medium:
 class Venue:
     id: int
     name: str
+    chain: str | None = None
+    city: str | None = None
+    country: str | None = None
 
 
 @dataclass(frozen=True)
@@ -175,6 +189,26 @@ class Store:
             "CREATE INDEX IF NOT EXISTS idx_entries_booking_ref ON entries(booking_ref)"
         )
 
+        venue_columns = {row[1] for row in self._conn.execute("PRAGMA table_info(venues)")}
+        for column in _MIGRATED_VENUE_COLUMNS:
+            if column not in venue_columns:
+                self._conn.execute(f"ALTER TABLE venues ADD COLUMN {column} TEXT")
+        self._backfill_known_venue_locations()
+
+    def _backfill_known_venue_locations(self) -> None:
+        # Only ever fills a NULL - never overwrites a value already set,
+        # whether that came from an earlier backfill or a manual edit.
+        rows = self._conn.execute(
+            "SELECT id, name FROM venues WHERE chain IS NULL AND city IS NULL AND country IS NULL"
+        )
+        for venue_id, name in rows.fetchall():
+            location = KNOWN_VENUE_LOCATIONS.get(name)
+            if location is not None:
+                self._conn.execute(
+                    "UPDATE venues SET chain = ?, city = ?, country = ? WHERE id = ?",
+                    (location.chain, location.city, location.country, venue_id),
+                )
+
     def close(self) -> None:
         self._conn.close()
 
@@ -218,18 +252,25 @@ class Store:
     # --- venues ---
 
     def add_venue(self, name: str) -> Venue:
+        location = KNOWN_VENUE_LOCATIONS.get(name)
+        chain = location.chain if location else None
+        city = location.city if location else None
+        country = location.country if location else None
         try:
-            cur = self._conn.execute("INSERT INTO venues (name) VALUES (?)", (name,))
+            cur = self._conn.execute(
+                "INSERT INTO venues (name, chain, city, country) VALUES (?, ?, ?, ?)",
+                (name, chain, city, country),
+            )
         except sqlite3.IntegrityError as e:
             raise StoreError(f"venue '{name}' already exists") from e
         self._conn.commit()
         # Invariant: sqlite always sets lastrowid on a successful INSERT.
         assert cur.lastrowid is not None  # nosec B101
-        return Venue(id=cur.lastrowid, name=name)
+        return Venue(id=cur.lastrowid, name=name, chain=chain, city=city, country=country)
 
     def list_venues(self) -> list[Venue]:
-        rows = self._conn.execute("SELECT id, name FROM venues ORDER BY name")
-        return [Venue(id=r[0], name=r[1]) for r in rows]
+        rows = self._conn.execute("SELECT id, name, chain, city, country FROM venues ORDER BY name")
+        return [Venue(id=r[0], name=r[1], chain=r[2], city=r[3], country=r[4]) for r in rows]
 
     def get_or_create_venue(self, name: str) -> Venue:
         existing = next((v for v in self.list_venues() if v.name == name), None)
@@ -294,6 +335,7 @@ class Store:
         date_from: datetime.date | None = None,
         date_to: datetime.date | None = None,
         medium_id: int | None = None,
+        venue_ids: list[int] | None = None,
     ) -> list[Entry]:
         # _ENTRY_COLUMNS is a fixed internal tuple, never user input; every filter value below is parameterized
         query = f"SELECT {', '.join(_ENTRY_COLUMNS)} FROM entries"  # nosec B608
@@ -308,6 +350,9 @@ class Store:
         if medium_id is not None:
             clauses.append("medium_id = ?")
             params.append(medium_id)
+        if venue_ids is not None:
+            clauses.append(f"venue_id IN ({', '.join('?' * len(venue_ids))})")
+            params.extend(venue_ids)
         if clauses:
             query += " WHERE " + " AND ".join(clauses)
         query += " ORDER BY date"

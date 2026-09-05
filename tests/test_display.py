@@ -7,7 +7,7 @@ from movie_planner.display import (
     format_entry,
     render_poster,
 )
-from movie_planner.store import Entry
+from movie_planner.store import Entry, Venue
 
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
@@ -83,9 +83,11 @@ def test_format_entry_includes_all_present_fields() -> None:
         metacritic_rating="80",
         letterboxd_url="https://letterboxd.com/film/dune-2021/",
         letterboxd_rating="4.5",
+        notes="Enjoyed the soundtrack",
     )
+    venue = Venue(id=1, name="Grand Vista Cinema")
 
-    text = format_entry(entry, medium_name="cinema", venue_name="Grand Vista Cinema")
+    text = format_entry(entry, medium_name="cinema", venue=venue)
 
     assert "Dune" in text
     assert "2026-01-01" in text
@@ -97,12 +99,25 @@ def test_format_entry_includes_all_present_fields() -> None:
     assert "80" in text
     assert "letterboxd.com/film/dune-2021" in text
     assert "4.5" in text
+    assert "Enjoyed the soundtrack" in text
+
+
+def test_format_entry_includes_venue_chain_and_location() -> None:
+    entry = _entry()
+    venue = Venue(id=1, name="Tuschinski", chain="Pathé", city="Amsterdam", country="Netherlands")
+
+    text = format_entry(entry, medium_name="cinema", venue=venue)
+
+    assert "Tuschinski" in text
+    assert "Pathé" in text
+    assert "Amsterdam" in text
+    assert "Netherlands" in text
 
 
 def test_format_entry_omits_absent_fields() -> None:
     entry = _entry()
 
-    text = format_entry(entry, medium_name="netflix", venue_name=None)
+    text = format_entry(entry, medium_name="netflix", venue=None)
 
     assert "Dune" in text
     assert "netflix" in text
@@ -110,3 +125,4 @@ def test_format_entry_omits_absent_fields() -> None:
     assert "Rotten Tomatoes" not in text
     assert "Metacritic" not in text
     assert "Letterboxd" not in text
+    assert "Notes" not in text
