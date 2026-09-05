@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.0.0...movie-planner-v1.1.0) (2026-09-05)
+
+
+### Features
+
+* **duplicates:** flag overlapping screening times ([#147](https://github.com/alrayyes/movie-planner/issues/147)) ([fe14b22](https://github.com/alrayyes/movie-planner/commit/fe14b22041fb246d2257ce0b790a6baa8e38b1ea)), closes [#142](https://github.com/alrayyes/movie-planner/issues/142)
+
 ## [1.0.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.21.3...movie-planner-v1.0.0) (2026-09-05)
 
 
