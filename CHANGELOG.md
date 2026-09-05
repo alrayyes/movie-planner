@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.17.1...movie-planner-v0.18.0) (2026-09-05)
+
+
+### Features
+
+* switch CalDAV UID generation from uuid4 to uuid7 ([#120](https://github.com/alrayyes/movie-planner/issues/120)) ([02ab70a](https://github.com/alrayyes/movie-planner/commit/02ab70a830c913c85cbf8f453486e5effc514a66)), closes [#118](https://github.com/alrayyes/movie-planner/issues/118)
+
 ## [0.17.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.17.0...movie-planner-v0.17.1) (2026-09-05)
 
 
