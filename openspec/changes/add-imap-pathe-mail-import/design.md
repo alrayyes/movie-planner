@@ -122,10 +122,15 @@ versa, and their operational shapes differ anyway (`movie-planner` is
 run interactively; this tool is a periodic batch job). Built from the
 same `Dockerfile` as a second stage/target (`--target
 pathe-mail-import`) to avoid duplicating base-image and
-dependency-install steps, but published as its own tagged image with
-its own minimal `docker run` flags (matching `docs/INSTALL.md`'s
-existing least-privilege pattern for `movie-planner`'s own image),
-never combined into one runtime container.
+dependency-install steps, with its own minimal `docker run` flags
+(matching `docs/INSTALL.md`'s existing least-privilege pattern for
+`movie-planner`'s own image), never combined into one runtime
+container. **Implemented as buildable, not published**: this change
+adds the stage and proves it builds (CI, both hooks), but doesn't
+push it anywhere - `movie-planner`'s own image publish is a whole
+release-job concern (GHCR tagging, versioning) this change doesn't
+take on for a second image. `docker build --target pathe-mail-import`
+from a checkout is the only way to get it today.
 
 **Chain-specific parsing lives entirely outside the tool, as an external
 script invoked per email - not a Python parser registered in-process.**

@@ -163,13 +163,22 @@ for it in this mode.
 - **THEN** it writes a diagnostic to stderr and emits nothing to stdout
   for that envelope, leaving the pipe's data stream uninterrupted
 
-### Requirement: Ship as its own container image
-The system SHALL be published as a Docker image separate from
+### Requirement: Buildable as its own container image
+The system SHALL be buildable as a Docker image separate from
 `movie-planner`'s own image, sharing no runtime container with it, so
 that neither tool's credentials, mounted config, or capabilities are
 reachable from the other's running container.
 
 #### Scenario: Independently runnable
-- **WHEN** the mail tool's image is run
+- **WHEN** the mail tool's image is built and run
 - **THEN** it runs and does its job with no `movie-planner`-specific
   configuration, volume, or credential present in that container
+
+#### Scenario: Not published anywhere yet
+- **WHEN** looking for where this image is distributed
+- **THEN** there is nowhere yet - it's a `docker build --target
+  pathe-mail-import` local build only, same as any other checkout;
+  publishing it to a registry (GHCR, matching `movie-planner`'s own
+  release-job publish) is deliberately out of scope for this
+  requirement - a separate decision about release-pipeline changes,
+  versioning, and tagging strategy, not assumed here

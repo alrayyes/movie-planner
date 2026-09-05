@@ -136,6 +136,11 @@ jobs:
         # as text and can't catch that on its own. Not pushed here; the
         # release job publishes it to GHCR once a release actually cuts.
         run: docker build -t movie-planner:ci .
+      - name: docker build (pathe-mail-import)
+        # Not published anywhere yet (no release-job counterpart) - this
+        # only proves the stage still builds, same as the default target
+        # above.
+        run: docker build --target pathe-mail-import -t pathe-mail-import:ci .
 
   # No release-job counterpart, unlike package-linux — a flake has
   # nothing to publish. `nix run github:alrayyes/movie-planner` (or
