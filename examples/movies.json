@@ -7,7 +7,15 @@
     "medium": "cinema",
     "venue": "Grand Vista Cinema",
     "imdb_url": "https://www.imdb.com/title/tt0000101/",
-    "notes": "Went with a friend"
+    "notes": "Went with a friend",
+    "imdb_rating": "8.5/10",
+    "rotten_tomatoes_rating": "91%",
+    "metacritic_rating": "80",
+    "poster_url": "https://m.media-amazon.com/images/clockmakers-daughter-poster.jpg",
+    "director": "Ana Ferreira",
+    "actors": "Priya Nair, Tomás Reyes",
+    "genre": "Drama",
+    "release_year": 2024
   },
   {
     "title": "Solstice Run",

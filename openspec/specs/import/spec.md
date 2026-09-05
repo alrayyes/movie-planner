@@ -47,3 +47,25 @@ refresh operation.
 - **WHEN** the user imports a file with `--no-metadata`
 - **THEN** every row is persisted and pushed to the calendar with no
   OMDb lookup
+
+### Requirement: A row can supply OMDb-derived fields directly
+The system SHALL accept a CSV/JSON row that already carries any of the
+OMDb-derived fields (ratings, poster URL, director, actors, genre,
+release year), matching the `metadata` spec's own field names, and
+SHALL store them as given rather than only ever fetching them from
+OMDb. The system SHALL NOT make an OMDb lookup for a row supplying
+every one of those fields already. `booking_ref`, `letterboxd_url`,
+and `letterboxd_rating` are accepted directly on a row the same way.
+
+#### Scenario: Row supplies every OMDb-derived field
+- **WHEN** a row is imported that already carries every OMDb-derived
+  field
+- **THEN** the entry is stored with those values and no OMDb lookup is
+  made for that row
+
+#### Scenario: Row supplies some but not all OMDb-derived fields
+- **WHEN** a row is imported that carries only some OMDb-derived
+  fields
+- **THEN** the supplied fields are stored, and the existing OMDb-fetch
+  behavior still runs for the row (skipped by `--no-metadata`, same as
+  any other row)

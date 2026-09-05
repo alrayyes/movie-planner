@@ -124,7 +124,12 @@ in automatically — a name that doesn't match gets none of that, never
 a guess. `list --chain`/`--city` filter on it; `show` displays it.
 
 `import` accepts a `.csv` or `.json` file with the same fields as
-`examples/`, and fetches OMDb ratings the same as `log` does. `sync retry`
+`examples/`, and fetches OMDb ratings the same as `log` does - unless a
+row already supplies every OMDb-derived field itself (ratings, poster,
+director, actors, genre, release year), in which case that row's OMDb
+lookup is skipped entirely, same as an already-enriched entry is on
+`sync refresh`. Useful for re-importing an export from somewhere that
+already ran its own OMDb lookup. `sync retry`
 re-pushes any entry that failed to sync when it was logged or imported —
 cheap, and safe to run any time, since it never calls OMDb and only
 touches entries that were never synced. `sync refresh` is the heavier
