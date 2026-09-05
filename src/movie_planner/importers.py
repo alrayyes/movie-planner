@@ -24,6 +24,17 @@ class ImportRow:
     venue: str | None = None
     imdb_url: str | None = None
     notes: str | None = None
+    imdb_rating: str | None = None
+    rotten_tomatoes_rating: str | None = None
+    metacritic_rating: str | None = None
+    poster_url: str | None = None
+    director: str | None = None
+    actors: str | None = None
+    genre: str | None = None
+    release_year: int | None = None
+    booking_ref: str | None = None
+    letterboxd_url: str | None = None
+    letterboxd_rating: str | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +72,15 @@ def _parse_time(value: str | None) -> datetime.time | None:
     return datetime.time.fromisoformat(value) if value else None
 
 
+def _parse_release_year(value: object) -> int | None:
+    # CSV always hands this in as a string; JSON can hand in a plain int too.
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value != "":
+        return int(value)
+    return None
+
+
 def _row_from_dict(row_number: int, raw: dict[str, Any]) -> ParsedRow:
     # A parsed CSV/JSON row is dynamically typed - Any is the honest
     # boundary here; the try/except below is what actually validates it.
@@ -80,6 +100,17 @@ def _row_from_dict(row_number: int, raw: dict[str, Any]) -> ParsedRow:
             venue=raw.get("venue") or None,
             imdb_url=raw.get("imdb_url") or None,
             notes=raw.get("notes") or None,
+            imdb_rating=raw.get("imdb_rating") or None,
+            rotten_tomatoes_rating=raw.get("rotten_tomatoes_rating") or None,
+            metacritic_rating=raw.get("metacritic_rating") or None,
+            poster_url=raw.get("poster_url") or None,
+            director=raw.get("director") or None,
+            actors=raw.get("actors") or None,
+            genre=raw.get("genre") or None,
+            release_year=_parse_release_year(raw.get("release_year")),
+            booking_ref=raw.get("booking_ref") or None,
+            letterboxd_url=raw.get("letterboxd_url") or None,
+            letterboxd_rating=raw.get("letterboxd_rating") or None,
         )
     except (KeyError, ValueError) as e:
         return ParsedRow(row_number=row_number, entry=None, error=str(e))
@@ -141,10 +172,28 @@ def run_import(
             end_time=r.end_time,
             venue_id=venue.id if venue else None,
         )
-        if r.imdb_url:
-            entry = store.update_entry(entry.id, imdb_url=r.imdb_url)
-        if r.notes:
-            entry = store.update_entry(entry.id, notes=r.notes)
+        supplied_fields: dict[str, object] = {
+            "imdb_url": r.imdb_url,
+            "notes": r.notes,
+            "imdb_rating": r.imdb_rating,
+            "rotten_tomatoes_rating": r.rotten_tomatoes_rating,
+            "metacritic_rating": r.metacritic_rating,
+            "poster_url": r.poster_url,
+            "director": r.director,
+            "actors": r.actors,
+            "genre": r.genre,
+            "release_year": r.release_year,
+            "booking_ref": r.booking_ref,
+            "letterboxd_url": r.letterboxd_url,
+            "letterboxd_rating": r.letterboxd_rating,
+        }
+        supplied_fields = {k: v for k, v in supplied_fields.items() if v is not None}
+        if supplied_fields:
+            # supplied_fields is a heterogeneous dict by design (only the
+            # fields this row actually supplied) - mypy can't verify
+            # update_entry's **kwargs against that without a per-field
+            # TypedDict, which isn't worth the ceremony for one call site.
+            entry = store.update_entry(entry.id, **supplied_fields)  # type: ignore[arg-type]
         existing.append(entry)
         imported_entries.append(ImportedEntry(entry=entry))
         imported += 1

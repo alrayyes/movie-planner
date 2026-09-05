@@ -59,6 +59,44 @@ def test_parse_csv_optional_fields_blank(tmp_path: Path) -> None:
     assert entry.imdb_url is None
 
 
+def test_parse_csv_full_row_with_omdb_derived_fields(tmp_path: Path) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text(
+        "title,date,medium,imdb_rating,rotten_tomatoes_rating,metacritic_rating,poster_url,"
+        "director,actors,genre,release_year,booking_ref,letterboxd_url,letterboxd_rating\n"
+        "Dune,2026-01-01,cinema,8.5/10,91%,80,"
+        "https://m.media-amazon.com/images/dune-poster.jpg,Denis Villeneuve,"
+        "Timothée Chalamet,Action,2021,BOOK123,"
+        "https://letterboxd.com/film/dune-2021/,4.5\n"
+    )
+
+    rows = parse_csv(csv_path)
+
+    entry = rows[0].entry
+    assert entry is not None
+    assert entry.imdb_rating == "8.5/10"
+    assert entry.rotten_tomatoes_rating == "91%"
+    assert entry.metacritic_rating == "80"
+    assert entry.poster_url == "https://m.media-amazon.com/images/dune-poster.jpg"
+    assert entry.director == "Denis Villeneuve"
+    assert entry.actors == "Timothée Chalamet"
+    assert entry.genre == "Action"
+    assert entry.release_year == 2021
+    assert entry.booking_ref == "BOOK123"
+    assert entry.letterboxd_url == "https://letterboxd.com/film/dune-2021/"
+    assert entry.letterboxd_rating == "4.5"
+
+
+def test_parse_csv_bad_release_year_is_a_failed_row(tmp_path: Path) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium,release_year\nDune,2026-01-01,cinema,not-a-year\n")
+
+    rows = parse_csv(csv_path)
+
+    assert rows[0].entry is None
+    assert rows[0].error is not None
+
+
 def test_parse_csv_missing_title_is_a_failed_row(tmp_path: Path) -> None:
     csv_path = tmp_path / "movies.csv"
     csv_path.write_text("title,date,medium\n,2024-01-01,cinema\n")
@@ -128,6 +166,38 @@ def test_parse_json_missing_optional_keys(tmp_path: Path) -> None:
     assert entry.venue is None
 
 
+def test_parse_json_full_row_with_omdb_derived_fields(tmp_path: Path) -> None:
+    json_path = tmp_path / "movies.json"
+    json_path.write_text(
+        """
+        [
+            {
+                "title": "Dune",
+                "date": "2026-01-01",
+                "medium": "cinema",
+                "imdb_rating": "8.5/10",
+                "poster_url": "https://m.media-amazon.com/images/dune-poster.jpg",
+                "director": "Denis Villeneuve",
+                "actors": "Timothée Chalamet",
+                "genre": "Action",
+                "release_year": 2021
+            }
+        ]
+        """
+    )
+
+    rows = parse_json(json_path)
+
+    entry = rows[0].entry
+    assert entry is not None
+    assert entry.imdb_rating == "8.5/10"
+    assert entry.poster_url == "https://m.media-amazon.com/images/dune-poster.jpg"
+    assert entry.director == "Denis Villeneuve"
+    assert entry.actors == "Timothée Chalamet"
+    assert entry.genre == "Action"
+    assert entry.release_year == 2021
+
+
 def test_parse_json_missing_medium_is_a_failed_row(tmp_path: Path) -> None:
     json_path = tmp_path / "movies.json"
     json_path.write_text('[{"title": "Solstice Run", "date": "2024-06-02"}]')
@@ -191,6 +261,64 @@ def test_run_import_creates_and_links_the_venue(store: Store) -> None:
     (venue,) = store.list_venues()
     assert venue.name == "Grand Vista Cinema"
     assert imported.entry.venue_id == venue.id
+
+
+def test_run_import_stores_omdb_derived_fields_when_supplied(store: Store) -> None:
+    rows = [
+        ParsedRow(
+            row_number=1,
+            entry=ImportRow(
+                title="Dune",
+                date=date(2026, 1, 1),
+                medium="cinema",
+                imdb_rating="8.5/10",
+                rotten_tomatoes_rating="91%",
+                metacritic_rating="80",
+                poster_url="https://m.media-amazon.com/images/dune-poster.jpg",
+                director="Denis Villeneuve",
+                actors="Timothée Chalamet",
+                genre="Action",
+                release_year=2021,
+            ),
+            error=None,
+        )
+    ]
+
+    run_import(store, rows)
+
+    (entry,) = store.list_entries()
+    assert entry.imdb_rating == "8.5/10"
+    assert entry.rotten_tomatoes_rating == "91%"
+    assert entry.metacritic_rating == "80"
+    assert entry.poster_url == "https://m.media-amazon.com/images/dune-poster.jpg"
+    assert entry.director == "Denis Villeneuve"
+    assert entry.actors == "Timothée Chalamet"
+    assert entry.genre == "Action"
+    assert entry.release_year == 2021
+
+
+def test_run_import_stores_booking_ref_and_letterboxd_when_supplied(store: Store) -> None:
+    rows = [
+        ParsedRow(
+            row_number=1,
+            entry=ImportRow(
+                title="Dune",
+                date=date(2026, 1, 1),
+                medium="cinema",
+                booking_ref="BOOK123",
+                letterboxd_url="https://letterboxd.com/film/dune-2021/",
+                letterboxd_rating="4.5",
+            ),
+            error=None,
+        )
+    ]
+
+    run_import(store, rows)
+
+    (entry,) = store.list_entries()
+    assert entry.booking_ref == "BOOK123"
+    assert entry.letterboxd_url == "https://letterboxd.com/film/dune-2021/"
+    assert entry.letterboxd_rating == "4.5"
 
 
 def test_run_import_reuses_existing_medium_and_venue(store: Store) -> None:

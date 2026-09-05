@@ -971,6 +971,66 @@ def test_import_no_metadata_skips_omdb(
     store.close()
 
 
+def test_import_skips_omdb_lookup_when_row_supplies_every_field(
+    config_path: Path, calendar: FakeCalendar, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = {"n": 0}
+
+    def lookup(self: OmdbClient, **kw: object) -> MovieRatings | None:
+        calls["n"] += 1
+        return MovieRatings(imdb="8.5/10", rotten_tomatoes="91%", metacritic="80")
+
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lookup)
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text(
+        "title,date,medium,imdb_rating,poster_url,director,actors,genre,release_year\n"
+        "Dune,2026-01-01,cinema,8.5/10,"
+        "https://m.media-amazon.com/images/dune-poster.jpg,Denis Villeneuve,"
+        "Timothée Chalamet,Action,2021\n"
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    assert result.exit_code == 0, result.output
+    assert calls["n"] == 0
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.director == "Denis Villeneuve"
+    store.close()
+
+
+def test_import_still_fetches_omdb_when_row_supplies_only_some_fields(
+    config_path: Path, calendar: FakeCalendar, omdb_match: None, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium,director\nDune,2026-01-01,cinema,Denis Villeneuve\n")
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.imdb_rating == "8.5/10"
+    store.close()
+
+
+def test_import_never_overwrites_an_imported_imdb_url_on_later_fetch(
+    config_path: Path, calendar: FakeCalendar, omdb_match: None, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text(
+        "title,date,medium,imdb_url\nDune,2026-01-01,cinema,https://www.imdb.com/title/tt-manual/\n"
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.imdb_url == "https://www.imdb.com/title/tt-manual/"
+    store.close()
+
+
 def test_import_reports_skipped_duplicates_in_summary(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
 ) -> None:

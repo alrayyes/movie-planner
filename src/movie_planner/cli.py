@@ -802,7 +802,7 @@ def import_command(
                 cfg,
                 store,
                 imported.entry,
-                fetch_metadata=not no_metadata,
+                fetch_metadata=not no_metadata and needs_omdb_fetch(imported.entry),
             )
 
         typer.echo(
