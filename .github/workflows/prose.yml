@@ -40,22 +40,39 @@ env:
   # separately and fetched by `vale sync`. No Go toolchain here to `go
   # install` it with, so this is a release binary instead.
   VALE_VERSION: v3.17.1
-  # ltex-ls-plus is pinned inside scripts/lint-mechanics.sh instead, so the
-  # hook and this workflow cannot install different versions of it.
+  # ltex-ls-plus is pinned inside scripts/lint-mechanics.sh and the
+  # mechanics job's own container image instead, so the hook and this
+  # workflow cannot install different versions of it.
 
 jobs:
   # Mechanics: grammar, spelling, the phonetic article. These have a right
-  # answer, so this one fails the build.
+  # answer, so this one fails the build. ghcr.io/alrayyes/ltex-cli-plus
+  # builds the ~300 MB tarball (its own JDK included) into an image once,
+  # instead of this job fetching it fresh on every run.
   mechanics:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    container:
+      image: ghcr.io/alrayyes/ltex-cli-plus:18.7.0@sha256:22452e86a130e528d526b60792926002983fcbf732bff09bd4e843d22816e4ea
+      # ltex-cli-plus is the image's own entrypoint, which leaves no shell
+      # for a step to run in - clearing it gets one back.
+      options: --entrypoint ""
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check the prose this repository owns
-        # The same script the pre-push hook runs, so the two cannot disagree
-        # about the version, the file list or what counts as a failure.
-        run: ./scripts/lint-mechanics.sh
+        # safe.directory: actions/checkout's own fix for this writes to a
+        # temporary $HOME that only exists for the checkout step, so it
+        # never reaches this later step's real $HOME in a container-as-root
+        # job — without it, git ls-files below fails with "detected
+        # dubious ownership", silently emptying the file list.
+        #
+        # The same script the pre-push hook runs, so the two cannot
+        # disagree about the version, the file list or what counts as a
+        # failure.
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          ./scripts/lint-mechanics.sh
 
   style:
     runs-on: ubuntu-24.04
