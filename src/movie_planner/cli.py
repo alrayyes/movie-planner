@@ -354,6 +354,7 @@ def log(
     letterboxd_rating: Annotated[
         str | None, typer.Option(help="Manually entered Letterboxd rating.")
     ] = None,
+    notes: Annotated[str | None, typer.Option(help="Personal notes about the viewing.")] = None,
     no_metadata: Annotated[
         bool, typer.Option("--no-metadata", help="Skip the OMDb lookup.")
     ] = False,
@@ -429,6 +430,9 @@ def log(
             entry = store.update_entry(
                 entry.id, letterboxd_url=letterboxd_url, letterboxd_rating=letterboxd_rating
             )
+
+        if notes:
+            entry = store.update_entry(entry.id, notes=notes)
 
         entry = _finalize_entry(
             cfg, store, entry, venue=venue, fetch_metadata=not no_metadata, imdb_id=imdb_id
@@ -567,6 +571,7 @@ def update(
     ] = None,
     letterboxd_url: Annotated[str | None, typer.Option(help="New Letterboxd URL.")] = None,
     letterboxd_rating: Annotated[str | None, typer.Option(help="New Letterboxd rating.")] = None,
+    notes: Annotated[str | None, typer.Option(help="New notes about the viewing.")] = None,
 ) -> None:
     """Update an existing logged entry."""
     cfg = _cfg(ctx)
@@ -599,6 +604,7 @@ def update(
             letterboxd_rating=letterboxd_rating
             if letterboxd_rating is not None
             else current.letterboxd_rating,
+            notes=notes if notes is not None else current.notes,
         )
 
         if imdb_id is not None:

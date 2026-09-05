@@ -68,10 +68,12 @@ local entry and SHALL report the sync failure to the user for retry.
 
 ### Requirement: Include metadata in the event description
 When pushing a VEVENT, whether creating or updating it, the system SHALL
-set its description from the entry's available ratings and Letterboxd
-link/rating, and, when the entry came from a Pathé booking confirmation,
-the screening format and seat. An entry with no such data SHALL still be
-pushed, with no description set.
+set its description from the entry's available ratings, Letterboxd
+link/rating, and notes, and, when the entry came from a Pathé booking
+confirmation, the screening format and seat. An entry with no such data
+SHALL still be pushed, with no description set. Unlike screening
+details, notes are stored on the entry, so they persist across every
+subsequent push.
 
 #### Scenario: Entry with ratings and a Letterboxd link
 - **WHEN** an entry with IMDb, Rotten Tomatoes, and Metacritic ratings and

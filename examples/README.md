@@ -6,7 +6,7 @@ full start/end range, a start with no known end, and a date with no
 known time at all.
 
 - `movies.csv` / `movies.json` — `title`, `date`, `medium` are required;
-  `start_time`, `end_time`, `venue`, `imdb_url` are optional.
+  `start_time`, `end_time`, `venue`, `imdb_url`, `notes` are optional.
 
 Try one:
 

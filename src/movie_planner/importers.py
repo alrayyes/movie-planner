@@ -23,6 +23,7 @@ class ImportRow:
     end_time: datetime.time | None = None
     venue: str | None = None
     imdb_url: str | None = None
+    notes: str | None = None
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,7 @@ def _row_from_dict(row_number: int, raw: dict[str, Any]) -> ParsedRow:
             end_time=_parse_time(raw.get("end_time")),
             venue=raw.get("venue") or None,
             imdb_url=raw.get("imdb_url") or None,
+            notes=raw.get("notes") or None,
         )
     except (KeyError, ValueError) as e:
         return ParsedRow(row_number=row_number, entry=None, error=str(e))
@@ -142,6 +144,8 @@ def run_import(
         )
         if r.imdb_url:
             entry = store.update_entry(entry.id, imdb_url=r.imdb_url)
+        if r.notes:
+            entry = store.update_entry(entry.id, notes=r.notes)
         existing.append(entry)
         imported_entries.append(ImportedEntry(entry=entry, venue=r.venue))
         imported += 1

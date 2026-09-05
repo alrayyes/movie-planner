@@ -49,7 +49,14 @@ included only when its underlying field is set:
 4. **Letterboxd** — `Letterboxd: {letterboxd_url}`, or
    `Letterboxd: {letterboxd_url} ({letterboxd_rating})` when a rating
    is set
-5. **Screening details** — free text, no label prefix. Only present
+5. **Notes** — `Notes: {notes}`. Personal context about the viewing
+   (who it was watched with, a reaction) - stored on `notes` and
+   unlike screening details, does persist across a `sync refresh` or
+   `update` that changes nothing else. Labelled, unlike screening
+   details below, specifically so the two can't be confused when an
+   entry has both: nothing but position would otherwise tell them
+   apart, since both are free text.
+6. **Screening details** — free text, no label prefix. Only present
    for an entry sourced from a Pathé booking confirmation email
    (auditorium/format/seat, parsed from that email). Provenance for
    the calendar event, not a stored field on the entry itself.

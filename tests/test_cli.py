@@ -245,6 +245,58 @@ def test_log_sync_failure_still_persists_the_entry(config_path: Path, no_omdb_ma
     store.close()
 
 
+def test_log_stores_notes(config_path: Path, calendar: FakeCalendar, no_omdb_match: None) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--notes",
+            "Enjoyed the soundtrack",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.notes == "Enjoyed the soundtrack"
+    store.close()
+
+
+def test_update_sets_notes(config_path: Path, calendar: FakeCalendar, no_omdb_match: None) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "update", "1", "--notes", "Went with a friend"]
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.notes == "Went with a friend"
+    store.close()
+
+
 # --- list ---
 
 
@@ -721,6 +773,21 @@ def test_import_csv_persists_rows_and_syncs_to_calendar(
     store = _store(config_path)
     (entry,) = store.list_entries()
     assert entry.caldav_uid in calendar.events_by_uid
+    store.close()
+
+
+def test_import_csv_persists_notes(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium,notes\nDune,2026-01-01,cinema,Enjoyed the soundtrack\n")
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.notes == "Enjoyed the soundtrack"
     store.close()
 
 
