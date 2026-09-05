@@ -17,6 +17,7 @@ class MovieRatings:
     rotten_tomatoes: str | None
     metacritic: str | None
     imdb_id: str | None = None
+    poster: str | None = None
 
 
 def _rating(ratings: list[dict[str, object]], source: str) -> str | None:
@@ -57,11 +58,13 @@ class OmdbClient:
             return None
 
         imdb_id = data.get("imdbID")
+        poster = data.get("Poster")
         ratings = MovieRatings(
             imdb=_rating(data.get("Ratings", []), "Internet Movie Database"),
             rotten_tomatoes=_rating(data.get("Ratings", []), "Rotten Tomatoes"),
             metacritic=_rating(data.get("Ratings", []), "Metacritic"),
             imdb_id=imdb_id if isinstance(imdb_id, str) else None,
+            poster=poster if isinstance(poster, str) and poster != "N/A" else None,
         )
         self._cache[cache_key] = ratings
         return ratings

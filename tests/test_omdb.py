@@ -19,6 +19,7 @@ MATCH_RESPONSE = {
         {"Source": "Metacritic", "Value": "74/100"},
     ],
     "imdbID": "tt1160419",
+    "Poster": "https://m.media-amazon.com/images/dune-poster.jpg",
     "Response": "True",
 }
 
@@ -98,6 +99,25 @@ def test_lookup_returns_the_imdb_id() -> None:
 
     assert ratings is not None
     assert ratings.imdb_id == "tt1160419"
+
+
+def test_lookup_returns_the_poster_url() -> None:
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    ratings = client.lookup(title="Dune")
+
+    assert ratings is not None
+    assert ratings.poster == "https://m.media-amazon.com/images/dune-poster.jpg"
+
+
+def test_lookup_treats_na_poster_as_no_poster() -> None:
+    response = {**MATCH_RESPONSE, "Poster": "N/A"}
+    client = _client(lambda request: httpx.Response(200, json=response))
+
+    ratings = client.lookup(title="Dune")
+
+    assert ratings is not None
+    assert ratings.poster is None
 
 
 def test_lookup_caches_successful_matches() -> None:
