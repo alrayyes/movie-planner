@@ -103,6 +103,30 @@ source (`[imap]` section vs. `[mbox]` section, or a `source = "imap" |
 "mbox"` key - exact shape decided in `tasks.md`); a third source later
 (Maildir, say) is a third adapter behind the same port, not a rewrite.
 
+**IMAP password: masked interactive prompt or `password_command`, never
+a flag or hand-typed into the config file.** Same reasoning
+`movie-planner` itself already applies to its own CalDAV password - a
+flag lands in shell history and a process list; a config file is fine
+to hold *a* secret but awkward to type one into by hand. The tool's own
+config setup uses `getpass` (stdlib, no dependency) for masked entry,
+writing the result to the config file the same way `movie-planner init`
+writes a starter config today; `password_command` remains the
+alternative for anyone already using a password manager CLI.
+
+**Separate Docker image, not bundled into `movie-planner`'s own.** One
+image holding both tools' credentials and volumes undoes the
+separation this whole change is about, the moment it reaches
+deployment - the mail tool's IMAP password has no reason to be
+reachable from a container that also mounts CalDAV/OMDb config, or vice
+versa, and their operational shapes differ anyway (`movie-planner` is
+run interactively; this tool is a periodic batch job). Built from the
+same `Dockerfile` as a second stage/target (`--target
+pathe-mail-import`) to avoid duplicating base-image and
+dependency-install steps, but published as its own tagged image with
+its own minimal `docker run` flags (matching `docs/INSTALL.md`'s
+existing least-privilege pattern for `movie-planner`'s own image),
+never combined into one runtime container.
+
 **Chain-specific parsing lives entirely outside the tool, as an external
 script invoked per email - not a Python parser registered in-process.**
 The core tool only ever does two generic things: (1) IMAP fetch + MIME
@@ -141,6 +165,45 @@ be Python just because this one is. Python is simply the right tool for
 an existing parser in another language, or one that's easier to express
 as a small shell/awk/whatever script against a simpler email format,
 should just be that.
+
+**Date-range scoping is a caller-computed flag, not tool-side state.**
+`--since`/`--until` (plus a relative "N seconds/minutes/hours ago" form
+for `--since`) narrow the IMAP/mbox search, but the tool itself still
+tracks nothing between runs - it's the caller's job (a cron script) to
+work out what window to pass, typically "since I last ran." This keeps
+the "stateless, no cursor" decision above intact while making a cron
+schedule practical: without it, every run re-scans the entire mail
+source regardless of how often it's invoked.
+
+**Envelope-only mode makes the pipeline `fetch | translate | import`
+buildable by hand, not just runnable as one command.** The single-
+command mode (fetch, dispatch to each chain's script itself, collect
+successes/failures, write one output) stays the default - simplest for
+a cron job, one exit code to check. But since the translation script is
+already a standalone binary with a stdin/stdout contract, the only
+missing piece for `movie-planner-mail-fetch --envelopes-only |
+pathe-translate | movie-planner import` to work is a mode where the
+fetch tool emits envelopes instead of dispatching them itself. Both
+modes share the same fetch/envelope-extraction code - this is a second
+output mode, not a second implementation. In this mode, a translation
+script's "I don't recognize this" signal moves from "return
+non-zero, tool routes it to a review table" to "write a diagnostic to
+stderr, emit nothing to stdout" - there's no coordinating process left
+to build a table, and stderr passing through a pipe is the standard way
+a Unix filter reports something without disturbing the data stream.
+
+**`movie-planner import` accepts stdin - a single object or an array,
+JSON only.** The immediate motivation is exactly the pipeline above:
+without this, `movie-planner import` is always a file, and the
+"pipe fetch straight into translate straight into import" story needs
+a temp file at the last step regardless. Accepting a bare single object
+(not just an array) matters because the common case piping through this
+tool is one row at a time, not a batch - forcing `echo '{"...": "..."}'
+| jq -s .` (wrap-in-array) on every caller isn't worth avoiding when
+the parser can just accept both shapes directly. CSV via stdin is
+explicitly out of scope - there's no use case motivating it here, and
+piped CSV would need its own header-detection story a file path already
+solves for free.
 
 **The core tool stamps `source`, not the translation script.** Every
 emitted row gets `source` set to the sender domain that matched it

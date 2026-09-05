@@ -16,6 +16,29 @@ movie-planner attaches meaning to.
 - **THEN** the entry is stored with no source value, and nothing else
   about the import is affected
 
+### Requirement: Accept import data piped on stdin, not only a file
+The system SHALL accept `import` with no file path argument, reading
+JSON from stdin instead - either a JSON array (the existing
+`movies.json` shape) or a single bare JSON object (one row, for a
+caller that doesn't want to construct an array just to import one
+row). CSV via stdin is out of scope; a piped input is always parsed as
+JSON.
+
+#### Scenario: Piping a single row
+- **WHEN** `import` is run with no path argument and a single JSON
+  object (not wrapped in an array) is piped to it
+- **THEN** that one row is imported, the same as if it were the only
+  element of a `movies.json` array
+
+#### Scenario: Piping an array of rows
+- **WHEN** `import` is run with no path argument and a JSON array is
+  piped to it
+- **THEN** it's imported the same way a `movies.json` file would be
+
+#### Scenario: A file path is still given
+- **WHEN** `import` is run with a file path argument
+- **THEN** behavior is unchanged - stdin is not read at all
+
 ## MODIFIED Requirements
 
 ### Requirement: A row can supply OMDb-derived fields directly

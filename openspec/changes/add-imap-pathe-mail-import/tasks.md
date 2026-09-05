@@ -12,6 +12,10 @@
   that writes a starter copy, matching movie-planner's own
   `password_command` convention; verify a missing/invalid config fails
   with a message naming the problem, not a stack trace
+- [ ] 1.4 Add masked interactive IMAP password entry (stdlib `getpass`)
+  to the config setup, used whenever no `password_command` is already
+  configured; verify the password is never accepted as a CLI flag and
+  never echoed - a fake stdin/tty in tests, not a real terminal
 
 ## 2. Mail fetch (IMAP and mbox adapters)
 
@@ -40,6 +44,10 @@
   (not just a hand-written fixture) that its default mbox format is
   actually readable by the mbox adapter as claimed in the spec - if it
   isn't, correct the spec rather than leaving an unverified claim in it
+- [ ] 2.9 Add `--since`/`--until` and a relative "N seconds/minutes/
+  hours ago" form for `--since`, scoping the search on both adapters;
+  verify a fake client/mbox fixture only returns messages inside the
+  given window, and that omitting both searches everything (unchanged)
 
 ## 3. Chain dispatch and translation scripts
 
@@ -105,10 +113,45 @@
 
 - [ ] 7.1 Write the new tool's own `README.md` (requirements,
   installation, config, usage, the translation-script contract for
-  anyone adding a second chain)
+  anyone adding a second chain), with a `--help` screenshot generated
+  by `rich-codex` the same way `movie-planner`'s own README got one in
+  #135
 - [ ] 7.2 Cross-link it from movie-planner's own `README.md` (a short
   pointer, same shape as the existing `movie-planner-web` mention) -
   discoverable, without `movie-planner --help` ever mentioning Pathé or
   IMAP
 - [ ] 7.3 Update `CHANGELOG.md`/release notes to call out the
   **BREAKING** `booking_ref` removal from the import contract
+- [ ] 7.4 Write `docs/architecture.md`: a Mermaid diagram and short
+  prose showing how movie-planner (CLI + SQLite store), the CalDAV
+  calendar, movie-planner-web, OMDb, and this mail tool all relate -
+  data flow, not implementation detail; linked from the main
+  `README.md`
+- [ ] 7.5 (scope check, not yet decided - see below) If the main
+  `README.md` has grown too large by this point, split the heavier
+  `## Usage` subsections out into `docs/` pages (per `rules/docs.md`'s
+  "anything that outgrows the README moves into docs/"), leaving the
+  README as a concise entry point; this is a general documentation-
+  quality task, not specific to Pathé mail import, so may land as its
+  own separate PR/issue rather than folded into #140 - confirm with the
+  user before doing the split
+
+## 8. Piped composition (fetch | translate | import)
+
+- [ ] 8.1 Add an envelope-only output mode to the fetch tool (one JSON
+  envelope per line on stdout, no dispatch to any translation script);
+  verify its output is valid input to the Pathé translation script run
+  standalone
+- [ ] 8.2 Update the Pathé translation script (and the dispatch
+  contract generally) so "doesn't recognize this envelope" writes a
+  diagnostic to stderr and emits nothing to stdout when run standalone,
+  distinct from the exit-code signal used when invoked internally by
+  the fetch tool's single-command mode; verify both call shapes
+- [ ] 8.3 `movie-planner import`: accept no file path, reading JSON
+  from stdin instead - a bare object (one row) or an array; verify
+  both shapes, and that a file path argument still works unchanged
+  with stdin untouched
+- [ ] 8.4 End-to-end: verify `fetch --envelopes-only | pathe-translate
+  | movie-planner import` on a fixture mailbox produces the same
+  entries as running the fetch tool as one command against the same
+  fixture and then importing its output file
