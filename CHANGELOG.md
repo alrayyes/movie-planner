@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.3.0...movie-planner-v1.4.0) (2026-09-05)
+
+
+### Features
+
+* **mail-import:** piped composition mode, import stdin support ([#153](https://github.com/alrayyes/movie-planner/issues/153)) ([d6a7390](https://github.com/alrayyes/movie-planner/commit/d6a739018239b3bef128618ec849a5975de3ffcd)), closes [#140](https://github.com/alrayyes/movie-planner/issues/140)
+
 ## [1.3.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.2.0...movie-planner-v1.3.0) (2026-09-05)
 
 
