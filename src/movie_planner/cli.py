@@ -666,6 +666,15 @@ def import_command(
     force: Annotated[
         bool, typer.Option("--force", help="Persist rows that look like duplicates.")
     ] = False,
+    no_metadata: Annotated[
+        bool,
+        typer.Option(
+            "--no-metadata",
+            help="Skip the OMDb lookup. Useful for a large historical import that would "
+            "otherwise exceed OMDb's daily request limit - run 'sync refresh --from/--to' "
+            "afterward to backfill ratings in date-scoped batches.",
+        ),
+    ] = False,
 ) -> None:
     """Bulk import viewing entries from a CSV or JSON file."""
     cfg = _cfg(ctx)
@@ -683,7 +692,13 @@ def import_command(
     try:
         summary = run_import(store, rows, force=force)
         for imported in summary.imported_entries:
-            _finalize_entry(cfg, store, imported.entry, venue=imported.venue, fetch_metadata=True)
+            _finalize_entry(
+                cfg,
+                store,
+                imported.entry,
+                venue=imported.venue,
+                fetch_metadata=not no_metadata,
+            )
 
         typer.echo(
             f"{summary.imported} imported, {summary.skipped_duplicates} skipped, "

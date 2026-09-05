@@ -35,3 +35,15 @@ failure.
 - **WHEN** a bulk import contains one row that fails validation
 - **THEN** the remaining valid rows are imported, and the failing row
   is reported in the summary
+
+### Requirement: Metadata fetch can be skipped
+The system SHALL accept a `--no-metadata` option that skips the OMDb
+lookup for every imported row, so a large historical import doesn't
+have to fetch ratings within a single run - the calendar push still
+happens. Ratings can be backfilled afterward via the calendar-sync
+refresh operation.
+
+#### Scenario: Importing with --no-metadata
+- **WHEN** the user imports a file with `--no-metadata`
+- **THEN** every row is persisted and pushed to the calendar with no
+  OMDb lookup

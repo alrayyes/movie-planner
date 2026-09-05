@@ -591,6 +591,32 @@ def test_import_csv_fetches_omdb_ratings(
     store.close()
 
 
+def test_import_no_metadata_skips_omdb(
+    config_path: Path, calendar: FakeCalendar, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = {"n": 0}
+
+    def lookup(self: OmdbClient, **kw: object) -> MovieRatings | None:
+        calls["n"] += 1
+        return MovieRatings(imdb="8.5/10", rotten_tomatoes="91%", metacritic="80")
+
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lookup)
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium\nDune,2026-01-01,cinema\n")
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "import", str(csv_path), "--no-metadata"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert calls["n"] == 0
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.imdb_rating is None
+    assert entry.caldav_uid is not None
+    store.close()
+
+
 def test_import_reports_skipped_duplicates_in_summary(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
 ) -> None:
