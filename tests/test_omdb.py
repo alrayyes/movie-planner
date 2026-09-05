@@ -29,6 +29,19 @@ MATCH_RESPONSE = {
 
 NO_MATCH_RESPONSE = {"Response": "False", "Error": "Movie not found!"}
 
+SERIES_RESPONSE = {
+    "Title": "Good Boy",
+    "Year": "2018–2020",
+    "Type": "series",
+    "Director": "N/A",
+    "Actors": "N/A",
+    "Genre": "Comedy",
+    "Ratings": [],
+    "imdbID": "tt9999999",
+    "Poster": "N/A",
+    "Response": "True",
+}
+
 
 def _client(handler: Callable[[httpx.Request], httpx.Response]) -> OmdbClient:
     http_client = httpx.Client(
@@ -301,6 +314,71 @@ def test_lookup_with_imdb_id_ignores_the_year_hint() -> None:
 
     assert seen_params["i"] == "tt1160419"
     assert "y" not in seen_params
+
+
+def test_lookup_by_title_sends_the_type_movie_param() -> None:
+    seen_params = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_params.update(dict(request.url.params))
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    client.lookup(title="Dune")
+
+    assert seen_params["type"] == "movie"
+
+
+def test_lookup_by_imdb_id_sends_no_type_param() -> None:
+    seen_params = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_params.update(dict(request.url.params))
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    client.lookup(imdb_id="tt1160419")
+
+    assert "type" not in seen_params
+
+
+def test_lookup_by_title_rejects_a_series_result() -> None:
+    client = _client(lambda request: httpx.Response(200, json=SERIES_RESPONSE))
+
+    ratings = client.lookup(title="Good Boy")
+
+    assert ratings is None
+
+
+def test_lookup_by_title_rejecting_a_series_result_is_cached() -> None:
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(200, json=SERIES_RESPONSE)
+
+    client = _client(handler)
+
+    client.lookup(title="Good Boy")
+    client.lookup(title="Good Boy")
+
+    assert call_count == 1
+
+
+def test_lookup_by_imdb_id_does_not_reject_a_series_result() -> None:
+    """An explicit imdb_id is already an exact, deliberate match - Type
+    filtering only guards against an ambiguous title search picking the
+    wrong kind of result.
+    """
+    client = _client(lambda request: httpx.Response(200, json=SERIES_RESPONSE))
+
+    ratings = client.lookup(imdb_id="tt9999999")
+
+    assert ratings is not None
+    assert ratings.imdb_id == "tt9999999"
 
 
 def test_lookup_by_title_with_no_year_sends_no_year_param() -> None:
