@@ -54,6 +54,7 @@
       "rulesets",
       "stdlib",
       "movie-planner",
+      "movie-planner-web",
       "nixpkgs",
       "stdout",
       "subpackage",

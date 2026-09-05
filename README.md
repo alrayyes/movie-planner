@@ -12,6 +12,12 @@ prompt, enriches entries with IMDb/Rotten Tomatoes/Metacritic ratings via
 OMDb and a manually entered Letterboxd link, and catches accidental
 duplicate log entries with fuzzy title matching.
 
+Prefer a browser to a terminal? [movie-planner-web](https://github.com/alrayyes/movie-planner-web)
+is a static web client for the same CalDAV calendar and OMDb setup — no
+install, no shared server, your browser talks straight to your CalDAV
+server. The two tools share movie-planner's own field names, so a CSV/JSON
+export from one imports straight into the other.
+
 ## Requirements
 
 - **Python 3.14 or newer.**
@@ -50,6 +56,8 @@ uv sync
 ```
 
 ## Usage
+
+![movie-planner --help](docs/img/help.svg)
 
 ```sh
 uv run movie-planner --help
