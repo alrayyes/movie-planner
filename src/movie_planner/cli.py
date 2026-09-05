@@ -17,7 +17,7 @@ from movie_planner import config as config_module
 from movie_planner.calendar_sync import CalendarClient, CalendarSync
 from movie_planner.display import detect_terminal_image_protocol, format_entry, render_poster
 from movie_planner.duplicates import find_duplicate
-from movie_planner.importers import parse_csv, parse_json, run_import
+from movie_planner.importers import parse_csv, parse_json, parse_json_text, run_import
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
 from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
 from movie_planner.store import Entry, Store, StoreError, Venue
@@ -770,7 +770,10 @@ def venues_remove(ctx: typer.Context, name: Annotated[str, typer.Argument()]) ->
 @app.command(name="import")
 def import_command(
     ctx: typer.Context,
-    path: Annotated[Path, typer.Argument(help="CSV or JSON file to import.")],
+    path: Annotated[
+        Path | None,
+        typer.Argument(help="CSV or JSON file to import. Omit to read JSON from stdin."),
+    ] = None,
     force: Annotated[
         bool, typer.Option("--force", help="Persist rows that look like duplicates.")
     ] = False,
@@ -784,9 +787,14 @@ def import_command(
         ),
     ] = False,
 ) -> None:
-    """Bulk import viewing entries from a CSV or JSON file."""
+    """Bulk import viewing entries from a CSV or JSON file, or pipe JSON
+    (an array, or a single row object) in on stdin when no path is
+    given.
+    """
     cfg = _cfg(ctx)
-    if path.suffix == ".csv":
+    if path is None:
+        rows = parse_json_text(sys.stdin.read())
+    elif path.suffix == ".csv":
         rows = parse_csv(path)
     elif path.suffix == ".json":
         rows = parse_json(path)

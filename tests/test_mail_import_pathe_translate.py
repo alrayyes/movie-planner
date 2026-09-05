@@ -67,3 +67,30 @@ def test_translate_invalid_envelope_json_writes_stderr_and_exits_nonzero() -> No
     assert result.returncode != 0
     assert result.stdout.strip() == ""
     assert "envelope JSON" in result.stderr
+
+
+def test_translate_streams_multiple_envelopes_ndjson_in_ndjson_out() -> None:
+    recognized = json.dumps(
+        {
+            "from": "Pathé Nederland <noreply@pathe.nl>",
+            "subject": "Your booking confirmation",
+            "date": "2026-08-29T12:00:00+02:00",
+            "body": PATHE_EMAIL_PLAIN,
+        }
+    )
+    unrecognized = json.dumps(
+        {
+            "from": "Newsletter <news@unrelated-sender.com>",
+            "subject": "This week in cinema",
+            "date": "2026-07-05T10:00:00+02:00",
+            "body": "Not a booking confirmation at all.",
+        }
+    )
+
+    result = _run(f"{recognized}\n{unrecognized}\n{recognized}\n")
+
+    assert result.returncode != 0  # one of the three wasn't recognized
+    stdout_lines = [line for line in result.stdout.splitlines() if line.strip()]
+    assert len(stdout_lines) == 2  # the two recognized ones only
+    assert all(json.loads(line)["title"] == "The Dog Stars" for line in stdout_lines)
+    assert result.stderr.strip() != ""  # the unrecognized one's diagnostic

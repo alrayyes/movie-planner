@@ -30,6 +30,19 @@ class MailEnvelope:
     body: str
 
 
+def envelope_to_json(envelope: MailEnvelope) -> dict[str, str]:
+    """The wire shape every translation script receives on stdin, and
+    what --envelopes-only prints one of per line - the one envelope
+    representation used everywhere this tool serializes one.
+    """
+    return {
+        "from": envelope.from_address,
+        "subject": envelope.subject,
+        "date": envelope.date.isoformat(),
+        "body": envelope.body,
+    }
+
+
 class MailClient(Protocol):
     def fetch(
         self,

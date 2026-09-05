@@ -192,6 +192,20 @@ stderr, emit nothing to stdout" - there's no coordinating process left
 to build a table, and stderr passing through a pipe is the standard way
 a Unix filter reports something without disturbing the data stream.
 
+**Discovered while implementing this: the translation script has to
+speak NDJSON, not one object per invocation.** `--envelopes-only`
+emits every fetched envelope on one stdout stream - a script piped
+straight from it has to consume all of them from one long-running
+process, not just the first line and exit. So a translation script's
+real contract is: read stdin line by line, one JSON envelope per line;
+for each, print one JSON row on stdout (recognized) or a diagnostic on
+stderr (not) and move to the next line. `dispatch.py`'s own internal
+invocation - one `subprocess.run` per envelope, envelope as the entire
+stdin - still works completely unchanged against this: a single
+`json.dumps(...)` call is always exactly one line (JSON escapes
+embedded newlines in string values, never emits a literal one), so
+that single-shot case is just the N=1 case of the same loop.
+
 **`movie-planner import` accepts stdin - a single object or an array,
 JSON only.** The immediate motivation is exactly the pipeline above:
 without this, `movie-planner import` is always a file, and the

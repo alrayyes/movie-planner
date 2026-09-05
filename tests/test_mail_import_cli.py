@@ -311,3 +311,51 @@ def test_fetch_run_twice_against_an_unchanged_mailbox_is_identical(tmp_path: Pat
     assert first.exit_code == 0, first.output
     assert second.exit_code == 0, second.output
     assert first_output.read_text() == second_output.read_text()
+
+
+# --- --envelopes-only / piped composition: task group 8 ---
+
+
+def test_fetch_envelopes_only_prints_one_json_line_per_message_no_output_file(
+    tmp_path: Path,
+) -> None:
+    config_path = _mbox_config(tmp_path, "irrelevant - not dispatched in this mode")
+    output_path = tmp_path / "import.json"
+
+    result = runner.invoke(
+        app,
+        ["fetch", "--config", str(config_path), "--output", str(output_path), "--envelopes-only"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert not output_path.exists()
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    assert len(lines) == 2
+    envelopes = [json.loads(line) for line in lines]
+    assert {e["subject"] for e in envelopes} == {
+        "Your booking confirmation",
+        "A second booking confirmation",
+    }
+    assert all({"from", "subject", "date", "body"} <= e.keys() for e in envelopes)
+
+
+def test_fetch_envelopes_only_with_no_matches_prints_nothing(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f"""\
+[mail]
+source = "mbox"
+
+[mail.mbox]
+path = "{FIXTURE_MBOX}"
+
+[[chains]]
+sender_domain = "nobody-sends-from-here.example"
+translate = "irrelevant"
+"""
+    )
+
+    result = runner.invoke(app, ["fetch", "--config", str(config_path), "--envelopes-only"])
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout.strip() == ""

@@ -124,9 +124,19 @@ def parse_csv(path: Path) -> list[ParsedRow]:
         return [_row_from_dict(i, raw) for i, raw in enumerate(reader, start=2)]
 
 
+def parse_json_text(text: str) -> list[ParsedRow]:
+    """Parses JSON already in memory - a `movies.json`-shaped array, or a
+    single bare row object (treated as a one-element array), the shape
+    a caller piping one row at a time naturally produces. Shared by
+    `parse_json` (a file) and `import`'s stdin path (no file at all).
+    """
+    data = json.loads(text)
+    rows = [data] if isinstance(data, dict) else data
+    return [_row_from_dict(i, raw) for i, raw in enumerate(rows, start=1)]
+
+
 def parse_json(path: Path) -> list[ParsedRow]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return [_row_from_dict(i, raw) for i, raw in enumerate(data, start=1)]
+    return parse_json_text(path.read_text(encoding="utf-8"))
 
 
 def run_import(

@@ -1138,6 +1138,57 @@ def test_import_force_persists_duplicates(
     store.close()
 
 
+# --- import from stdin: task 8.3 (add-imap-pathe-mail-import) ---
+
+
+def test_import_from_stdin_single_object(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    row = '{"title": "Dune", "date": "2026-01-01", "medium": "cinema"}'
+
+    result = runner.invoke(app, ["--config", str(config_path), "import"], input=row)
+
+    assert result.exit_code == 0, result.output
+    assert "1 imported" in result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.title == "Dune"
+    assert entry.caldav_uid in calendar.events_by_uid
+    store.close()
+
+
+def test_import_from_stdin_array(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    rows = (
+        '[{"title": "Dune", "date": "2026-01-01", "medium": "cinema"}, '
+        '{"title": "Solstice Run", "date": "2026-01-02", "medium": "cinema"}]'
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "import"], input=rows)
+
+    assert result.exit_code == 0, result.output
+    assert "2 imported" in result.output
+    store = _store(config_path)
+    assert len(store.list_entries()) == 2
+    store.close()
+
+
+def test_import_with_a_path_argument_does_not_read_stdin(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium\nDune,2026-01-01,cinema\n")
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.title == "Dune"
+    store.close()
+
+
 # --- from-pathe-email: tasks 5.1-5.4 ---
 
 

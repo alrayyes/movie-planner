@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from movie_planner.mail_import.config import ChainConfig
-from movie_planner.mail_import.envelope import MailEnvelope, sender_domain
+from movie_planner.mail_import.envelope import MailEnvelope, envelope_to_json, sender_domain
 
 
 @dataclass(frozen=True)
@@ -27,17 +27,6 @@ class DispatchResult:
     row: dict[str, Any] | None
 
 
-def _envelope_payload(envelope: MailEnvelope) -> str:
-    return json.dumps(
-        {
-            "from": envelope.from_address,
-            "subject": envelope.subject,
-            "date": envelope.date.isoformat(),
-            "body": envelope.body,
-        }
-    )
-
-
 def dispatch(envelope: MailEnvelope, chains: tuple[ChainConfig, ...]) -> DispatchResult:
     domain = sender_domain(envelope.from_address)
     chain = next((c for c in chains if c.sender_domain.lower() == domain), None)
@@ -47,7 +36,7 @@ def dispatch(envelope: MailEnvelope, chains: tuple[ChainConfig, ...]) -> Dispatc
     try:
         result = subprocess.run(  # nosec B603
             shlex.split(chain.translate),
-            input=_envelope_payload(envelope),
+            input=json.dumps(envelope_to_json(envelope)),
             capture_output=True,
             text=True,
             check=False,
