@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.13.0...movie-planner-v0.13.1) (2026-09-05)
+
+
+### Documentation
+
+* publish the CalDAV data contract for movie-planner-web ([#101](https://github.com/alrayyes/movie-planner/issues/101)) ([5169c9c](https://github.com/alrayyes/movie-planner/commit/5169c9c61ee405083bf614e4c2efd3220882b817)), closes [#100](https://github.com/alrayyes/movie-planner/issues/100)
+
 ## [0.13.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.12.0...movie-planner-v0.13.0) (2026-09-05)
 
 
