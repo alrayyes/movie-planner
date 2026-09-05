@@ -63,10 +63,10 @@ def test_parse_csv_full_row_with_omdb_derived_fields(tmp_path: Path) -> None:
     csv_path = tmp_path / "movies.csv"
     csv_path.write_text(
         "title,date,medium,imdb_rating,rotten_tomatoes_rating,metacritic_rating,poster_url,"
-        "director,actors,genre,release_year,booking_ref,letterboxd_url,letterboxd_rating\n"
+        "director,actors,genre,release_year,source,letterboxd_url,letterboxd_rating\n"
         "Dune,2026-01-01,cinema,8.5/10,91%,80,"
         "https://m.media-amazon.com/images/dune-poster.jpg,Denis Villeneuve,"
-        "Timothée Chalamet,Action,2021,BOOK123,"
+        "Timothée Chalamet,Action,2021,pathe.nl,"
         "https://letterboxd.com/film/dune-2021/,4.5\n"
     )
 
@@ -82,9 +82,22 @@ def test_parse_csv_full_row_with_omdb_derived_fields(tmp_path: Path) -> None:
     assert entry.actors == "Timothée Chalamet"
     assert entry.genre == "Action"
     assert entry.release_year == 2021
-    assert entry.booking_ref == "BOOK123"
+    assert entry.source == "pathe.nl"
     assert entry.letterboxd_url == "https://letterboxd.com/film/dune-2021/"
     assert entry.letterboxd_rating == "4.5"
+
+
+def test_parse_csv_ignores_a_booking_ref_column(tmp_path: Path) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text(
+        "title,date,medium,booking_ref\nDune,2026-01-01,cinema,BOOK123\n",
+    )
+
+    rows = parse_csv(csv_path)
+
+    entry = rows[0].entry
+    assert entry is not None
+    assert not hasattr(entry, "booking_ref")
 
 
 def test_parse_csv_bad_release_year_is_a_failed_row(tmp_path: Path) -> None:
@@ -297,7 +310,7 @@ def test_run_import_stores_omdb_derived_fields_when_supplied(store: Store) -> No
     assert entry.release_year == 2021
 
 
-def test_run_import_stores_booking_ref_and_letterboxd_when_supplied(store: Store) -> None:
+def test_run_import_stores_letterboxd_when_supplied(store: Store) -> None:
     rows = [
         ParsedRow(
             row_number=1,
@@ -305,7 +318,6 @@ def test_run_import_stores_booking_ref_and_letterboxd_when_supplied(store: Store
                 title="Dune",
                 date=date(2026, 1, 1),
                 medium="cinema",
-                booking_ref="BOOK123",
                 letterboxd_url="https://letterboxd.com/film/dune-2021/",
                 letterboxd_rating="4.5",
             ),
@@ -316,9 +328,43 @@ def test_run_import_stores_booking_ref_and_letterboxd_when_supplied(store: Store
     run_import(store, rows)
 
     (entry,) = store.list_entries()
-    assert entry.booking_ref == "BOOK123"
     assert entry.letterboxd_url == "https://letterboxd.com/film/dune-2021/"
     assert entry.letterboxd_rating == "4.5"
+
+
+def test_run_import_stores_source_when_supplied(store: Store) -> None:
+    rows = [
+        ParsedRow(
+            row_number=1,
+            entry=ImportRow(
+                title="Dune",
+                date=date(2026, 1, 1),
+                medium="cinema",
+                source="pathe.nl",
+            ),
+            error=None,
+        )
+    ]
+
+    run_import(store, rows)
+
+    (entry,) = store.list_entries()
+    assert entry.source == "pathe.nl"
+
+
+def test_run_import_with_no_source_leaves_it_unset(store: Store) -> None:
+    rows = [
+        ParsedRow(
+            row_number=1,
+            entry=ImportRow(title="Dune", date=date(2026, 1, 1), medium="cinema"),
+            error=None,
+        )
+    ]
+
+    run_import(store, rows)
+
+    (entry,) = store.list_entries()
+    assert entry.source is None
 
 
 def test_run_import_reuses_existing_medium_and_venue(store: Store) -> None:

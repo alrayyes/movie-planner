@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS entries (
     director TEXT,
     actors TEXT,
     genre TEXT,
-    release_year INTEGER
+    release_year INTEGER,
+    source TEXT
 );
 """
 
@@ -73,6 +74,7 @@ _MIGRATED_COLUMNS: tuple[tuple[str, str], ...] = (
     ("actors", "TEXT"),
     ("genre", "TEXT"),
     ("release_year", "INTEGER"),
+    ("source", "TEXT"),
 )
 
 _MIGRATED_VENUE_COLUMNS = (
@@ -128,6 +130,7 @@ class Entry:
     actors: str | None = None
     genre: str | None = None
     release_year: int | None = None
+    source: str | None = None
 
 
 _ENTRY_COLUMNS = (
@@ -152,6 +155,7 @@ _ENTRY_COLUMNS = (
     "actors",
     "genre",
     "release_year",
+    "source",
 )
 
 
@@ -184,6 +188,7 @@ def _row_to_entry(row: tuple[Any, ...]) -> Entry:
         actors=values["actors"],
         genre=values["genre"],
         release_year=values["release_year"],
+        source=values["source"],
     )
 
 
@@ -410,6 +415,7 @@ class Store:
         actors: str | None = _UNSET,
         genre: str | None = _UNSET,
         release_year: int | None = _UNSET,
+        source: str | None = _UNSET,
     ) -> Entry:
         current = self.get_entry(entry_id)
         changes = {
@@ -433,6 +439,7 @@ class Store:
             "actors": actors,
             "genre": genre,
             "release_year": release_year,
+            "source": source,
         }
         # changes is a heterogeneous dict by design (the _UNSET-sentinel
         # pattern needs one dict covering every field) - mypy can't verify

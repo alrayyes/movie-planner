@@ -59,3 +59,14 @@ def test_a_non_numeral_release_year_fails_validation(row_schema: dict[str, objec
 
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(row, row_schema)
+
+
+def test_a_row_with_a_source_field_validates(row_schema: dict[str, object]) -> None:
+    row = {"title": "Some Movie", "date": "2026-01-01", "medium": "cinema", "source": "pathe.nl"}
+
+    jsonschema.validate(row, row_schema)
+
+
+def test_the_schema_no_longer_defines_booking_ref(schema: dict[str, object]) -> None:
+    row_def = schema["$defs"]["row"]  # type: ignore[index]
+    assert "booking_ref" not in row_def["properties"]
