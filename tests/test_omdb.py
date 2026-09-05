@@ -159,6 +159,87 @@ def test_lookup_requires_title_or_imdb_id() -> None:
         client.lookup()
 
 
+def test_lookup_by_title_and_year_sends_the_year_param() -> None:
+    seen_params = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_params.update(dict(request.url.params))
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    client.lookup(title="Dune", year=2021)
+
+    assert seen_params["t"] == "Dune"
+    assert seen_params["y"] == "2021"
+
+
+def test_lookup_falls_back_to_title_only_when_year_scoped_search_finds_nothing() -> None:
+    requests_seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        requests_seen.append(params)
+        if "y" in params:
+            return httpx.Response(200, json=NO_MATCH_RESPONSE)
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    ratings = client.lookup(title="Dune", year=1900)
+
+    assert ratings is not None
+    assert ratings.imdb == "8.0/10"
+    assert len(requests_seen) == 2
+    assert "y" in requests_seen[0]
+    assert "y" not in requests_seen[1]
+
+
+def test_lookup_with_imdb_id_ignores_the_year_hint() -> None:
+    seen_params = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_params.update(dict(request.url.params))
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    client.lookup(imdb_id="tt1160419", year=2021)
+
+    assert seen_params["i"] == "tt1160419"
+    assert "y" not in seen_params
+
+
+def test_lookup_by_title_with_no_year_sends_no_year_param() -> None:
+    seen_params = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_params.update(dict(request.url.params))
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    client.lookup(title="Dune")
+
+    assert "y" not in seen_params
+
+
+def test_lookup_caches_a_year_scoped_match_separately_from_a_plain_one() -> None:
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    client.lookup(title="Dune", year=2021)
+    client.lookup(title="Dune")
+
+    assert call_count == 2
+
+
 # --- fetch_and_store_ratings: task 5.2 ---
 
 
@@ -181,6 +262,22 @@ def test_fetch_and_store_ratings_on_a_match(store: Store) -> None:
     assert updated.rotten_tomatoes_rating == "83%"
     assert updated.metacritic_rating == "74/100"
     assert store.get_entry(entry.id).imdb_rating == "8.0/10"
+
+
+def test_fetch_and_store_ratings_uses_the_entrys_year_as_a_hint(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    seen_params = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_params.update(dict(request.url.params))
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    fetch_and_store_ratings(store, client, entry)
+
+    assert seen_params["y"] == "2026"
 
 
 def test_fetch_and_store_ratings_sets_imdb_url_from_the_imdb_id(store: Store) -> None:

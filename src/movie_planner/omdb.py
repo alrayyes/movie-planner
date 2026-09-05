@@ -35,19 +35,40 @@ class OmdbClient:
         self._cache: dict[str, MovieRatings | None] = {}
 
     def lookup(
-        self, *, title: str | None = None, imdb_id: str | None = None
+        self,
+        *,
+        title: str | None = None,
+        imdb_id: str | None = None,
+        year: int | None = None,
     ) -> MovieRatings | None:
         if not title and not imdb_id:
             raise ValueError("lookup needs a title or imdb_id")
 
-        cache_key = imdb_id or title
-        # Validated above: at least one of imdb_id/title is set.
-        assert cache_key is not None  # nosec B101
+        # A watched-year hint only makes sense for a title search - an
+        # imdb_id is already exact - and is disambiguation, not a strict
+        # filter: a re-watch of an older film has a watched-year that's
+        # never the release year, so a year-scoped miss falls back to a
+        # plain title search rather than reporting no match.
+        if title and not imdb_id and year is not None:
+            year_scoped = self._lookup_one(title=title, imdb_id=None, year=year)
+            if year_scoped is not None:
+                return year_scoped
+        return self._lookup_one(title=title, imdb_id=imdb_id, year=None)
+
+    def _lookup_one(
+        self, *, title: str | None, imdb_id: str | None, year: int | None
+    ) -> MovieRatings | None:
+        cache_key_base = imdb_id or title
+        # Validated by the caller: at least one of imdb_id/title is set.
+        assert cache_key_base is not None  # nosec B101
+        cache_key = f"{cache_key_base}|{year}" if year is not None else cache_key_base
         if cache_key in self._cache:
             return self._cache[cache_key]
 
         params: dict[str, str] = {"apikey": self._api_key}
-        params["i" if imdb_id else "t"] = cache_key
+        params["i" if imdb_id else "t"] = cache_key_base
+        if year is not None:
+            params["y"] = str(year)
 
         response = self._http.get("/", params=params)
         response.raise_for_status()
@@ -57,13 +78,13 @@ class OmdbClient:
             self._cache[cache_key] = None
             return None
 
-        imdb_id = data.get("imdbID")
+        response_imdb_id = data.get("imdbID")
         poster = data.get("Poster")
         ratings = MovieRatings(
             imdb=_rating(data.get("Ratings", []), "Internet Movie Database"),
             rotten_tomatoes=_rating(data.get("Ratings", []), "Rotten Tomatoes"),
             metacritic=_rating(data.get("Ratings", []), "Metacritic"),
-            imdb_id=imdb_id if isinstance(imdb_id, str) else None,
+            imdb_id=response_imdb_id if isinstance(response_imdb_id, str) else None,
             poster=poster if isinstance(poster, str) and poster != "N/A" else None,
         )
         self._cache[cache_key] = ratings
@@ -82,7 +103,7 @@ def fetch_and_store_ratings(
     and whether a match was found, so the caller can tell the user when
     it wasn't.
     """
-    ratings = client.lookup(title=entry.title, imdb_id=imdb_id)
+    ratings = client.lookup(title=entry.title, imdb_id=imdb_id, year=entry.date.year)
     if ratings is None:
         return entry, False
     imdb_url = entry.imdb_url or (
