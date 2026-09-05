@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.1.0...movie-planner-v1.2.0) (2026-09-05)
+
+
+### Features
+
+* **mail-import:** scaffold pathe-mail-import, IMAP/mbox adapters ([#149](https://github.com/alrayyes/movie-planner/issues/149)) ([b642e30](https://github.com/alrayyes/movie-planner/commit/b642e309242f5ad5c3e0ef2f91832cadb1ab7ec3))
+
 ## [1.1.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.0.0...movie-planner-v1.1.0) (2026-09-05)
 
 
