@@ -835,16 +835,41 @@ def sync_retry(ctx: typer.Context) -> None:
 
 
 @sync_app.command("refresh")
-def sync_refresh(ctx: typer.Context) -> None:
+def sync_refresh(
+    ctx: typer.Context,
+    date_from: Annotated[
+        str | None, typer.Option("--from", help="Only entries on or after this date.")
+    ] = None,
+    date_to: Annotated[
+        str | None, typer.Option("--to", help="Only entries on or before this date.")
+    ] = None,
+    entry_date: Annotated[
+        str | None, typer.Option("--date", help="Only entries on this exact date.")
+    ] = None,
+) -> None:
     """Backfill missing OMDb ratings and re-push every entry's calendar
     event, so its description reflects current data. Kept separate from
     `sync retry` - this touches every entry and can make many OMDb calls
     on a first run; `retry` stays the cheap, unsynced-only, no-OMDb path.
+
+    With no date arguments, every entry is refreshed. `--from`/`--to` scope
+    it to a date range; `--date` scopes it to a single day and can't be
+    combined with either.
     """
+    if entry_date is not None and (date_from is not None or date_to is not None):
+        typer.secho("--date can't be combined with --from or --to.", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+    if entry_date is not None:
+        date_from = date_to = entry_date
+
     cfg = _cfg(ctx)
     store = _open_store(cfg)
     try:
-        entries = store.list_entries()
+        entries = store.list_entries(
+            date_from=_parse_date(date_from) if date_from else None,
+            date_to=_parse_date(date_to) if date_to else None,
+        )
         if not entries:
             typer.echo("No entries to refresh.")
             return

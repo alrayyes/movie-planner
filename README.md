@@ -97,6 +97,8 @@ uv run movie-planner locations venues add "Grand Vista Cinema"
 uv run movie-planner import movies.csv --force
 uv run movie-planner sync retry
 uv run movie-planner sync refresh
+uv run movie-planner sync refresh --from 2026-01-01 --to 2026-01-31
+uv run movie-planner sync refresh --date 2026-01-15
 ```
 
 `import` accepts a `.csv` or `.json` file with the same fields as
@@ -108,7 +110,9 @@ counterpart: it walks every entry, fetches OMDb ratings for any that are
 still missing them, and re-pushes every calendar event so its description
 reflects current data — worth running after upgrading, or to backfill
 ratings for entries imported before this existed, not something to run
-reflexively the way `retry` is.
+reflexively the way `retry` is. Pass `--from`/`--to` or a single `--date`
+to scope it to a range instead of the whole log; `--date` can't be
+combined with either.
 
 ## Configuration
 
