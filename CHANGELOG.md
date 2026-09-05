@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.21.0...movie-planner-v0.21.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **omdb:** restrict title lookups to movies ([#133](https://github.com/alrayyes/movie-planner/issues/133)) ([e360197](https://github.com/alrayyes/movie-planner/commit/e3601973601ca553088e762019a808fee5ba4c07)), closes [#132](https://github.com/alrayyes/movie-planner/issues/132)
+
 ## [0.21.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.20.0...movie-planner-v0.21.0) (2026-09-05)
 
 
