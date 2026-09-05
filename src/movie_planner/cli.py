@@ -413,7 +413,9 @@ def log(
 
     store = _open_store(cfg)
     try:
-        duplicate = find_duplicate(title, parsed_date, store.list_entries())
+        duplicate = find_duplicate(
+            title, parsed_date, store.list_entries(), start_time=parsed_start, end_time=parsed_end
+        )
         if duplicate is not None and not force:
             if interactive:
                 confirmed = typer.confirm(
@@ -864,7 +866,13 @@ def from_pathe_email(
         duplicate = (
             None
             if target is not None
-            else find_duplicate(booking.title, booking.date, store.list_entries())
+            else find_duplicate(
+                booking.title,
+                booking.date,
+                store.list_entries(),
+                start_time=booking.start_time,
+                end_time=booking.end_time,
+            )
         )
         match = target or duplicate
 

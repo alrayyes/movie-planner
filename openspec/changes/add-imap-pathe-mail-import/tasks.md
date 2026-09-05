@@ -91,13 +91,13 @@
 
 ## 6. Overlapping-screening duplicate detection
 
-- [ ] 6.1 Implement the buffered time-range overlap check in
+- [x] 6.1 Implement the buffered time-range overlap check in
   `duplicates.py`, folded into `find_duplicate` alongside the existing
   fuzzy-title/same-day check; verify each scenario in
   `specs/duplicate-detection/spec.md`'s delta has a passing test
-- [ ] 6.2 Verify existing `find_duplicate`/`duplicate-detection` tests
+- [x] 6.2 Verify existing `find_duplicate`/`duplicate-detection` tests
   (title-based) still pass unchanged
-- [ ] 6.3 Verify the bulk-import and interactive-logging call sites
+- [x] 6.3 Verify the bulk-import and interactive-logging call sites
   (`run_import`, `log`) surface an overlap-flagged candidate the same
   way they already surface a title-flagged one - no new UI path
 
