@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.5.0...movie-planner-v1.5.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **mail-import:** wire --since/--until into fetch ([#161](https://github.com/alrayyes/movie-planner/issues/161)) ([07bbd55](https://github.com/alrayyes/movie-planner/commit/07bbd551a68d9ecfe1b3fc59dfa287135b3d519c))
+
 ## [1.5.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.4.0...movie-planner-v1.5.0) (2026-09-05)
 
 
