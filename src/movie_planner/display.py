@@ -27,7 +27,13 @@ _KITTY_CHUNK_SIZE = 4096
 
 
 def detect_terminal_image_protocol() -> TerminalImageProtocol | None:
-    if os.environ.get("KITTY_WINDOW_ID") or os.environ.get("TERM") == "xterm-kitty":
+    # Ghostty implements the Kitty graphics protocol but identifies as
+    # TERM=xterm-ghostty, not xterm-kitty, and sets neither
+    # KITTY_WINDOW_ID nor TERM_PROGRAM.
+    if os.environ.get("KITTY_WINDOW_ID") or os.environ.get("TERM") in (
+        "xterm-kitty",
+        "xterm-ghostty",
+    ):
         return "kitty"
     if os.environ.get("TERM_PROGRAM") in ("iTerm.app", "WezTerm"):
         return "iterm2"

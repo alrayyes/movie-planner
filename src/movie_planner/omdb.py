@@ -94,5 +94,6 @@ def fetch_and_store_ratings(
         rotten_tomatoes_rating=ratings.rotten_tomatoes,
         metacritic_rating=ratings.metacritic,
         imdb_url=imdb_url,
+        poster_url=ratings.poster,
     )
     return updated, True

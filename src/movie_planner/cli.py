@@ -533,6 +533,8 @@ def _fetch_poster_bytes(url: str) -> bytes:
 
 
 def _poster_url_for(cfg: config_module.Config, entry: Entry) -> str | None:
+    if entry.poster_url:
+        return entry.poster_url
     if not entry.imdb_url:
         return None
     match = _IMDB_ID_RE.search(entry.imdb_url)

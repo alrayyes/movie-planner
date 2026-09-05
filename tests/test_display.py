@@ -30,6 +30,16 @@ def test_detect_protocol_kitty_term(monkeypatch: pytest.MonkeyPatch) -> None:
     assert detect_terminal_image_protocol() == "kitty"
 
 
+def test_detect_protocol_ghostty(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Ghostty implements the Kitty graphics protocol but identifies
+    # itself as TERM=xterm-ghostty, not xterm-kitty, and sets neither
+    # KITTY_WINDOW_ID nor TERM_PROGRAM - confirmed against Ghostty's own
+    # docs, not assumed.
+    monkeypatch.setenv("TERM", "xterm-ghostty")
+
+    assert detect_terminal_image_protocol() == "kitty"
+
+
 @pytest.mark.parametrize("program", ["iTerm.app", "WezTerm"])
 def test_detect_protocol_iterm2(program: str, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TERM_PROGRAM", program)

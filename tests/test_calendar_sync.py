@@ -341,6 +341,34 @@ def test_push_new_includes_ratings_in_the_description(store: Store) -> None:
     assert "IMDb: 8.5/10" in calendar.events_by_uid[synced.caldav_uid].data
 
 
+def test_push_new_includes_poster_url_as_an_x_property(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.update_entry(
+        entry.id, poster_url="https://m.media-amazon.com/images/dune-poster.jpg"
+    )
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-POSTER-URL:https://m.media-amazon.com/images/dune-poster.jpg" in ical_text
+
+
+def test_push_new_omits_poster_url_property_when_entry_has_none(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    assert "X-POSTER-URL" not in calendar.events_by_uid[synced.caldav_uid].data
+
+
 def test_push_new_includes_chain_in_the_description(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)

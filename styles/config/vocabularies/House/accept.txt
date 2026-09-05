@@ -46,6 +46,7 @@ Letterboxd
 IMDb
 CalDAV
 Baikal
+iCalendar
 hadolint
 GHCR
 pipx

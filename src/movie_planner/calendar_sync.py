@@ -65,10 +65,14 @@ def build_vevent(
     end_time: time | None,
     venue: str | None,
     description: str | None = None,
+    poster_url: str | None = None,
 ) -> str:
     """Maps a movie-log entry's date/time completeness to a VEVENT:
     date-only -> all-day, start-only -> DTSTART with no DTEND, both -> a
     normal ranged event. See design.md's "VEVENT mapping" decision.
+    `X-POSTER-URL` is movie-planner's first (and so far only) custom
+    property - matches the bare X-NAME movie-planner-web already reads,
+    per docs/calendar-schema.md.
     """
     calendar = icalendar.Calendar()
     calendar.add("prodid", "-//movie-planner//EN")
@@ -81,6 +85,8 @@ def build_vevent(
         event.add("location", venue)
     if description:
         event.add("description", description)
+    if poster_url:
+        event.add("X-POSTER-URL", poster_url)
 
     if start_time is None:
         event.add("dtstart", entry_date)
@@ -171,6 +177,7 @@ class CalendarSync:
             end_time=entry.end_time,
             venue=venue,
             description=build_description(entry, chain=chain, screening_details=screening_details),
+            poster_url=entry.poster_url,
         )
         try:
             self._client.create_event(ical_text)
@@ -196,6 +203,7 @@ class CalendarSync:
             end_time=entry.end_time,
             venue=venue,
             description=build_description(entry, chain=chain, screening_details=screening_details),
+            poster_url=entry.poster_url,
         )
         try:
             self._client.update_event(entry.caldav_uid, ical_text)
