@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.15.0...movie-planner-v0.16.0) (2026-09-05)
+
+
+### Features
+
+* add a free-text notes field to logged entries ([#110](https://github.com/alrayyes/movie-planner/issues/110)) ([565b214](https://github.com/alrayyes/movie-planner/commit/565b21459c4ea8387539125d94c8760a54d5d55c))
+
 ## [0.15.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.14.0...movie-planner-v0.15.0) (2026-09-05)
 
 
