@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.20.0...movie-planner-v0.21.0) (2026-09-05)
+
+
+### Features
+
+* **import:** accept OMDb-derived fields directly on a row ([#130](https://github.com/alrayyes/movie-planner/issues/130)) ([06b865f](https://github.com/alrayyes/movie-planner/commit/06b865f88cc2675ed268af9a535ffe6434f92196))
+
 ## [0.20.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.19.1...movie-planner-v0.20.0) (2026-09-05)
 
 
