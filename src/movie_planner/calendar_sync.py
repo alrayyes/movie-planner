@@ -65,14 +65,16 @@ def build_vevent(
     end_time: time | None,
     venue: str | None,
     description: str | None = None,
-    poster_url: str | None = None,
+    extra_properties: dict[str, str] | None = None,
 ) -> str:
     """Maps a movie-log entry's date/time completeness to a VEVENT:
     date-only -> all-day, start-only -> DTSTART with no DTEND, both -> a
     normal ranged event. See design.md's "VEVENT mapping" decision.
-    `X-POSTER-URL` is movie-planner's first (and so far only) custom
-    property - matches the bare X-NAME movie-planner-web already reads,
-    per docs/calendar-schema.md.
+    `extra_properties` covers movie-planner's custom `X-*` properties
+    (`X-POSTER-URL`, `X-DIRECTOR`, `X-ACTORS`, `X-GENRE`, `X-YEAR`) -
+    bare X-NAME form, matching what movie-planner-web already reads, per
+    docs/calendar-schema.md. Only set (non-empty) values belong in the
+    dict; this adds whatever it's given with no further filtering.
     """
     calendar = icalendar.Calendar()
     calendar.add("prodid", "-//movie-planner//EN")
@@ -85,8 +87,8 @@ def build_vevent(
         event.add("location", venue)
     if description:
         event.add("description", description)
-    if poster_url:
-        event.add("X-POSTER-URL", poster_url)
+    for name, value in (extra_properties or {}).items():
+        event.add(name, value)
 
     if start_time is None:
         event.add("dtstart", entry_date)
@@ -155,6 +157,17 @@ class CalendarClient:
         event.delete()
 
 
+def _extra_properties(entry: Entry) -> dict[str, str]:
+    values: dict[str, str | None] = {
+        "X-POSTER-URL": entry.poster_url,
+        "X-DIRECTOR": entry.director,
+        "X-ACTORS": entry.actors,
+        "X-GENRE": entry.genre,
+        "X-YEAR": str(entry.release_year) if entry.release_year is not None else None,
+    }
+    return {name: value for name, value in values.items() if value}
+
+
 class CalendarSync:
     def __init__(self, store: Store, client: CalendarClient) -> None:
         self._store = store
@@ -180,7 +193,7 @@ class CalendarSync:
             end_time=entry.end_time,
             venue=venue,
             description=build_description(entry, chain=chain, screening_details=screening_details),
-            poster_url=entry.poster_url,
+            extra_properties=_extra_properties(entry),
         )
         try:
             self._client.create_event(ical_text)
@@ -206,7 +219,7 @@ class CalendarSync:
             end_time=entry.end_time,
             venue=venue,
             description=build_description(entry, chain=chain, screening_details=screening_details),
-            poster_url=entry.poster_url,
+            extra_properties=_extra_properties(entry),
         )
         try:
             self._client.update_event(entry.caldav_uid, ical_text)

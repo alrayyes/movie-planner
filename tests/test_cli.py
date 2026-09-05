@@ -86,6 +86,10 @@ def omdb_match(monkeypatch: pytest.MonkeyPatch) -> None:
         rotten_tomatoes="91%",
         metacritic="80",
         poster="https://m.media-amazon.com/images/dune-poster.jpg",
+        director="Denis Villeneuve",
+        actors="Timothée Chalamet, Rebecca Ferguson, Zendaya",
+        genre="Action, Adventure, Drama",
+        release_year=2021,
     )
     monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: ratings)
 
@@ -368,6 +372,30 @@ def test_list_shows_logged_entries(
     assert "Grand Vista Cinema" in result.output
 
 
+def test_list_shows_release_year_when_known(
+    config_path: Path, calendar: FakeCalendar, omdb_match: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "list"])
+
+    assert result.exit_code == 0, result.output
+    assert "(2021)" in result.output
+
+
 def test_list_filtered_by_chain(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None
 ) -> None:
@@ -421,6 +449,10 @@ def test_show_prints_structured_metadata(
     assert "cinema" in result.output
     assert "Grand Vista Cinema" in result.output
     assert "8.5/10" in result.output
+    assert "Denis Villeneuve" in result.output
+    assert "Timothée Chalamet, Rebecca Ferguson, Zendaya" in result.output
+    assert "Action, Adventure, Drama" in result.output
+    assert "2021" in result.output
 
 
 def test_show_missing_entry_errors(config_path: Path) -> None:

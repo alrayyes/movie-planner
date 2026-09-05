@@ -45,24 +45,34 @@ CREATE TABLE IF NOT EXISTS entries (
     imdb_url TEXT,
     booking_ref TEXT,
     notes TEXT,
-    poster_url TEXT
+    poster_url TEXT,
+    director TEXT,
+    actors TEXT,
+    genre TEXT,
+    release_year INTEGER
 );
 """
 
 # Columns added to `entries` after its initial release, ALTERed in for a
 # database created before each one existed - CREATE TABLE IF NOT EXISTS
-# above only covers a brand-new database.
-_MIGRATED_COLUMNS = (
-    "caldav_uid",
-    "imdb_rating",
-    "rotten_tomatoes_rating",
-    "metacritic_rating",
-    "letterboxd_url",
-    "letterboxd_rating",
-    "imdb_url",
-    "booking_ref",
-    "notes",
-    "poster_url",
+# above only covers a brand-new database. Each pair is (column, SQL type);
+# nearly all of these are TEXT, so a plain string is TEXT and only a
+# column needing a different affinity (release_year) spells it out.
+_MIGRATED_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("caldav_uid", "TEXT"),
+    ("imdb_rating", "TEXT"),
+    ("rotten_tomatoes_rating", "TEXT"),
+    ("metacritic_rating", "TEXT"),
+    ("letterboxd_url", "TEXT"),
+    ("letterboxd_rating", "TEXT"),
+    ("imdb_url", "TEXT"),
+    ("booking_ref", "TEXT"),
+    ("notes", "TEXT"),
+    ("poster_url", "TEXT"),
+    ("director", "TEXT"),
+    ("actors", "TEXT"),
+    ("genre", "TEXT"),
+    ("release_year", "INTEGER"),
 )
 
 _MIGRATED_VENUE_COLUMNS = (
@@ -114,6 +124,10 @@ class Entry:
     booking_ref: str | None = None
     notes: str | None = None
     poster_url: str | None = None
+    director: str | None = None
+    actors: str | None = None
+    genre: str | None = None
+    release_year: int | None = None
 
 
 _ENTRY_COLUMNS = (
@@ -134,6 +148,10 @@ _ENTRY_COLUMNS = (
     "booking_ref",
     "notes",
     "poster_url",
+    "director",
+    "actors",
+    "genre",
+    "release_year",
 )
 
 
@@ -162,6 +180,10 @@ def _row_to_entry(row: tuple[Any, ...]) -> Entry:
         booking_ref=values["booking_ref"],
         notes=values["notes"],
         poster_url=values["poster_url"],
+        director=values["director"],
+        actors=values["actors"],
+        genre=values["genre"],
+        release_year=values["release_year"],
     )
 
 
@@ -184,9 +206,9 @@ class Store:
 
     def _migrate(self) -> None:
         columns = {row[1] for row in self._conn.execute("PRAGMA table_info(entries)")}
-        for column in _MIGRATED_COLUMNS:
+        for column, sql_type in _MIGRATED_COLUMNS:
             if column not in columns:
-                self._conn.execute(f"ALTER TABLE entries ADD COLUMN {column} TEXT")
+                self._conn.execute(f"ALTER TABLE entries ADD COLUMN {column} {sql_type}")
         # Not UNIQUE: Pathé's own uniqueness guarantee for booking numbers
         # is unconfirmed - a plain index plus the caller's own confirmation
         # step is the safety net instead of a write that can fail outright.
@@ -384,6 +406,10 @@ class Store:
         booking_ref: str | None = _UNSET,
         notes: str | None = _UNSET,
         poster_url: str | None = _UNSET,
+        director: str | None = _UNSET,
+        actors: str | None = _UNSET,
+        genre: str | None = _UNSET,
+        release_year: int | None = _UNSET,
     ) -> Entry:
         current = self.get_entry(entry_id)
         changes = {
@@ -403,6 +429,10 @@ class Store:
             "booking_ref": booking_ref,
             "notes": notes,
             "poster_url": poster_url,
+            "director": director,
+            "actors": actors,
+            "genre": genre,
+            "release_year": release_year,
         }
         # changes is a heterogeneous dict by design (the _UNSET-sentinel
         # pattern needs one dict covering every field) - mypy can't verify

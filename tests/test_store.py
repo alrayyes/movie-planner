@@ -411,6 +411,78 @@ def test_update_entry_sets_poster_url(store: Store) -> None:
     assert reloaded.poster_url == "https://m.media-amazon.com/images/dune-poster.jpg"
 
 
+def test_new_entry_has_no_director_actors_genre_or_release_year(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+
+    assert entry.director is None
+    assert entry.actors is None
+    assert entry.genre is None
+    assert entry.release_year is None
+
+
+def test_update_entry_sets_director_actors_genre_and_release_year(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+
+    updated = store.update_entry(
+        entry.id,
+        director="Denis Villeneuve",
+        actors="Timothée Chalamet, Rebecca Ferguson, Zendaya",
+        genre="Action, Adventure, Drama",
+        release_year=2021,
+    )
+
+    assert updated.director == "Denis Villeneuve"
+    assert updated.actors == "Timothée Chalamet, Rebecca Ferguson, Zendaya"
+    assert updated.genre == "Action, Adventure, Drama"
+    assert updated.release_year == 2021
+    reloaded = store.get_entry(entry.id)
+    assert reloaded.director == "Denis Villeneuve"
+    assert reloaded.actors == "Timothée Chalamet, Rebecca Ferguson, Zendaya"
+    assert reloaded.genre == "Action, Adventure, Drama"
+    assert reloaded.release_year == 2021
+
+
+def test_migrates_a_database_created_before_director_actors_genre_and_release_year_existed(
+    tmp_path: Path,
+) -> None:
+    import sqlite3
+
+    db_path = tmp_path / "movies.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE media (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            is_physical_place INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE venues (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+        CREATE TABLE entries (
+            id INTEGER PRIMARY KEY, title TEXT NOT NULL, date TEXT NOT NULL,
+            start_time TEXT, end_time TEXT,
+            medium_id INTEGER NOT NULL REFERENCES media(id),
+            venue_id INTEGER REFERENCES venues(id)
+        );
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    s = Store(db_path)
+    try:
+        medium = s.add_medium("cinema", is_physical_place=True)
+        entry = s.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+        assert entry.director is None
+        assert entry.release_year is None
+        updated = s.update_entry(entry.id, director="Denis Villeneuve", release_year=2021)
+        assert updated.director == "Denis Villeneuve"
+        assert updated.release_year == 2021
+    finally:
+        s.close()
+
+
 def test_update_entry_sets_imdb_url(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
