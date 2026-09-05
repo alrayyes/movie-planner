@@ -30,8 +30,12 @@ def build_description(entry: Entry, *, screening_details: str | None = None) -> 
     decision.
     """
     lines: list[str] = []
-    if entry.imdb_rating:
+    if entry.imdb_rating and entry.imdb_url:
+        lines.append(f"IMDb: {entry.imdb_rating} ({entry.imdb_url})")
+    elif entry.imdb_rating:
         lines.append(f"IMDb: {entry.imdb_rating}")
+    elif entry.imdb_url:
+        lines.append(f"IMDb: {entry.imdb_url}")
     if entry.rotten_tomatoes_rating:
         lines.append(f"Rotten Tomatoes: {entry.rotten_tomatoes_rating}")
     if entry.metacritic_rating:

@@ -173,6 +173,22 @@ def test_build_description_with_only_some_fields() -> None:
     assert description == "IMDb: 8.5/10"
 
 
+def test_build_description_includes_the_imdb_link_alongside_the_rating() -> None:
+    entry = _entry(imdb_rating="8.5/10", imdb_url="https://www.imdb.com/title/tt1160419/")
+
+    description = build_description(entry)
+
+    assert description == "IMDb: 8.5/10 (https://www.imdb.com/title/tt1160419/)"
+
+
+def test_build_description_includes_the_imdb_link_with_no_rating() -> None:
+    entry = _entry(imdb_url="https://www.imdb.com/title/tt1160419/")
+
+    description = build_description(entry)
+
+    assert description == "IMDb: https://www.imdb.com/title/tt1160419/"
+
+
 # --- CalendarClient: task 4.1, wrapping a caldav.Calendar-like object ---
 
 

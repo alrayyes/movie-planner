@@ -83,6 +83,22 @@ pushed, with no description set.
   is pushed
 - **THEN** the pushed VEVENT has no description
 
+### Requirement: IMDb link is fetched and included automatically
+When an OMDb lookup matches, the system SHALL derive `imdb_url` from the
+match's IMDb ID and store it, unless the entry already has a manually-set
+`imdb_url`, which SHALL never be overwritten. The pushed description's
+`IMDb:` line SHALL include this link alongside the rating when both are
+present.
+
+#### Scenario: A fresh OMDb match with no existing link
+- **WHEN** an entry with no `imdb_url` gets an OMDb match
+- **THEN** `imdb_url` is set to `https://www.imdb.com/title/<id>/` and the
+  pushed description's `IMDb:` line includes it
+
+#### Scenario: An entry with a manually-set link
+- **WHEN** an entry that already has an `imdb_url` gets an OMDb match
+- **THEN** the existing `imdb_url` is left unchanged
+
 ### Requirement: Refresh recomputes and re-pushes every entry
 The system SHALL provide a refresh operation that, for every logged
 entry, fetches OMDb ratings when the entry does not already have them,

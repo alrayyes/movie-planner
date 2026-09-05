@@ -88,6 +88,16 @@ def test_lookup_missing_rating_source_is_none() -> None:
     assert ratings.imdb == "8.0/10"
     assert ratings.rotten_tomatoes is None
     assert ratings.metacritic is None
+    assert ratings.imdb_id is None
+
+
+def test_lookup_returns_the_imdb_id() -> None:
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    ratings = client.lookup(title="Dune")
+
+    assert ratings is not None
+    assert ratings.imdb_id == "tt1160419"
 
 
 def test_lookup_caches_successful_matches() -> None:
@@ -151,6 +161,28 @@ def test_fetch_and_store_ratings_on_a_match(store: Store) -> None:
     assert updated.rotten_tomatoes_rating == "83%"
     assert updated.metacritic_rating == "74/100"
     assert store.get_entry(entry.id).imdb_rating == "8.0/10"
+
+
+def test_fetch_and_store_ratings_sets_imdb_url_from_the_imdb_id(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    updated, _ = fetch_and_store_ratings(store, client, entry)
+
+    assert updated.imdb_url == "https://www.imdb.com/title/tt1160419/"
+    assert store.get_entry(entry.id).imdb_url == "https://www.imdb.com/title/tt1160419/"
+
+
+def test_fetch_and_store_ratings_does_not_overwrite_a_manual_imdb_url(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.update_entry(entry.id, imdb_url="https://www.imdb.com/title/tt-manual/")
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    updated, _ = fetch_and_store_ratings(store, client, entry)
+
+    assert updated.imdb_url == "https://www.imdb.com/title/tt-manual/"
 
 
 def test_fetch_and_store_ratings_on_no_match(store: Store) -> None:
