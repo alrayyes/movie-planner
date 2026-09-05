@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.4.0...movie-planner-v1.5.0) (2026-09-05)
+
+
+### Features
+
+* **docker:** buildable pathe-mail-import image, usage docs, man pages ([#155](https://github.com/alrayyes/movie-planner/issues/155)) ([ba3fcdf](https://github.com/alrayyes/movie-planner/commit/ba3fcdf14ef5ec479a496ea0a16e6fd04396726f))
+
 ## [1.4.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.3.0...movie-planner-v1.4.0) (2026-09-05)
 
 
