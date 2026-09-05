@@ -121,6 +121,48 @@ mailbox.
 - **THEN** both runs produce the same set of rows, independent of
   whether the first run's output was ever imported
 
+### Requirement: Scope a run to a date range
+The system SHALL accept an optional `--since`/`--until` date range and
+an optional "N seconds/minutes/hours ago" relative form for `--since`,
+and SHALL restrict the search to messages within that range when given.
+Omitting both SHALL search the entire mail source, unchanged from
+today's behavior. The tool itself SHALL NOT persist any watermark
+between runs - a caller (a cron job, say) computing `--since` itself
+from when it last ran is what makes a scoped run possible, not state
+the tool keeps.
+
+#### Scenario: Scoped run via a cron job
+- **WHEN** the tool runs with `--since "1 hour ago"`
+- **THEN** only messages from within that window are searched, so a
+  cron job running hourly only re-processes its own window each time
+
+#### Scenario: No range given
+- **WHEN** the tool runs with neither `--since` nor `--until`
+- **THEN** the entire configured mail source is searched, as today
+
+### Requirement: Support composition as a pipe, not only a single command
+The system SHALL support an alternate mode that emits each matched
+message's envelope to stdout (one JSON object per line) instead of
+dispatching to a translation script itself, so it can be the first
+stage of a shell pipe (`fetch --envelopes-only | pathe-translate |
+movie-planner import`) as well as run as a single self-contained
+command. A translation script run standalone this way SHALL write an
+unrecognized envelope's diagnostic to stderr rather than dropping it
+silently, since no coordinating process is collecting a review table
+for it in this mode.
+
+#### Scenario: Piped composition
+- **WHEN** the fetch tool runs in envelope-only mode, piped into a
+  translation script, piped into `movie-planner import`
+- **THEN** the same bookings end up imported as running the fetch tool
+  as a single self-contained command would produce
+
+#### Scenario: Unrecognized envelope in piped mode
+- **WHEN** a translation script run standalone receives an envelope it
+  doesn't recognize
+- **THEN** it writes a diagnostic to stderr and emits nothing to stdout
+  for that envelope, leaving the pipe's data stream uninterrupted
+
 ### Requirement: Ship as its own container image
 The system SHALL be published as a Docker image separate from
 `movie-planner`'s own image, sharing no runtime container with it, so

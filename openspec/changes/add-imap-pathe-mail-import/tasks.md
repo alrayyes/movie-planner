@@ -44,6 +44,10 @@
   (not just a hand-written fixture) that its default mbox format is
   actually readable by the mbox adapter as claimed in the spec - if it
   isn't, correct the spec rather than leaving an unverified claim in it
+- [ ] 2.9 Add `--since`/`--until` and a relative "N seconds/minutes/
+  hours ago" form for `--since`, scoping the search on both adapters;
+  verify a fake client/mbox fixture only returns messages inside the
+  given window, and that omitting both searches everything (unchanged)
 
 ## 3. Chain dispatch and translation scripts
 
@@ -131,3 +135,23 @@
   quality task, not specific to Pathé mail import, so may land as its
   own separate PR/issue rather than folded into #140 - confirm with the
   user before doing the split
+
+## 8. Piped composition (fetch | translate | import)
+
+- [ ] 8.1 Add an envelope-only output mode to the fetch tool (one JSON
+  envelope per line on stdout, no dispatch to any translation script);
+  verify its output is valid input to the Pathé translation script run
+  standalone
+- [ ] 8.2 Update the Pathé translation script (and the dispatch
+  contract generally) so "doesn't recognize this envelope" writes a
+  diagnostic to stderr and emits nothing to stdout when run standalone,
+  distinct from the exit-code signal used when invoked internally by
+  the fetch tool's single-command mode; verify both call shapes
+- [ ] 8.3 `movie-planner import`: accept no file path, reading JSON
+  from stdin instead - a bare object (one row) or an array; verify
+  both shapes, and that a file path argument still works unchanged
+  with stdin untouched
+- [ ] 8.4 End-to-end: verify `fetch --envelopes-only | pathe-translate
+  | movie-planner import` on a fixture mailbox produces the same
+  entries as running the fetch tool as one command against the same
+  fixture and then importing its output file
