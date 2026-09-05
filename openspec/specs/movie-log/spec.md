@@ -28,12 +28,19 @@ SHALL persist the entry to the local store.
 ### Requirement: User-editable medium and venue lists
 The system SHALL let the user add, list, and remove values from the
 medium list and the venue list, and SHALL offer only currently-defined
-values, plus an option to add a new one, when prompting.
+values, plus an option to add a new one, when prompting. A venue whose
+name matches a hardcoded chain/location table SHALL have its chain,
+city, and country filled in automatically; a venue that doesn't match
+gets none of that, never a guess.
 
 #### Scenario: Adding a new venue
 - **WHEN** the user adds venue "Starlight Cinema" via the locations command
 - **THEN** "Starlight Cinema" appears as a selectable venue on subsequent log
   entries
+
+#### Scenario: Adding a venue matching the chain/location table
+- **WHEN** the user adds a venue whose name matches the hardcoded table
+- **THEN** the venue's chain, city, and country are set automatically
 
 #### Scenario: Removing a medium in use
 - **WHEN** the user attempts to remove a medium that existing entries
@@ -43,19 +50,25 @@ values, plus an option to add a new one, when prompting.
 
 ### Requirement: List logged entries
 The system SHALL let the user list logged entries showing title, date,
-medium, and venue, optionally filtered by date range or medium.
+medium, and venue, optionally filtered by date range, medium, venue
+chain, or venue city.
 
 #### Scenario: Listing all entries
 - **WHEN** the user runs the list command with no filters
 - **THEN** every logged entry is shown, ordered by date
 
+#### Scenario: Filtering by chain or city
+- **WHEN** the user lists entries filtered by a venue chain or city
+- **THEN** only entries at a matching venue are shown
+
 ### Requirement: Show one entry's full metadata
 The system SHALL let the user show a single logged entry's full
-metadata - ratings, links, venue, times - in a structured, labeled
-layout, and SHALL render its poster inline when the terminal supports
-the iTerm2 or Kitty inline-image protocol. The poster is fetched live
-from OMDb at display time using the entry's stored IMDb ID, not
-persisted on the entry.
+metadata - ratings, links, venue (including its chain and location,
+when known), times - in a structured, labelled layout, and SHALL
+render its poster inline when the terminal supports the iTerm2 or
+Kitty inline-image protocol. The poster is fetched live from OMDb at
+display time using the entry's stored IMDb ID, not persisted on the
+entry.
 
 #### Scenario: Showing an entry with ratings and links
 - **WHEN** the user shows an entry with ratings and a Letterboxd link

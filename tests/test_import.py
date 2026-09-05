@@ -169,7 +169,7 @@ def test_run_import_creates_entries_and_resolves_medium_and_venue(store: Store) 
     assert [v.name for v in store.list_venues()] == ["Grand Vista Cinema"]
 
 
-def test_run_import_reports_imported_entries_with_venue(store: Store) -> None:
+def test_run_import_creates_and_links_the_venue(store: Store) -> None:
     rows = [
         ParsedRow(
             row_number=1,
@@ -188,7 +188,9 @@ def test_run_import_reports_imported_entries_with_venue(store: Store) -> None:
     assert len(summary.imported_entries) == 1
     imported = summary.imported_entries[0]
     assert imported.entry.title == "The Clockmaker's Daughter"
-    assert imported.venue == "Grand Vista Cinema"
+    (venue,) = store.list_venues()
+    assert venue.name == "Grand Vista Cinema"
+    assert imported.entry.venue_id == venue.id
 
 
 def test_run_import_reuses_existing_medium_and_venue(store: Store) -> None:

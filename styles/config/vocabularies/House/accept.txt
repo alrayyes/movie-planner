@@ -51,3 +51,8 @@ GHCR
 pipx
 nixpkgs
 Sixel
+hardcoded
+geocodable
+geocoding
+backfilled
+GSC's?

@@ -2,6 +2,7 @@ from datetime import time
 from pathlib import Path
 
 import httpx
+import icalendar
 import pytest
 from fakes import FakeCalendar
 from fixtures import PATHE_BOOKING_REF, PATHE_EMAIL_PLAIN
@@ -117,6 +118,36 @@ def test_log_creates_entry_and_syncs_to_calendar(
     assert entry.title == "Dune"
     assert entry.caldav_uid is not None
     assert entry.caldav_uid in calendar.events_by_uid
+    store.close()
+
+
+def test_log_pushes_a_known_venues_chain_and_location(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Tuschinski",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "LOCATION:Tuschinski\\, Amsterdam\\, Netherlands" in ical_text
+    assert "Chain: Pathé" in ical_text
     store.close()
 
 
@@ -326,6 +357,28 @@ def test_list_shows_logged_entries(
     assert "Dune" in result.output
     assert "cinema" in result.output
     assert "Grand Vista Cinema" in result.output
+
+
+def test_list_filtered_by_chain(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    _log(config_path, "Dune", "2026-01-01", venue="Tuschinski")
+    _log(config_path, "Solstice Run", "2026-01-02", venue="Eye")
+
+    result = runner.invoke(app, ["--config", str(config_path), "list", "--chain", "Pathé"])
+
+    assert result.exit_code == 0, result.output
+    assert "Dune" in result.output
+    assert "Solstice Run" not in result.output
+
+
+def test_list_filtered_by_city_with_no_matching_venues_reports_no_entries(
+    config_path: Path,
+) -> None:
+    result = runner.invoke(app, ["--config", str(config_path), "list", "--city", "Nowhere"])
+
+    assert result.exit_code == 0, result.output
+    assert "no entries" in result.output.lower()
 
 
 # --- show ---
@@ -1061,7 +1114,14 @@ def test_from_pathe_email_description_includes_screening_details(
     store = _store(config_path)
     (entry,) = store.list_entries()
     assert entry.caldav_uid is not None
-    assert "Auditorium 1 DOLBY - Row 5 Seat 17" in calendar.events_by_uid[entry.caldav_uid].data
+    # Parsed rather than a raw substring check on the wire text: a long
+    # enough DESCRIPTION gets RFC 5545 line-folded, and where the fold
+    # lands shifts with unrelated content (LOCATION length, other
+    # description lines) - parsing unfolds it the same way a real
+    # CalDAV client would.
+    cal = icalendar.Calendar.from_ical(calendar.events_by_uid[entry.caldav_uid].data)
+    (event,) = [c for c in cal.subcomponents if c.name == "VEVENT"]
+    assert "Auditorium 1 DOLBY - Row 5 Seat 17" in str(event["description"])
     store.close()
 
 
@@ -1321,21 +1381,21 @@ def test_refresh_with_no_entries_reports_nothing_to_do(config_path: Path) -> Non
     assert "no entries" in result.output.lower()
 
 
-def _log(config_path: Path, title: str, entry_date: str) -> None:
-    result = runner.invoke(
-        app,
-        [
-            "--config",
-            str(config_path),
-            "log",
-            "--title",
-            title,
-            "--date",
-            entry_date,
-            "--medium",
-            "cinema",
-        ],
-    )
+def _log(config_path: Path, title: str, entry_date: str, *, venue: str | None = None) -> None:
+    args = [
+        "--config",
+        str(config_path),
+        "log",
+        "--title",
+        title,
+        "--date",
+        entry_date,
+        "--medium",
+        "cinema",
+    ]
+    if venue:
+        args += ["--venue", venue]
+    result = runner.invoke(app, args)
     assert result.exit_code == 0, result.output
 
 

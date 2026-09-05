@@ -18,7 +18,7 @@ import base64
 import os
 from typing import Literal
 
-from movie_planner.store import Entry
+from movie_planner.store import Entry, Venue
 
 TerminalImageProtocol = Literal["iterm2", "kitty"]
 
@@ -59,7 +59,7 @@ def _render_kitty(image_bytes: bytes) -> str:
     return "".join(parts)
 
 
-def format_entry(entry: Entry, *, medium_name: str, venue_name: str | None) -> str:
+def format_entry(entry: Entry, *, medium_name: str, venue: Venue | None) -> str:
     lines = [f"{entry.title} ({entry.date})"]
     if entry.start_time and entry.end_time:
         lines.append(
@@ -69,8 +69,14 @@ def format_entry(entry: Entry, *, medium_name: str, venue_name: str | None) -> s
     elif entry.start_time:
         lines.append(f"  {entry.start_time.isoformat(timespec='minutes')}")
     location = f"  {medium_name}"
-    if venue_name:
-        location += f" @ {venue_name}"
+    if venue:
+        location += f" @ {venue.name}"
+        if venue.chain:
+            location += f" ({venue.chain})"
+        if venue.city:
+            location += f" - {venue.city}"
+            if venue.country:
+                location += f", {venue.country}"
     lines.append(location)
 
     if entry.imdb_rating and entry.imdb_url:
@@ -86,5 +92,7 @@ def format_entry(entry: Entry, *, medium_name: str, venue_name: str | None) -> s
     if entry.letterboxd_url:
         suffix = f" ({entry.letterboxd_rating})" if entry.letterboxd_rating else ""
         lines.append(f"  Letterboxd: {entry.letterboxd_url}{suffix}")
+    if entry.notes:
+        lines.append(f"  Notes: {entry.notes}")
 
     return "\n".join(lines)

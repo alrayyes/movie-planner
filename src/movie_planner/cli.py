@@ -20,7 +20,7 @@ from movie_planner.duplicates import find_duplicate
 from movie_planner.importers import parse_csv, parse_json, run_import
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings
 from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
-from movie_planner.store import Entry, Store, StoreError
+from movie_planner.store import Entry, Store, StoreError, Venue
 
 app = typer.Typer(help="movie-planner: log watched movies and sync them to a calendar.")
 locations_app = typer.Typer(help="Manage the medium and venue lists.")
@@ -228,18 +228,27 @@ def _connect_calendar(cfg: config_module.Config) -> CalendarClient:
     )
 
 
+def _venue_for_entry(store: Store, entry: Entry) -> Venue | None:
+    if entry.venue_id is None:
+        return None
+    return next((v for v in store.list_venues() if v.id == entry.venue_id), None)
+
+
 def _push_new_or_warn(
     cfg: config_module.Config,
     store: Store,
     entry: Entry,
     *,
-    venue: str | None,
     screening_details: str | None = None,
 ) -> Entry:
+    venue = _venue_for_entry(store, entry)
     try:
         client = _connect_calendar(cfg)
         return CalendarSync(store, client).push_new(
-            entry, venue=venue, screening_details=screening_details
+            entry,
+            venue=_venue_location(venue),
+            chain=venue.chain if venue else None,
+            screening_details=screening_details,
         )
     except Exception as e:  # noqa: BLE001 - any connect/push failure is a warning
         typer.secho(
@@ -254,15 +263,18 @@ def _push_update_or_warn(
     store: Store,
     entry: Entry,
     *,
-    venue: str | None,
     screening_details: str | None = None,
 ) -> None:
     if entry.caldav_uid is None:
         return
+    venue = _venue_for_entry(store, entry)
     try:
         client = _connect_calendar(cfg)
         CalendarSync(store, client).push_update(
-            entry, venue=venue, screening_details=screening_details
+            entry,
+            venue=_venue_location(venue),
+            chain=venue.chain if venue else None,
+            screening_details=screening_details,
         )
     except Exception as e:  # noqa: BLE001
         typer.secho(
@@ -276,7 +288,6 @@ def _finalize_entry(
     store: Store,
     entry: Entry,
     *,
-    venue: str | None,
     fetch_metadata: bool,
     imdb_id: str | None = None,
     screening_details: str | None = None,
@@ -290,10 +301,8 @@ def _finalize_entry(
     if fetch_metadata:
         entry = _fetch_metadata_or_warn(cfg, store, entry, imdb_id=imdb_id)
     if entry.caldav_uid is None:
-        return _push_new_or_warn(
-            cfg, store, entry, venue=venue, screening_details=screening_details
-        )
-    _push_update_or_warn(cfg, store, entry, venue=venue, screening_details=screening_details)
+        return _push_new_or_warn(cfg, store, entry, screening_details=screening_details)
+    _push_update_or_warn(cfg, store, entry, screening_details=screening_details)
     return entry
 
 
@@ -324,11 +333,18 @@ def _fetch_metadata_or_warn(
     return updated
 
 
-def _venue_name(store: Store, entry: Entry) -> str | None:
-    if entry.venue_id is None:
+def _venue_location(venue: Venue | None) -> str | None:
+    """Builds the VEVENT LOCATION string: just the venue name, or, for a
+    venue matching the hardcoded chain/city/country table, "name, city,
+    country" - a real, geocodable address string most calendar clients
+    (Google Calendar, Apple Calendar) already try to map from LOCATION,
+    which is why chain isn't folded in here too - see docs/calendar-schema.md.
+    """
+    if venue is None:
         return None
-    venue = next((v for v in store.list_venues() if v.id == entry.venue_id), None)
-    return venue.name if venue else None
+    if venue.city and venue.country:
+        return f"{venue.name}, {venue.city}, {venue.country}"
+    return venue.name
 
 
 # --- log: requirement "Log a watched movie interactively" ---
@@ -434,9 +450,7 @@ def log(
         if notes:
             entry = store.update_entry(entry.id, notes=notes)
 
-        entry = _finalize_entry(
-            cfg, store, entry, venue=venue, fetch_metadata=not no_metadata, imdb_id=imdb_id
-        )
+        entry = _finalize_entry(cfg, store, entry, fetch_metadata=not no_metadata, imdb_id=imdb_id)
 
         typer.echo(f"Logged '{title}' as entry {entry.id}.")
     finally:
@@ -456,6 +470,10 @@ def list_entries(
         str | None, typer.Option("--to", help="Only entries on or before this date.")
     ] = None,
     medium: Annotated[str | None, typer.Option(help="Only entries with this medium.")] = None,
+    chain: Annotated[
+        str | None, typer.Option(help="Only entries at a venue in this chain.")
+    ] = None,
+    city: Annotated[str | None, typer.Option(help="Only entries at a venue in this city.")] = None,
 ) -> None:
     """List logged entries."""
     cfg = _cfg(ctx)
@@ -471,10 +489,23 @@ def list_entries(
                 return
             medium_id = match.id
 
+        venue_ids = None
+        if chain is not None or city is not None:
+            matches = [
+                v
+                for v in venues_by_id.values()
+                if (chain is None or v.chain == chain) and (city is None or v.city == city)
+            ]
+            if not matches:
+                typer.echo("No entries.")
+                return
+            venue_ids = [v.id for v in matches]
+
         entries = store.list_entries(
             date_from=_parse_date(date_from) if date_from else None,
             date_to=_parse_date(date_to) if date_to else None,
             medium_id=medium_id,
+            venue_ids=venue_ids,
         )
         if not entries:
             typer.echo("No entries.")
@@ -533,8 +564,8 @@ def show(
         media_by_id = {m.id: m for m in store.list_media()}
         venues_by_id = {v.id: v for v in store.list_venues()}
         medium_name = media_by_id[entry.medium_id].name
-        venue_name = venues_by_id[entry.venue_id].name if entry.venue_id else None
-        typer.echo(format_entry(entry, medium_name=medium_name, venue_name=venue_name))
+        venue = venues_by_id[entry.venue_id] if entry.venue_id else None
+        typer.echo(format_entry(entry, medium_name=medium_name, venue=venue))
 
         protocol = detect_terminal_image_protocol()
         if protocol is None:
@@ -610,7 +641,7 @@ def update(
         if imdb_id is not None:
             updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=imdb_id)
 
-        _push_update_or_warn(cfg, store, updated, venue=_venue_name(store, updated))
+        _push_update_or_warn(cfg, store, updated)
         typer.echo(f"Updated entry {entry_id}.")
     finally:
         store.close()
@@ -768,7 +799,6 @@ def import_command(
                 cfg,
                 store,
                 imported.entry,
-                venue=imported.venue,
                 fetch_metadata=not no_metadata,
             )
 
@@ -884,7 +914,6 @@ def from_pathe_email(
             cfg,
             store,
             entry,
-            venue=booking.cinema,
             fetch_metadata=not no_metadata,
             screening_details=booking.screening_details,
         )
@@ -909,9 +938,7 @@ def sync_retry(ctx: typer.Context) -> None:
             typer.echo("Nothing to retry.")
             return
         for entry in unsynced:
-            _finalize_entry(
-                cfg, store, entry, venue=_venue_name(store, entry), fetch_metadata=False
-            )
+            _finalize_entry(cfg, store, entry, fetch_metadata=False)
         retried = sum(1 for e in unsynced if store.get_entry(e.id).caldav_uid is not None)
         typer.echo(f"Retried {len(unsynced)} entries, {retried} synced successfully.")
     finally:
@@ -978,9 +1005,7 @@ def sync_refresh(
         fetched = 0
         for entry in entries:
             fetch_metadata = force or entry.imdb_rating is None
-            refreshed = _finalize_entry(
-                cfg, store, entry, venue=_venue_name(store, entry), fetch_metadata=fetch_metadata
-            )
+            refreshed = _finalize_entry(cfg, store, entry, fetch_metadata=fetch_metadata)
             if fetch_metadata and refreshed.imdb_rating is not None:
                 fetched += 1
 
