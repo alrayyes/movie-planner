@@ -7,8 +7,8 @@ import pytest
 from fakes import FakeCalendar
 
 from movie_planner.calendar_sync import CalendarClient, CalendarSync
-from movie_planner.omdb import OmdbClient, fetch_and_store_ratings
-from movie_planner.store import Store
+from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
+from movie_planner.store import Entry, Store
 
 MATCH_RESPONSE = {
     "Title": "Dune",
@@ -150,6 +150,36 @@ def test_lookup_caches_no_match_too() -> None:
     client.lookup(title="Missing")
 
     assert call_count == 1
+
+
+def _entry(**overrides: object) -> Entry:
+    defaults: dict[str, object] = {
+        "id": 1,
+        "title": "Dune",
+        "date": date(2026, 1, 1),
+        "medium_id": 1,
+    }
+    defaults.update(overrides)
+    return Entry(**defaults)  # type: ignore[arg-type]
+
+
+def test_needs_omdb_fetch_with_no_rating() -> None:
+    assert needs_omdb_fetch(_entry()) is True
+
+
+def test_needs_omdb_fetch_with_rating_but_no_poster() -> None:
+    entry = _entry(imdb_rating="8.5/10", poster_url=None)
+
+    assert needs_omdb_fetch(entry) is True
+
+
+def test_needs_omdb_fetch_with_rating_and_poster_is_false() -> None:
+    entry = _entry(
+        imdb_rating="8.5/10",
+        poster_url="https://m.media-amazon.com/images/dune-poster.jpg",
+    )
+
+    assert needs_omdb_fetch(entry) is False
 
 
 def test_lookup_requires_title_or_imdb_id() -> None:
