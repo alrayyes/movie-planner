@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.21.3...movie-planner-v1.0.0) (2026-09-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **import:** a CSV/JSON row supplying booking_ref no longer has it stored. from-pathe-email is unaffected - it never went through this code path.
+
+### Features
+
+* **import:** drop booking_ref, add an opaque source field ([#143](https://github.com/alrayyes/movie-planner/issues/143)) ([27f3cde](https://github.com/alrayyes/movie-planner/commit/27f3cdea8b4018375bae0310677fbc20475fe49c))
+
 ## [0.21.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.21.2...movie-planner-v0.21.3) (2026-09-05)
 
 
