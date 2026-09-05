@@ -24,6 +24,25 @@ in the description - see `calendar-sync`'s spec.
 - **THEN** the entry is stored without ratings, and the user is told no
   match was found
 
+### Requirement: Watched-year hint disambiguates a title search
+When looking up by title (not IMDb ID) for an entry with a known
+watched date, the system SHALL first try OMDb's title search scoped to
+that watched year, and SHALL fall back to a plain title-only search
+when the year-scoped search finds nothing - the watched year is a
+disambiguation hint, not a strict filter, since a re-watch of an older
+film has a watched year that's never the release year.
+
+#### Scenario: Year-scoped search finds a match
+- **WHEN** a title search scoped to the entry's watched year finds a
+  match
+- **THEN** that match is used, with no further OMDb call
+
+#### Scenario: Year-scoped search finds nothing
+- **WHEN** a title search scoped to the entry's watched year finds no
+  match
+- **THEN** the system falls back to a plain title-only search instead
+  of reporting no match
+
 ### Requirement: Manual Letterboxd link/rating
 The system SHALL let the user attach a Letterboxd URL and, optionally,
 a rating to an entry, entered by hand rather than fetched.
