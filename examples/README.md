@@ -15,6 +15,13 @@ known time at all.
   OMDb lookup for that row entirely once every OMDb-derived field is
   present - useful for re-importing a previously enriched export without
   burning a fresh API call.
+- [`movies.schema.json`](movies.schema.json) is the JSON Schema for one
+  row - required/optional fields, types, and the date/time formats
+  expected. It's the same field-name shape whether the row came from
+  `movies.json` or `movies.csv`'s header row; the schema's own
+  `description` covers the one difference (CSV values are always plain
+  text). [`movie-planner-web`](https://github.com/alrayyes/movie-planner-web)
+  reads this file's field names to stay compatible.
 
 Try one:
 
