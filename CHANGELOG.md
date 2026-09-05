@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.21.1...movie-planner-v0.21.2) (2026-09-05)
+
+
+### Documentation
+
+* link movie-planner-web and add a --help screenshot ([#135](https://github.com/alrayyes/movie-planner/issues/135)) ([99000dd](https://github.com/alrayyes/movie-planner/commit/99000dd3735513d17caa542089e2d3e6c2b2843f))
+
 ## [0.21.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.21.0...movie-planner-v0.21.1) (2026-09-05)
 
 
