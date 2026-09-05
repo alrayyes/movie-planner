@@ -85,6 +85,15 @@ def format_entry(entry: Entry, *, medium_name: str, venue: Venue | None) -> str:
                 location += f", {venue.country}"
     lines.append(location)
 
+    if entry.release_year:
+        lines.append(f"  Year: {entry.release_year}")
+    if entry.director:
+        lines.append(f"  Director: {entry.director}")
+    if entry.genre:
+        lines.append(f"  Genre: {entry.genre}")
+    if entry.actors:
+        lines.append(f"  Cast: {entry.actors}")
+
     if entry.imdb_rating and entry.imdb_url:
         lines.append(f"  IMDb: {entry.imdb_rating} ({entry.imdb_url})")
     elif entry.imdb_rating:

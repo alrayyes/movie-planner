@@ -105,8 +105,10 @@ uv run movie-planner sync refresh --date 2026-01-15
 uv run movie-planner sync refresh --force --date 2026-01-15
 ```
 
-`show` prints one entry's full metadata — ratings, links, venue, times —
-in a structured, labelled layout instead of `list`'s single line. On a
+`show` prints one entry's full metadata — ratings, links, venue, times,
+and, where OMDb had them, director, cast, genre, and release year — in
+a structured, labelled layout instead of `list`'s single line, which
+shows the release year alongside the title when known. On a
 terminal identifiable as iTerm2/WezTerm or Kitty/Ghostty, it also renders
 the poster inline — `poster_url` is fetched and stored the same time
 ratings are (`log`, `import`, `sync refresh`), or, for an entry logged

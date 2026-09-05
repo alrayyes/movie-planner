@@ -45,11 +45,19 @@ either.
     `DATE-TIME`.
 - **DESCRIPTION** — optional, omitted entirely (not an empty string)
   when there's nothing to show. See below for its content.
-- **`X-POSTER-URL`** — a non-standard `X-` property (bare `X-NAME`
-  form, matching movie-planner-web's own convention on its read side),
-  present only when the entry has a poster URL. This is movie-planner's
-  first (and so far only) custom property; everything else here is
+- Custom `X-` properties (bare `X-NAME` form, matching
+  movie-planner-web's own convention on its read side), each present
+  only when the entry has that field. Everything else here is
   standard iCalendar.
+  - **`X-POSTER-URL`** — the poster image URL.
+  - **`X-DIRECTOR`** — OMDb's `Director`, verbatim (can itself be a
+    comma-separated list for a co-directed film).
+  - **`X-ACTORS`** — OMDb's `Actors`, a comma-separated string,
+    verbatim - not split into a list.
+  - **`X-GENRE`** — OMDb's `Genre`, also comma-separated, verbatim.
+  - **`X-YEAR`** — the release year, as a plain integer string (for
+    example `2021`) - not the watched date, which is `DTSTART`/`DTEND`
+    instead.
 
 ## DESCRIPTION content
 
@@ -94,10 +102,14 @@ set by hand, which is never overwritten — see
 [`src/movie_planner/omdb.py`](../src/movie_planner/omdb.py)'s
 `fetch_and_store_ratings`.
 
-`poster_url` comes straight from OMDb's own `Poster` field on every
-successful match - no manual-override protection the way `imdb_url`
-has, since there's no way to set one by hand. It's overwritten on
-every fetch, same as the ratings themselves.
+`poster_url`, `director`, `actors`, `genre`, and `release_year` all
+come straight from OMDb's own `Poster`/`Director`/`Actors`/`Genre`/
+`Year` fields on every successful match - no manual-override
+protection the way `imdb_url` has, since there's no way to set any of
+them by hand. All are overwritten on every fetch, same as the ratings
+themselves. `Year` is parsed down to a single four-digit release year
+(OMDb sometimes returns a range like `2019-2023` for a series; the
+first year in it is what's stored).
 
 ## Venue chain/location
 

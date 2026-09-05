@@ -12,6 +12,10 @@ from movie_planner.store import Entry, Store
 
 MATCH_RESPONSE = {
     "Title": "Dune",
+    "Year": "2021",
+    "Director": "Denis Villeneuve",
+    "Actors": "Timothée Chalamet, Rebecca Ferguson, Zendaya",
+    "Genre": "Action, Adventure, Drama",
     "imdbRating": "8.0",
     "Ratings": [
         {"Source": "Internet Movie Database", "Value": "8.0/10"},
@@ -120,6 +124,50 @@ def test_lookup_treats_na_poster_as_no_poster() -> None:
     assert ratings.poster is None
 
 
+def test_lookup_returns_director_actors_genre_and_release_year() -> None:
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    ratings = client.lookup(title="Dune")
+
+    assert ratings is not None
+    assert ratings.director == "Denis Villeneuve"
+    assert ratings.actors == "Timothée Chalamet, Rebecca Ferguson, Zendaya"
+    assert ratings.genre == "Action, Adventure, Drama"
+    assert ratings.release_year == 2021
+
+
+def test_lookup_treats_na_as_none_for_director_actors_and_genre() -> None:
+    response = {**MATCH_RESPONSE, "Director": "N/A", "Actors": "N/A", "Genre": "N/A"}
+    client = _client(lambda request: httpx.Response(200, json=response))
+
+    ratings = client.lookup(title="Dune")
+
+    assert ratings is not None
+    assert ratings.director is None
+    assert ratings.actors is None
+    assert ratings.genre is None
+
+
+def test_lookup_with_no_year_field_has_no_release_year() -> None:
+    response = {k: v for k, v in MATCH_RESPONSE.items() if k != "Year"}
+    client = _client(lambda request: httpx.Response(200, json=response))
+
+    ratings = client.lookup(title="Dune")
+
+    assert ratings is not None
+    assert ratings.release_year is None
+
+
+def test_lookup_parses_a_year_range_as_the_release_year() -> None:
+    response = {**MATCH_RESPONSE, "Year": "2019–2023"}
+    client = _client(lambda request: httpx.Response(200, json=response))
+
+    ratings = client.lookup(title="Dune")
+
+    assert ratings is not None
+    assert ratings.release_year == 2019
+
+
 def test_lookup_caches_successful_matches() -> None:
     call_count = 0
 
@@ -173,11 +221,26 @@ def test_needs_omdb_fetch_with_rating_but_no_poster() -> None:
     assert needs_omdb_fetch(entry) is True
 
 
-def test_needs_omdb_fetch_with_rating_and_poster_is_false() -> None:
-    entry = _entry(
-        imdb_rating="8.5/10",
-        poster_url="https://m.media-amazon.com/images/dune-poster.jpg",
-    )
+_ALL_OMDB_FIELDS: dict[str, object] = {
+    "imdb_rating": "8.5/10",
+    "poster_url": "https://m.media-amazon.com/images/dune-poster.jpg",
+    "director": "Denis Villeneuve",
+    "actors": "Timothée Chalamet, Rebecca Ferguson, Zendaya",
+    "genre": "Action, Adventure, Drama",
+    "release_year": 2021,
+}
+
+
+@pytest.mark.parametrize("missing_field", list(_ALL_OMDB_FIELDS))
+def test_needs_omdb_fetch_with_one_field_missing_is_true(missing_field: str) -> None:
+    fields = {**_ALL_OMDB_FIELDS, missing_field: None}
+    entry = _entry(**fields)
+
+    assert needs_omdb_fetch(entry) is True
+
+
+def test_needs_omdb_fetch_with_every_field_present_is_false() -> None:
+    entry = _entry(**_ALL_OMDB_FIELDS)
 
     assert needs_omdb_fetch(entry) is False
 
@@ -332,6 +395,26 @@ def test_fetch_and_store_ratings_persists_the_poster_url(store: Store) -> None:
     assert (
         store.get_entry(entry.id).poster_url == "https://m.media-amazon.com/images/dune-poster.jpg"
     )
+
+
+def test_fetch_and_store_ratings_persists_director_actors_genre_and_release_year(
+    store: Store,
+) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    updated, _ = fetch_and_store_ratings(store, client, entry)
+
+    assert updated.director == "Denis Villeneuve"
+    assert updated.actors == "Timothée Chalamet, Rebecca Ferguson, Zendaya"
+    assert updated.genre == "Action, Adventure, Drama"
+    assert updated.release_year == 2021
+    stored = store.get_entry(entry.id)
+    assert stored.director == "Denis Villeneuve"
+    assert stored.actors == "Timothée Chalamet, Rebecca Ferguson, Zendaya"
+    assert stored.genre == "Action, Adventure, Drama"
+    assert stored.release_year == 2021
 
 
 def test_fetch_and_store_ratings_does_not_overwrite_a_manual_imdb_url(store: Store) -> None:

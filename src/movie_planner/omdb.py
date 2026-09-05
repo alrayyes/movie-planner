@@ -4,6 +4,7 @@ successful lookups are cached so re-editing an entry doesn't re-fetch a
 title already matched.
 """
 
+import re
 from dataclasses import dataclass
 
 import httpx
@@ -18,6 +19,10 @@ class MovieRatings:
     metacritic: str | None
     imdb_id: str | None = None
     poster: str | None = None
+    director: str | None = None
+    actors: str | None = None
+    genre: str | None = None
+    release_year: int | None = None
 
 
 def needs_omdb_fetch(entry: Entry) -> bool:
@@ -25,10 +30,17 @@ def needs_omdb_fetch(entry: Entry) -> bool:
     not just the rating, so an entry logged before a field like
     `poster_url` existed still gets backfilled by a plain `sync refresh`,
     not just `--force`. Update this alongside adding any future
-    OMDb-derived field (director/genre/etc., issue #88) - it's the one
-    place "does this entry need fetching" is decided.
+    OMDb-derived field - it's the one place "does this entry need
+    fetching" is decided.
     """
-    return entry.imdb_rating is None or entry.poster_url is None
+    return (
+        entry.imdb_rating is None
+        or entry.poster_url is None
+        or entry.director is None
+        or entry.actors is None
+        or entry.genre is None
+        or entry.release_year is None
+    )
 
 
 def _rating(ratings: list[dict[str, object]], source: str) -> str | None:
@@ -37,6 +49,23 @@ def _rating(ratings: list[dict[str, object]], source: str) -> str | None:
             value = entry.get("Value")
             return value if isinstance(value, str) else None
     return None
+
+
+def _na_or(value: object) -> str | None:
+    return value if isinstance(value, str) and value != "N/A" else None
+
+
+_YEAR_RE = re.compile(r"\d{4}")
+
+
+def _parse_release_year(value: object) -> int | None:
+    # OMDb's "Year" is a plain "2021" for a movie, but a range like
+    # "2019-2023" or open-ended "2019-" for a series - take the first
+    # four-digit run either way.
+    if not isinstance(value, str):
+        return None
+    match = _YEAR_RE.search(value)
+    return int(match.group()) if match else None
 
 
 class OmdbClient:
@@ -90,13 +119,16 @@ class OmdbClient:
             return None
 
         response_imdb_id = data.get("imdbID")
-        poster = data.get("Poster")
         ratings = MovieRatings(
             imdb=_rating(data.get("Ratings", []), "Internet Movie Database"),
             rotten_tomatoes=_rating(data.get("Ratings", []), "Rotten Tomatoes"),
             metacritic=_rating(data.get("Ratings", []), "Metacritic"),
             imdb_id=response_imdb_id if isinstance(response_imdb_id, str) else None,
-            poster=poster if isinstance(poster, str) and poster != "N/A" else None,
+            poster=_na_or(data.get("Poster")),
+            director=_na_or(data.get("Director")),
+            actors=_na_or(data.get("Actors")),
+            genre=_na_or(data.get("Genre")),
+            release_year=_parse_release_year(data.get("Year")),
         )
         self._cache[cache_key] = ratings
         return ratings
@@ -127,5 +159,9 @@ def fetch_and_store_ratings(
         metacritic_rating=ratings.metacritic,
         imdb_url=imdb_url,
         poster_url=ratings.poster,
+        director=ratings.director,
+        actors=ratings.actors,
+        genre=ratings.genre,
+        release_year=ratings.release_year,
     )
     return updated, True

@@ -513,7 +513,8 @@ def list_entries(
         for entry in entries:
             medium_name = media_by_id[entry.medium_id].name
             venue_name = venues_by_id[entry.venue_id].name if entry.venue_id else None
-            line = f"{entry.id}  {entry.date}  {entry.title}  [{medium_name}]"
+            title = f"{entry.title} ({entry.release_year})" if entry.release_year else entry.title
+            line = f"{entry.id}  {entry.date}  {title}  [{medium_name}]"
             if venue_name:
                 line += f" @ {venue_name}"
             typer.echo(line)

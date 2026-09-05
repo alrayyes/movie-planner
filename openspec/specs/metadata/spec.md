@@ -8,16 +8,19 @@ and accepting what can't.
 
 ### Requirement: Fetch ratings via OMDb
 The system SHALL fetch IMDb, Rotten Tomatoes, and Metacritic ratings,
-and a poster URL, for a movie from OMDb given a title or IMDb ID, and
-SHALL store all of it against the entry. Unlike ratings, the poster
-URL is pushed to the calendar as a custom `X-POSTER-URL` property, not
-in the description - see `calendar-sync`'s spec.
+a poster URL, and director/actors/genre/release year, for a movie from
+OMDb given a title or IMDb ID, and SHALL store all of it against the
+entry. Unlike ratings, the poster URL and director/actors/genre/year
+are pushed to the calendar as custom `X-POSTER-URL`/`X-DIRECTOR`/
+`X-ACTORS`/`X-GENRE`/`X-YEAR` properties, not in the description - see
+`calendar-sync`'s spec.
 
 #### Scenario: Successful fetch by title
 - **WHEN** the user logs a movie and OMDb returns a match for its title
 - **THEN** the entry is stored with IMDb, Rotten Tomatoes, and
-  Metacritic ratings from that match, and its poster URL if OMDb
-  returned one
+  Metacritic ratings from that match, its poster URL if OMDb returned
+  one, and its director, actors, genre, and release year if OMDb
+  returned them
 
 #### Scenario: No OMDb match
 - **WHEN** OMDb returns no match for the given title

@@ -126,6 +126,36 @@ def test_build_vevent_with_no_description_omits_the_field() -> None:
     assert "description" not in event
 
 
+def test_build_vevent_with_extra_properties() -> None:
+    ical_text = build_vevent(
+        uid="uid-6",
+        title="Dune",
+        entry_date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue=None,
+        extra_properties={"X-DIRECTOR": "Denis Villeneuve", "X-YEAR": "2021"},
+    )
+
+    event = _parse(ical_text)
+    assert str(event["X-DIRECTOR"]) == "Denis Villeneuve"
+    assert str(event["X-YEAR"]) == "2021"
+
+
+def test_build_vevent_with_no_extra_properties_adds_none() -> None:
+    ical_text = build_vevent(
+        uid="uid-7",
+        title="Dune",
+        entry_date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue=None,
+    )
+
+    event = _parse(ical_text)
+    assert "X-DIRECTOR" not in event
+
+
 # --- build_description: task 2.1 ---
 
 
@@ -367,6 +397,61 @@ def test_push_new_includes_poster_url_as_an_x_property(store: Store) -> None:
     assert synced.caldav_uid is not None
     ical_text = calendar.events_by_uid[synced.caldav_uid].data
     assert "X-POSTER-URL:https://m.media-amazon.com/images/dune-poster.jpg" in ical_text
+
+
+def test_push_new_includes_director_actors_genre_and_year_as_x_properties(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.update_entry(
+        entry.id,
+        director="Denis Villeneuve",
+        actors="Timothée Chalamet, Rebecca Ferguson, Zendaya",
+        genre="Action, Adventure, Drama",
+        release_year=2021,
+    )
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-DIRECTOR:Denis Villeneuve" in ical_text
+    assert "X-ACTORS:Timothée Chalamet, Rebecca Ferguson, Zendaya" in ical_text
+    assert "X-GENRE:Action, Adventure, Drama" in ical_text
+    assert "X-YEAR:2021" in ical_text
+
+
+def test_push_new_omits_director_actors_genre_and_year_when_entry_has_none(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-DIRECTOR" not in ical_text
+    assert "X-ACTORS" not in ical_text
+    assert "X-GENRE" not in ical_text
+    assert "X-YEAR" not in ical_text
+
+
+def test_push_update_refreshes_director_actors_genre_and_year(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None)
+    entry = store.update_entry(entry.id, director="Denis Villeneuve", release_year=2021)
+
+    sync.push_update(entry, venue=None)
+
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "X-DIRECTOR:Denis Villeneuve" in ical_text
+    assert "X-YEAR:2021" in ical_text
 
 
 def test_push_new_omits_poster_url_property_when_entry_has_none(store: Store) -> None:
