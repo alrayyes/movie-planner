@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.10.2...movie-planner-v0.11.0) (2026-09-05)
+
+
+### Features
+
+* **cli:** scope sync refresh to a date range or single date ([#90](https://github.com/alrayyes/movie-planner/issues/90)) ([4284819](https://github.com/alrayyes/movie-planner/commit/4284819ec25bd173da8b58b3e6db86131850d7be)), closes [#89](https://github.com/alrayyes/movie-planner/issues/89)
+
 ## [0.10.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.10.1...movie-planner-v0.10.2) (2026-09-03)
 
 
