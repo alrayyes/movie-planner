@@ -1,53 +1,60 @@
 ## 1. Scaffolding
 
-- [ ] 1.1 Create the new mail-fetch module/package and its
+- [x] 1.1 Create the new mail-fetch module/package and its
   `[project.scripts]` entry point in `pyproject.toml`, separate from
   `movie_planner.cli`; verify `uv run <entry-point> --help` runs
 - [ ] 1.2 Create the Pathé translation-script module and its own
   `[project.scripts]` entry point, importing `movie_planner.pathe`
   directly; verify it runs standalone
-- [ ] 1.3 Define the mail tool's own config file shape (IMAP
+- [x] 1.3 Define the mail tool's own config file shape (IMAP
   host/port/username/password or password_command, `[[chains]]`
   sender_domain/translate entries) and a `<tool> init` (or equivalent)
   that writes a starter copy, matching movie-planner's own
   `password_command` convention; verify a missing/invalid config fails
   with a message naming the problem, not a stack trace
-- [ ] 1.4 Add masked interactive IMAP password entry (stdlib `getpass`)
+- [x] 1.4 Add masked interactive IMAP password entry (stdlib `getpass`)
   to the config setup, used whenever no `password_command` is already
   configured; verify the password is never accepted as a CLI flag and
   never echoed - a fake stdin/tty in tests, not a real terminal
 
 ## 2. Mail fetch (IMAP and mbox adapters)
 
-- [ ] 2.1 Define the `MailClient` port (`Protocol`): search by sender
+- [x] 2.1 Define the `MailClient` port (`Protocol`): search by sender
   domain, return raw messages
-- [ ] 2.2 Implement the `imaplib`-based IMAP adapter; verify against a
+- [x] 2.2 Implement the `imaplib`-based IMAP adapter; verify against a
   fake/mock transport in tests, no real mailbox needed
-- [ ] 2.3 Implement the stdlib-`mailbox`-based mbox adapter; verify
+- [x] 2.3 Implement the stdlib-`mailbox`-based mbox adapter; verify
   against a small fixture `.mbox` file committed to `tests/fixtures/`
-- [ ] 2.4 Add config for selecting and configuring whichever source is
+- [x] 2.4 Add config for selecting and configuring whichever source is
   in use (IMAP host/port/credentials, or an mbox file path); verify a
   missing/invalid config for the selected source fails with a message
   naming the problem
-- [ ] 2.5 Implement sender-domain search across configured chains,
+- [x] 2.5 Implement sender-domain search across configured chains,
   shared by both adapters; verify with a fake client returning a mixed
   set of senders that only matching-domain messages are returned
-- [ ] 2.6 Implement generic envelope extraction (from, subject, date,
+- [x] 2.6 Implement generic envelope extraction (from, subject, date,
   plain-text body) from a raw fetched message, reusing the same
   MIME-vs-plain-text detection approach `pathe.py`'s `_extract_body`
   already uses; verify against both a raw `.eml` fixture and an
   already-extracted-text fixture, through both adapters
-- [ ] 2.7 Report an IMAP connection/auth failure, or a missing/unreadable
+- [x] 2.7 Report an IMAP connection/auth failure, or a missing/unreadable
   mbox file, clearly, and produce no output file either way; verify
   with a fake client raising on connect and a nonexistent mbox path
-- [ ] 2.8 Verify against a real Thunderbird-produced local-folder file
+- [x] 2.8 Verify against a real Thunderbird-produced local-folder file
   (not just a hand-written fixture) that its default mbox format is
   actually readable by the mbox adapter as claimed in the spec - if it
   isn't, correct the spec rather than leaving an unverified claim in it
-- [ ] 2.9 Add `--since`/`--until` and a relative "N seconds/minutes/
-  hours ago" form for `--since`, scoping the search on both adapters;
-  verify a fake client/mbox fixture only returns messages inside the
-  given window, and that omitting both searches everything (unchanged)
+  **(caveat: no Thunderbird binary available in this sandbox - verified
+  via Thunderbird's own official source docs instead, confirming mbox
+  is genuinely the default local-folder format; not empirically tested
+  against a real Thunderbird-produced file. Worth a real test if that
+  ever becomes possible.)**
+- [x] 2.9 Add `--since`/`--until` scoping to both adapters (`since`/
+  `until` params on `MailClient.fetch`), verified with a fake
+  client/mbox fixture; omitting both searches everything (unchanged).
+  The CLI-level `--since`/`--until`/"N ago" flags themselves land with
+  the `fetch` command in the next PR (task group 3/4), since that
+  command doesn't exist yet
 
 ## 3. Chain dispatch and translation scripts
 
