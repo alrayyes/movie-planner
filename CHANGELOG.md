@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.19.0...movie-planner-v0.19.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* sync refresh checks every OMDb field, not just imdb_rating ([#125](https://github.com/alrayyes/movie-planner/issues/125)) ([589374e](https://github.com/alrayyes/movie-planner/commit/589374e02343eb458e647dc19dcbbfe45e317809)), closes [#124](https://github.com/alrayyes/movie-planner/issues/124)
+
 ## [0.19.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.18.0...movie-planner-v0.19.0) (2026-09-05)
 
 
