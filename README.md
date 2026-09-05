@@ -114,6 +114,20 @@ reflexively the way `retry` is. Pass `--from`/`--to` or a single `--date`
 to scope it to a range instead of the whole log; `--date` can't be
 combined with either.
 
+A large historical import (years of entries at once) can exceed OMDb's
+daily request limit before it finishes. Pass `--no-metadata` to `import`
+to create every entry with no OMDb calls at all, then backfill ratings
+afterward with `sync refresh --from`/`--to`, one date range per day, as
+many days as the limit takes to clear:
+
+```sh
+uv run movie-planner import movies-2020-2026.csv --no-metadata
+uv run movie-planner sync refresh --from 2020-01-01 --to 2021-12-31
+# next day:
+uv run movie-planner sync refresh --from 2022-01-01 --to 2023-12-31
+# ...and so on until every year is covered
+```
+
 ## Configuration
 
 A TOML file at `$XDG_CONFIG_HOME/movie-planner/config.toml`
