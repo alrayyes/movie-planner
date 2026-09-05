@@ -16,6 +16,7 @@ class MovieRatings:
     imdb: str | None
     rotten_tomatoes: str | None
     metacritic: str | None
+    imdb_id: str | None = None
 
 
 def _rating(ratings: list[dict[str, object]], source: str) -> str | None:
@@ -55,10 +56,12 @@ class OmdbClient:
             self._cache[cache_key] = None
             return None
 
+        imdb_id = data.get("imdbID")
         ratings = MovieRatings(
             imdb=_rating(data.get("Ratings", []), "Internet Movie Database"),
             rotten_tomatoes=_rating(data.get("Ratings", []), "Rotten Tomatoes"),
             metacritic=_rating(data.get("Ratings", []), "Metacritic"),
+            imdb_id=imdb_id if isinstance(imdb_id, str) else None,
         )
         self._cache[cache_key] = ratings
         return ratings
@@ -79,10 +82,14 @@ def fetch_and_store_ratings(
     ratings = client.lookup(title=entry.title, imdb_id=imdb_id)
     if ratings is None:
         return entry, False
+    imdb_url = entry.imdb_url or (
+        f"https://www.imdb.com/title/{ratings.imdb_id}/" if ratings.imdb_id else None
+    )
     updated = store.update_entry(
         entry.id,
         imdb_rating=ratings.imdb,
         rotten_tomatoes_rating=ratings.rotten_tomatoes,
         metacritic_rating=ratings.metacritic,
+        imdb_url=imdb_url,
     )
     return updated, True
