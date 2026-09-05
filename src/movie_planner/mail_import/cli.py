@@ -6,7 +6,9 @@ mentions any of this.
 
 import getpass
 import json
+import re
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -34,6 +36,36 @@ app = typer.Typer(help="Fetches cinema booking confirmations from a mailbox and 
 
 _DEFAULT_CHAIN_SENDER_DOMAIN = "service.pathe.nl"
 _DEFAULT_CHAIN_TRANSLATE = "pathe-translate"
+
+_RELATIVE_TIME_RE = re.compile(
+    r"^(?P<amount>\d+)\s+(?P<unit>second|minute|hour|day|week)s?\s+ago$", re.IGNORECASE
+)
+_UNIT_SECONDS = {"second": 1, "minute": 60, "hour": 3600, "day": 86400, "week": 604800}
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _parse_time_bound(value: str, *, flag: str) -> datetime:
+    """Accepts '<N> <unit> ago' (seconds/minutes/hours/days/weeks) for a
+    cron job's own relative window, or an ISO 8601 date/datetime for an
+    absolute one - naive ISO values are treated as UTC.
+    """
+    match = _RELATIVE_TIME_RE.match(value.strip())
+    if match:
+        seconds = int(match["amount"]) * _UNIT_SECONDS[match["unit"].lower()]
+        return _now() - timedelta(seconds=seconds)
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as e:
+        typer.secho(
+            f"Could not parse {flag} value '{value}' - use '<N> <unit> ago' "
+            "(seconds/minutes/hours/days/weeks) or an ISO 8601 date/datetime.",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1) from e
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 def _is_interactive() -> bool:
@@ -236,6 +268,18 @@ def fetch(
             "of running this as one self-contained command.",
         ),
     ] = False,
+    since: Annotated[
+        str | None,
+        typer.Option(
+            help="Only fetch messages from after this time - '<N> <unit> ago' "
+            "(seconds/minutes/hours/days/weeks) or an ISO 8601 date/datetime. "
+            "For scoping a cron job to its own window."
+        ),
+    ] = None,
+    until: Annotated[
+        str | None,
+        typer.Option(help="Only fetch messages from before this time - same format as --since."),
+    ] = None,
 ) -> None:
     """Fetches every configured chain's booking confirmations from the
     configured mail source and writes them to --output as import-ready
@@ -249,10 +293,13 @@ def fetch(
         typer.secho(str(e), fg=typer.colors.RED)
         raise typer.Exit(code=1) from e
 
+    since_dt = _parse_time_bound(since, flag="--since") if since else None
+    until_dt = _parse_time_bound(until, flag="--until") if until else None
+
     client = _build_client(cfg.source)
     domains = [chain.sender_domain for chain in cfg.chains]
     try:
-        raw_messages = list(client.fetch(domains))
+        raw_messages = list(client.fetch(domains, since=since_dt, until=until_dt))
     except MailFetchError as e:
         typer.secho(str(e), fg=typer.colors.RED)
         raise typer.Exit(code=1) from e

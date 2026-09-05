@@ -1,6 +1,7 @@
 import json
 import sys
 import tomllib
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import jsonschema
@@ -8,8 +9,21 @@ import pytest
 from typer.testing import CliRunner
 
 from movie_planner.mail_import.cli import app
+from movie_planner.mail_import.mbox_client import MboxMailClient
 
 runner = CliRunner()
+
+
+def _spy_fetch(
+    captured: dict[str, object],
+) -> object:
+    original_fetch = MboxMailClient.fetch
+
+    def spy_fetch(self: MboxMailClient, domains: list[str], **kwargs: object) -> list[str]:
+        captured.update(kwargs)
+        return list(original_fetch(self, domains, **kwargs))  # type: ignore[arg-type]
+
+    return spy_fetch
 
 
 def test_help() -> None:
@@ -402,3 +416,65 @@ translate = "{sys.executable} -m movie_planner.mail_import.pathe_translate"
     assert rows[0]["title"] == "Spider-Man: Brand New Day"
     assert rows[0]["venue"] == "Pathé De Munt"
     assert "not recognized" not in result.output
+
+
+# --- --since/--until: issue #159 ---
+
+
+def test_fetch_since_relative_reaches_the_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixed_now = datetime(2026, 9, 5, 12, 0, tzinfo=UTC)
+    monkeypatch.setattr("movie_planner.mail_import.cli._now", lambda: fixed_now)
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(MboxMailClient, "fetch", _spy_fetch(captured))
+    config_path = _mbox_config(tmp_path, "irrelevant")
+
+    result = runner.invoke(app, ["fetch", "--config", str(config_path), "--since", "1 hour ago"])
+
+    assert result.exit_code == 0, result.output
+    assert captured["since"] == fixed_now - timedelta(hours=1)
+    assert captured.get("until") is None
+
+
+def test_fetch_until_relative_reaches_the_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixed_now = datetime(2026, 9, 5, 12, 0, tzinfo=UTC)
+    monkeypatch.setattr("movie_planner.mail_import.cli._now", lambda: fixed_now)
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(MboxMailClient, "fetch", _spy_fetch(captured))
+    config_path = _mbox_config(tmp_path, "irrelevant")
+
+    result = runner.invoke(app, ["fetch", "--config", str(config_path), "--until", "2 weeks ago"])
+
+    assert result.exit_code == 0, result.output
+    assert captured["until"] == fixed_now - timedelta(weeks=2)
+
+
+def test_fetch_since_accepts_an_iso_date(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(MboxMailClient, "fetch", _spy_fetch(captured))
+    config_path = _mbox_config(tmp_path, "irrelevant")
+
+    result = runner.invoke(app, ["fetch", "--config", str(config_path), "--since", "2026-08-01"])
+
+    assert result.exit_code == 0, result.output
+    assert captured["since"] == datetime(2026, 8, 1, tzinfo=UTC)
+
+
+def test_fetch_since_unparseable_fails_clearly(tmp_path: Path) -> None:
+    config_path = _mbox_config(tmp_path, "irrelevant")
+
+    result = runner.invoke(app, ["fetch", "--config", str(config_path), "--since", "nonsense"])
+
+    assert result.exit_code != 0
+    assert "--since" in result.output
+
+
+def test_fetch_with_no_since_until_still_works(tmp_path: Path) -> None:
+    config_path = _mbox_config(tmp_path, "irrelevant")
+
+    result = runner.invoke(app, ["fetch", "--config", str(config_path), "--envelopes-only"])
+
+    assert result.exit_code == 0, result.output
