@@ -99,6 +99,7 @@ uv run movie-planner sync retry
 uv run movie-planner sync refresh
 uv run movie-planner sync refresh --from 2026-01-01 --to 2026-01-31
 uv run movie-planner sync refresh --date 2026-01-15
+uv run movie-planner sync refresh --force --date 2026-01-15
 ```
 
 `import` accepts a `.csv` or `.json` file with the same fields as
@@ -112,7 +113,10 @@ reflects current data — worth running after upgrading, or to backfill
 ratings for entries imported before this existed, not something to run
 reflexively the way `retry` is. Pass `--from`/`--to` or a single `--date`
 to scope it to a range instead of the whole log; `--date` can't be
-combined with either.
+combined with either. Pass `--force` to re-fetch ratings for entries
+that already have them too — useful after a wrong OMDb match, or when a
+rating's changed since — instead of the default of only fetching for
+entries still missing one.
 
 A large historical import (years of entries at once) can exceed OMDb's
 daily request limit before it finishes. Pass `--no-metadata` to `import`

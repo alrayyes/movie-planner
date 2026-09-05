@@ -133,3 +133,18 @@ entry is refreshed.
 #### Scenario: Combining --date with --from or --to
 - **WHEN** refresh runs with `--date` and either `--from` or `--to`
 - **THEN** the command exits with an error instead of refreshing anything
+
+### Requirement: Refresh can force-refetch existing ratings
+The system SHALL accept a `--force` option that re-fetches OMDb ratings
+for every refreshed entry, including ones that already have a rating -
+instead of the default of only fetching for entries still missing one.
+`--force` SHALL still respect any date scoping in the same invocation.
+
+#### Scenario: Forcing a re-fetch
+- **WHEN** refresh runs with `--force` against entries that already
+  have ratings
+- **THEN** OMDb is queried again for every one of them
+
+#### Scenario: Forcing a re-fetch within a date range
+- **WHEN** refresh runs with `--force` and `--from`/`--to`/`--date`
+- **THEN** only entries within that range are re-fetched
