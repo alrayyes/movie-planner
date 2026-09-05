@@ -20,6 +20,17 @@ class MovieRatings:
     poster: str | None = None
 
 
+def needs_omdb_fetch(entry: Entry) -> bool:
+    """Whether an entry is missing any OMDb-derived field it could have -
+    not just the rating, so an entry logged before a field like
+    `poster_url` existed still gets backfilled by a plain `sync refresh`,
+    not just `--force`. Update this alongside adding any future
+    OMDb-derived field (director/genre/etc., issue #88) - it's the one
+    place "does this entry need fetching" is decided.
+    """
+    return entry.imdb_rating is None or entry.poster_url is None
+
+
 def _rating(ratings: list[dict[str, object]], source: str) -> str | None:
     for entry in ratings:
         if entry.get("Source") == source:

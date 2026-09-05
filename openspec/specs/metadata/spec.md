@@ -69,16 +69,25 @@ skipped.
   title
 - **THEN** the resulting entry is stored with OMDb ratings
 
-### Requirement: Refresh backfills missing ratings only
-During refresh, the system SHALL fetch OMDb ratings only for entries that
-do not already have them, and SHALL NOT re-fetch ratings for an entry
-that already has them.
+### Requirement: Refresh backfills missing OMDb data only
+During refresh, the system SHALL fetch OMDb data only for entries
+missing at least one OMDb-derived field (rating, poster, or any future
+one), not only entries missing a rating specifically - an entry logged
+before a field existed still needs a fetch even though its rating is
+already stored. The system SHALL NOT re-fetch for an entry with every
+OMDb-derived field already populated.
 
-#### Scenario: Entry already has ratings
-- **WHEN** refresh runs against an entry that already has OMDb ratings
-  stored
+#### Scenario: Entry already has every OMDb field
+- **WHEN** refresh runs against an entry with every OMDb-derived field
+  already stored
 - **THEN** no OMDb lookup is made for that entry
 
-#### Scenario: Entry is missing ratings
-- **WHEN** refresh runs against an entry with no OMDb ratings stored
+#### Scenario: Entry is missing a rating
+- **WHEN** refresh runs against an entry with no OMDb rating stored
 - **THEN** an OMDb lookup is made for that entry and any match is stored
+
+#### Scenario: Entry has a rating but is missing a newer field
+- **WHEN** refresh runs against an entry with a rating already stored
+  but a newer OMDb-derived field (for example `poster_url`) missing
+- **THEN** an OMDb lookup is made for that entry, backfilling the
+  missing field

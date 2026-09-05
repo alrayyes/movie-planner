@@ -126,12 +126,15 @@ a guess. `list --chain`/`--city` filter on it; `show` displays it.
 re-pushes any entry that failed to sync when it was logged or imported —
 cheap, and safe to run any time, since it never calls OMDb and only
 touches entries that were never synced. `sync refresh` is the heavier
-counterpart: it walks every entry, fetches OMDb ratings for any that are
-still missing them, and re-pushes every calendar event so its description
-reflects current data — worth running after upgrading, or to backfill
-ratings for entries imported before this existed, not something to run
-reflexively the way `retry` is. Pass `--from`/`--to` or a single `--date`
-to scope it to a range instead of the whole log; `--date` can't be
+counterpart: it walks every entry, fetches OMDb data (ratings, poster,
+and so on) for any entry still missing at least one such field — an
+entry that already has a rating but was logged before a newer field
+existed still gets that field backfilled — and re-pushes every
+calendar event so its description reflects current data. Worth running
+after upgrading, or to backfill data for entries imported before this
+existed, not something to run reflexively the way `retry` is. Pass
+`--from`/`--to` or a single `--date` to scope it to a range instead of
+the whole log; `--date` can't be
 combined with either. Pass `--force` to re-fetch ratings for entries
 that already have them too — useful after a wrong OMDb match, or when a
 rating's changed since — instead of the default of only fetching for

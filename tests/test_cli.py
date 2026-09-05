@@ -77,7 +77,16 @@ def no_omdb_match(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def omdb_match(monkeypatch: pytest.MonkeyPatch) -> None:
-    ratings = MovieRatings(imdb="8.5/10", rotten_tomatoes="91%", metacritic="80")
+    # Includes a poster, same as a real OMDb match would - a fixture
+    # missing one made a fully-enriched entry look incomplete to
+    # needs_omdb_fetch, breaking any test that logs via this fixture
+    # then asserts a later refresh doesn't re-fetch it.
+    ratings = MovieRatings(
+        imdb="8.5/10",
+        rotten_tomatoes="91%",
+        metacritic="80",
+        poster="https://m.media-amazon.com/images/dune-poster.jpg",
+    )
     monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: ratings)
 
 
@@ -1288,6 +1297,57 @@ def test_refresh_does_not_refetch_entries_that_already_have_ratings(
 
     assert result.exit_code == 0, result.output
     assert calls["n"] == 0
+
+
+def test_refresh_backfills_a_rated_entry_still_missing_its_poster(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Ratings but no poster - as if logged before poster_url existed.
+    monkeypatch.setattr(
+        "movie_planner.cli.OmdbClient.lookup",
+        lambda self, **kw: MovieRatings(imdb="8.5/10", rotten_tomatoes="91%", metacritic="80"),
+    )
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.imdb_rating == "8.5/10"
+    assert entry.poster_url is None
+    store.close()
+
+    calls = {"n": 0}
+
+    def lookup_with_poster(self: OmdbClient, **kw: object) -> MovieRatings:
+        calls["n"] += 1
+        return MovieRatings(
+            imdb="8.5/10",
+            rotten_tomatoes="91%",
+            metacritic="80",
+            poster="https://m.media-amazon.com/images/dune-poster.jpg",
+        )
+
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lookup_with_poster)
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert result.exit_code == 0, result.output
+    assert calls["n"] == 1
+    store = _store(config_path)
+    (refreshed,) = store.list_entries()
+    assert refreshed.poster_url == "https://m.media-amazon.com/images/dune-poster.jpg"
+    store.close()
 
 
 def test_refresh_force_refetches_entries_that_already_have_ratings(

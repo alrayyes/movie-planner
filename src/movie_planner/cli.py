@@ -18,7 +18,7 @@ from movie_planner.calendar_sync import CalendarClient, CalendarSync
 from movie_planner.display import detect_terminal_image_protocol, format_entry, render_poster
 from movie_planner.duplicates import find_duplicate
 from movie_planner.importers import parse_csv, parse_json, run_import
-from movie_planner.omdb import OmdbClient, fetch_and_store_ratings
+from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
 from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
 from movie_planner.store import Entry, Store, StoreError, Venue
 
@@ -998,7 +998,7 @@ def sync_refresh(
             typer.echo("No entries to refresh.")
             return
 
-        to_fetch = entries if force else [e for e in entries if e.imdb_rating is None]
+        to_fetch = entries if force else [e for e in entries if needs_omdb_fetch(e)]
         if to_fetch:
             typer.echo(
                 f"About to look up OMDb ratings for {len(to_fetch)} of {len(entries)} entries."
@@ -1006,7 +1006,7 @@ def sync_refresh(
 
         fetched = 0
         for entry in entries:
-            fetch_metadata = force or entry.imdb_rating is None
+            fetch_metadata = force or needs_omdb_fetch(entry)
             refreshed = _finalize_entry(cfg, store, entry, fetch_metadata=fetch_metadata)
             if fetch_metadata and refreshed.imdb_rating is not None:
                 fetched += 1
