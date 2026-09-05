@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.13.1...movie-planner-v0.14.0) (2026-09-05)
+
+
+### Features
+
+* **cli:** add --force to sync refresh to re-fetch existing ratings ([#104](https://github.com/alrayyes/movie-planner/issues/104)) ([aeadc48](https://github.com/alrayyes/movie-planner/commit/aeadc484ef9b54bc4b1a2497a16e75756215df59)), closes [#103](https://github.com/alrayyes/movie-planner/issues/103)
+
 ## [0.13.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.13.0...movie-planner-v0.13.1) (2026-09-05)
 
 
