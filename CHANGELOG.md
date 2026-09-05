@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.18.0...movie-planner-v0.19.0) (2026-09-05)
+
+
+### Features
+
+* **omdb:** try a year-scoped title search before falling back ([#122](https://github.com/alrayyes/movie-planner/issues/122)) ([3e281b7](https://github.com/alrayyes/movie-planner/commit/3e281b7b501bf369796e8cc44c24aa4da218faeb)), closes [#87](https://github.com/alrayyes/movie-planner/issues/87)
+
 ## [0.18.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.17.1...movie-planner-v0.18.0) (2026-09-05)
 
 
