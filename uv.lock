@@ -795,7 +795,7 @@ wheels = [
 
 [[package]]
 name = "movie-planner"
-version = "0.10.2"
+version = "0.11.0"
 source = { editable = "." }
 dependencies = [
     { name = "caldav" },
@@ -835,7 +835,7 @@ requires-dist = [
 dev = [
     { name = "bandit", specifier = "==1.9.4" },
     { name = "click-man", specifier = "==0.5.1" },
-    { name = "mutmut", specifier = "==3.7.0" },
+    { name = "mutmut", specifier = "==3.7" },
     { name = "mypy", specifier = "==2.3.1" },
     { name = "pip-audit", specifier = "==2.10.1" },
     { name = "pyinstaller", specifier = "==6.22.2" },
