@@ -103,6 +103,30 @@ source (`[imap]` section vs. `[mbox]` section, or a `source = "imap" |
 "mbox"` key - exact shape decided in `tasks.md`); a third source later
 (Maildir, say) is a third adapter behind the same port, not a rewrite.
 
+**IMAP password: masked interactive prompt or `password_command`, never
+a flag or hand-typed into the config file.** Same reasoning
+`movie-planner` itself already applies to its own CalDAV password - a
+flag lands in shell history and a process list; a config file is fine
+to hold *a* secret but awkward to type one into by hand. The tool's own
+config setup uses `getpass` (stdlib, no dependency) for masked entry,
+writing the result to the config file the same way `movie-planner init`
+writes a starter config today; `password_command` remains the
+alternative for anyone already using a password manager CLI.
+
+**Separate Docker image, not bundled into `movie-planner`'s own.** One
+image holding both tools' credentials and volumes undoes the
+separation this whole change is about, the moment it reaches
+deployment - the mail tool's IMAP password has no reason to be
+reachable from a container that also mounts CalDAV/OMDb config, or vice
+versa, and their operational shapes differ anyway (`movie-planner` is
+run interactively; this tool is a periodic batch job). Built from the
+same `Dockerfile` as a second stage/target (`--target
+pathe-mail-import`) to avoid duplicating base-image and
+dependency-install steps, but published as its own tagged image with
+its own minimal `docker run` flags (matching `docs/INSTALL.md`'s
+existing least-privilege pattern for `movie-planner`'s own image),
+never combined into one runtime container.
+
 **Chain-specific parsing lives entirely outside the tool, as an external
 script invoked per email - not a Python parser registered in-process.**
 The core tool only ever does two generic things: (1) IMAP fetch + MIME

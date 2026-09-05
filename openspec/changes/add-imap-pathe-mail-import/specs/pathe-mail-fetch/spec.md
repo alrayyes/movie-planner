@@ -47,6 +47,21 @@ envelope shape for everything downstream:
 - **THEN** it produces the same envelope, and is dispatched to the same
   chain's translation script, either way
 
+### Requirement: IMAP password entry never touches the shell
+The system SHALL offer an interactive, masked prompt for the IMAP
+password when setting up or editing the mail source's configuration,
+so a password never has to be typed as a command-line argument (shell
+history, process list) or pasted into a config file by hand. A
+`password_command` (running an external command and using its stdout,
+same as `movie-planner`'s own CalDAV credential handling) remains
+available as an alternative to either.
+
+#### Scenario: Interactive setup
+- **WHEN** the user runs the tool's configuration setup for an IMAP
+  source and doesn't already have a `password_command` configured
+- **THEN** the password is read from a masked interactive prompt, never
+  echoed to the terminal, and never accepted as a command-line flag
+
 ### Requirement: Dispatch each email to its chain's translation script
 For each fetched message, the system SHALL extract a plain envelope
 (sender address, subject, date, and the plain-text body) and SHALL
@@ -105,3 +120,14 @@ mailbox.
 - **WHEN** the tool is run twice against an unchanged mailbox
 - **THEN** both runs produce the same set of rows, independent of
   whether the first run's output was ever imported
+
+### Requirement: Ship as its own container image
+The system SHALL be published as a Docker image separate from
+`movie-planner`'s own image, sharing no runtime container with it, so
+that neither tool's credentials, mounted config, or capabilities are
+reachable from the other's running container.
+
+#### Scenario: Independently runnable
+- **WHEN** the mail tool's image is run
+- **THEN** it runs and does its job with no `movie-planner`-specific
+  configuration, volume, or credential present in that container
