@@ -213,8 +213,8 @@ or a process list.
 ## Import examples
 
 [`examples/`](examples/) has three fictional viewings in CSV and JSON
-form. It shows the field names and structure that each import format
-expects.
+form, plus a [JSON Schema](examples/movies.schema.json) for the row shape
+both formats share.
 
 ## Contributing
 

@@ -22,6 +22,7 @@ devDependencies
 configs?
 bot's
 else's
+schema's
 allowlist
 automerge
 changelog

@@ -30,6 +30,7 @@ scripts.movie-planner = "movie_planner:main"
 dev = [
   "bandit==1.9.4",
   "click-man==0.5.1",
+  "jsonschema==4.26",
   "mutmut==3.7",
   "mypy==2.3.1",
   "pip-audit==2.10.1",
@@ -39,6 +40,7 @@ dev = [
   "pytest-cov==7.1",
   "ruff==0.16.5",
   "testcontainers==4.15",
+  "types-jsonschema==4.26.0.20260518",
 ]
 
 [tool.ruff]
@@ -74,4 +76,10 @@ source_paths = [ "src" ]
 # test_e2e.py spins up a real Baikal Docker container per module - fine
 # once for the real suite, ruinous rerun per mutant. Everything it covers
 # is also covered against FakeCalendar in test_cli.py/test_calendar_sync.py.
-pytest_add_cli_args_test_selection = [ "--ignore=tests/test_e2e.py" ]
+# test_examples_schema.py reads examples/, which mutmut's mutant sandbox
+# doesn't mirror (only source_paths and tests/ are copied in) - it never
+# imports movie_planner itself, so it has no mutation to catch anyway.
+pytest_add_cli_args_test_selection = [
+  "--ignore=tests/test_e2e.py",
+  "--ignore=tests/test_examples_schema.py",
+]
