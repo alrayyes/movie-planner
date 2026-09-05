@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.2.0...movie-planner-v1.3.0) (2026-09-05)
+
+
+### Features
+
+* **mail-import:** chain dispatch, Pathé translation script, fetch ([#151](https://github.com/alrayyes/movie-planner/issues/151)) ([3cb2c32](https://github.com/alrayyes/movie-planner/commit/3cb2c32672d25c42df1764eb3891a2d17c1818f1))
+
 ## [1.2.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.1.0...movie-planner-v1.2.0) (2026-09-05)
 
 
