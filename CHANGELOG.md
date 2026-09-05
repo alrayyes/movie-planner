@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.16.0...movie-planner-v0.17.0) (2026-09-05)
+
+
+### Features
+
+* add a chain/location structure for venues ([#113](https://github.com/alrayyes/movie-planner/issues/113)) ([5a941b5](https://github.com/alrayyes/movie-planner/commit/5a941b524f78bf54fd233834b1a5706b7efbdb25)), closes [#111](https://github.com/alrayyes/movie-planner/issues/111)
+
 ## [0.16.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.15.0...movie-planner-v0.16.0) (2026-09-05)
 
 
