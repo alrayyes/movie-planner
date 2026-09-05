@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.11.0...movie-planner-v0.12.0) (2026-09-05)
+
+
+### Features
+
+* **omdb:** auto-populate imdb_url and include it in calendar descriptions ([#93](https://github.com/alrayyes/movie-planner/issues/93)) ([59b8666](https://github.com/alrayyes/movie-planner/commit/59b8666e8a947988e4d4d7be4a69b89c13ec1aad)), closes [#92](https://github.com/alrayyes/movie-planner/issues/92)
+
 ## [0.11.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.10.2...movie-planner-v0.11.0) (2026-09-05)
 
 
