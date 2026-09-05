@@ -326,11 +326,11 @@ def test_update_entry_sets_notes(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
 
-    updated = store.update_entry(entry.id, notes="Took mother")
+    updated = store.update_entry(entry.id, notes="Enjoyed the soundtrack")
 
-    assert updated.notes == "Took mother"
+    assert updated.notes == "Enjoyed the soundtrack"
     reloaded = store.get_entry(entry.id)
-    assert reloaded.notes == "Took mother"
+    assert reloaded.notes == "Enjoyed the soundtrack"
 
 
 def test_update_entry_sets_imdb_url(store: Store) -> None:

@@ -166,11 +166,11 @@ def test_build_description_with_nothing_present_is_none() -> None:
 
 
 def test_build_description_includes_notes() -> None:
-    entry = _entry(notes="Took mother")
+    entry = _entry(notes="Enjoyed the soundtrack")
 
     description = build_description(entry)
 
-    assert description == "Took mother"
+    assert description == "Notes: Enjoyed the soundtrack"
 
 
 def test_build_description_with_only_some_fields() -> None:
