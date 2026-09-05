@@ -861,6 +861,13 @@ def sync_refresh(
     entry_date: Annotated[
         str | None, typer.Option("--date", help="Only entries on this exact date.")
     ] = None,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Re-fetch OMDb ratings even for entries that already have them.",
+        ),
+    ] = False,
 ) -> None:
     """Backfill missing OMDb ratings and re-push every entry's calendar
     event, so its description reflects current data. Kept separate from
@@ -869,7 +876,8 @@ def sync_refresh(
 
     With no date arguments, every entry is refreshed. `--from`/`--to` scope
     it to a date range; `--date` scopes it to a single day and can't be
-    combined with either.
+    combined with either. `--force` re-fetches ratings for entries that
+    already have them, instead of only entries missing one.
     """
     if entry_date is not None and (date_from is not None or date_to is not None):
         typer.secho("--date can't be combined with --from or --to.", fg=typer.colors.RED)
@@ -889,16 +897,15 @@ def sync_refresh(
             typer.echo("No entries to refresh.")
             return
 
-        missing_metadata = [e for e in entries if e.imdb_rating is None]
-        if missing_metadata:
+        to_fetch = entries if force else [e for e in entries if e.imdb_rating is None]
+        if to_fetch:
             typer.echo(
-                f"About to look up OMDb ratings for {len(missing_metadata)} of "
-                f"{len(entries)} entries."
+                f"About to look up OMDb ratings for {len(to_fetch)} of {len(entries)} entries."
             )
 
         fetched = 0
         for entry in entries:
-            fetch_metadata = entry.imdb_rating is None
+            fetch_metadata = force or entry.imdb_rating is None
             refreshed = _finalize_entry(
                 cfg, store, entry, venue=_venue_name(store, entry), fetch_metadata=fetch_metadata
             )

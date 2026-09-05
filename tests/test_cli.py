@@ -970,6 +970,78 @@ def test_refresh_does_not_refetch_entries_that_already_have_ratings(
     assert calls["n"] == 0
 
 
+def test_refresh_force_refetches_entries_that_already_have_ratings(
+    config_path: Path, calendar: FakeCalendar, omdb_match: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.imdb_rating == "8.5/10"
+    store.close()
+
+    calls = {"n": 0}
+
+    def lookup(self: OmdbClient, **kw: object) -> MovieRatings:
+        calls["n"] += 1
+        return MovieRatings(imdb="9.0/10", rotten_tomatoes="91%", metacritic="80")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("movie_planner.cli.OmdbClient.lookup", lookup)
+        result = runner.invoke(app, ["--config", str(config_path), "sync", "refresh", "--force"])
+
+    assert result.exit_code == 0, result.output
+    assert calls["n"] == 1
+    assert "1 metadata fetches" in result.output
+    store = _store(config_path)
+    (refreshed,) = store.list_entries()
+    assert refreshed.imdb_rating == "9.0/10"
+    store.close()
+
+
+def test_refresh_force_respects_date_scoping(
+    config_path: Path, calendar: FakeCalendar, omdb_match: None
+) -> None:
+    _log(config_path, "In Range", "2026-01-15")
+    _log(config_path, "Out Of Range", "2026-02-15")
+
+    calls = {"n": 0}
+
+    def lookup(self: OmdbClient, **kw: object) -> MovieRatings:
+        calls["n"] += 1
+        return MovieRatings(imdb="9.0/10", rotten_tomatoes="91%", metacritic="80")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("movie_planner.cli.OmdbClient.lookup", lookup)
+        result = runner.invoke(
+            app,
+            [
+                "--config",
+                str(config_path),
+                "sync",
+                "refresh",
+                "--force",
+                "--date",
+                "2026-01-15",
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    assert calls["n"] == 1
+
+
 def test_refresh_creates_event_for_a_never_synced_entry(
     config_path: Path, no_omdb_match: None
 ) -> None:
