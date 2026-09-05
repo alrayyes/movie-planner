@@ -168,7 +168,10 @@ class CalendarSync:
         chain: str | None = None,
         screening_details: str | None = None,
     ) -> Entry:
-        uid = str(uuid.uuid4())
+        # uuid7, not uuid4: time-ordered, so newly-created entries insert
+        # sequentially rather than at a random point - and it's already
+        # in Python 3.14's stdlib, no new dependency needed.
+        uid = str(uuid.uuid7())
         ical_text = build_vevent(
             uid=uid,
             title=entry.title,

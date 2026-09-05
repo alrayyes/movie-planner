@@ -14,10 +14,16 @@ either.
 
 ## `VEVENT` fields
 
-- **UID** — a `uuid4` string, generated once per entry and stored as
-  the entry's `caldav_uid`. This is how the CLI finds the event again
-  to update or delete it; a reader shouldn't assume any other structure
-  from it.
+- **UID** — a `uuid7` string, generated once per entry (at its first
+  push) and stored as the entry's `caldav_uid`. This is how the CLI
+  finds the event again to update or delete it. `uuid7`, not `uuid4`:
+  time-ordered, so newly created entries insert sequentially rather
+  than at a random point - Python 3.14's stdlib `uuid.uuid7()`, no
+  dependency needed. A reader can extract the creation timestamp from
+  it (the leading 48 bits are a Unix millisecond timestamp per RFC
+  9562), but shouldn't assume any other structure. An entry synced
+  before this changed keeps its existing `uuid4` UID - this isn't
+  retroactive.
 - **SUMMARY** — the movie title, verbatim.
 - **LOCATION** — present only when the entry has a venue (only a
   physical-place medium - a cinema, not `netflix`/`youtube`/etc. - can

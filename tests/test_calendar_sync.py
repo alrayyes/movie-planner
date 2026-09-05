@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import Iterator
 from datetime import date, datetime, time
 from pathlib import Path
@@ -326,6 +327,17 @@ def test_push_new_stores_the_returned_uid_on_the_entry(store: Store) -> None:
 
     assert synced.caldav_uid is not None
     assert store.get_entry(entry.id).caldav_uid == synced.caldav_uid
+
+
+def test_push_new_generates_a_uuid7(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    sync = CalendarSync(store, CalendarClient(FakeCalendar()))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    assert uuid.UUID(synced.caldav_uid).version == 7
 
 
 def test_push_new_includes_ratings_in_the_description(store: Store) -> None:

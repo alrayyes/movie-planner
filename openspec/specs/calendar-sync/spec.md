@@ -9,12 +9,15 @@ place edits originate from.
 ### Requirement: Push a new entry to the calendar
 When a movie-log entry is created, the system SHALL create a
 corresponding VEVENT on the configured Baikal calendar and SHALL record
-the resulting CalDAV UID against the local entry.
+the resulting CalDAV UID against the local entry. The UID SHALL be a
+UUIDv7, not v4, so newly-created entries insert in time order rather
+than at a random point.
 
 #### Scenario: New entry creates a calendar event
 - **WHEN** a movie-log entry is logged successfully
 - **THEN** a VEVENT is created on the configured calendar with the
-  entry's title, date/time, and venue, and its UID is stored locally
+  entry's title, date/time, and venue, and its UID (a UUIDv7) is
+  stored locally
 
 ### Requirement: Map partial time information to VEVENT fields
 The system SHALL create an all-day VEVENT when only a date is known, a

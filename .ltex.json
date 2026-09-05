@@ -51,6 +51,7 @@
       "ruff",
       "ruleset",
       "rulesets",
+      "stdlib",
       "movie-planner",
       "nixpkgs",
       "stdout",
