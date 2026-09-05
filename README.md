@@ -128,6 +128,11 @@ uv run movie-planner sync refresh --from 2022-01-01 --to 2023-12-31
 # ...and so on until every year is covered
 ```
 
+Sync is push-only — the local SQLite store is the only source of
+truth, and nothing here ever reads the calendar back. See
+[`docs/calendar-schema.md`](docs/calendar-schema.md) for exactly what
+gets written to the calendar, if something else needs to read it.
+
 ## Configuration
 
 A TOML file at `$XDG_CONFIG_HOME/movie-planner/config.toml`
