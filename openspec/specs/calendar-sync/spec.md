@@ -119,6 +119,19 @@ present.
 - **WHEN** an entry that already has an `imdb_url` gets an OMDb match
 - **THEN** the existing `imdb_url` is left unchanged
 
+### Requirement: Poster URL is pushed as a custom property
+When an entry has a `poster_url`, the system SHALL include it on the
+pushed VEVENT as a custom `X-POSTER-URL` property. An entry with no
+poster URL SHALL have no such property on the pushed event.
+
+#### Scenario: Pushing an entry with a poster URL
+- **WHEN** an entry with a `poster_url` is pushed
+- **THEN** the pushed VEVENT has an `X-POSTER-URL` property set to it
+
+#### Scenario: Pushing an entry with no poster URL
+- **WHEN** an entry with no `poster_url` is pushed
+- **THEN** the pushed VEVENT has no `X-POSTER-URL` property
+
 ### Requirement: Refresh recomputes and re-pushes every entry
 The system SHALL provide a refresh operation that, for every logged
 entry, fetches OMDb ratings when the entry does not already have them,

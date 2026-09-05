@@ -194,6 +194,19 @@ def test_fetch_and_store_ratings_sets_imdb_url_from_the_imdb_id(store: Store) ->
     assert store.get_entry(entry.id).imdb_url == "https://www.imdb.com/title/tt1160419/"
 
 
+def test_fetch_and_store_ratings_persists_the_poster_url(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    updated, _ = fetch_and_store_ratings(store, client, entry)
+
+    assert updated.poster_url == "https://m.media-amazon.com/images/dune-poster.jpg"
+    assert (
+        store.get_entry(entry.id).poster_url == "https://m.media-amazon.com/images/dune-poster.jpg"
+    )
+
+
 def test_fetch_and_store_ratings_does_not_overwrite_a_manual_imdb_url(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)

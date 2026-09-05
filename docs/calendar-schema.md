@@ -39,6 +39,11 @@ either.
     `DATE-TIME`.
 - **DESCRIPTION** — optional, omitted entirely (not an empty string)
   when there's nothing to show. See below for its content.
+- **`X-POSTER-URL`** — a non-standard `X-` property (bare `X-NAME`
+  form, matching movie-planner-web's own convention on its read side),
+  present only when the entry has a poster URL. This is movie-planner's
+  first (and so far only) custom property; everything else here is
+  standard iCalendar.
 
 ## DESCRIPTION content
 
@@ -82,6 +87,11 @@ day.
 set by hand, which is never overwritten — see
 [`src/movie_planner/omdb.py`](../src/movie_planner/omdb.py)'s
 `fetch_and_store_ratings`.
+
+`poster_url` comes straight from OMDb's own `Poster` field on every
+successful match - no manual-override protection the way `imdb_url`
+has, since there's no way to set one by hand. It's overwritten on
+every fetch, same as the ratings themselves.
 
 ## Venue chain/location
 

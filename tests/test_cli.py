@@ -488,6 +488,51 @@ def test_show_renders_poster_when_protocol_detected(
     assert "\033]1337;File=" in result.output
 
 
+def test_show_uses_the_stored_poster_url_without_a_live_lookup(
+    config_path: Path,
+    calendar: FakeCalendar,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ratings = MovieRatings(
+        imdb="8.5/10",
+        rotten_tomatoes="91%",
+        metacritic="80",
+        imdb_id="tt1160419",
+        poster="https://m.media-amazon.com/images/dune-poster.jpg",
+    )
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: ratings)
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    calls = {"n": 0}
+
+    def lookup_again(self: OmdbClient, **kw: object) -> MovieRatings:
+        calls["n"] += 1
+        return ratings
+
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lookup_again)
+    monkeypatch.setenv("TERM_PROGRAM", "iTerm.app")
+    monkeypatch.setattr("movie_planner.cli._fetch_poster_bytes", lambda url: b"fake-image-bytes")
+
+    result = runner.invoke(app, ["--config", str(config_path), "show", "1"])
+
+    assert result.exit_code == 0, result.output
+    assert "\033]1337;File=" in result.output
+    assert calls["n"] == 0
+
+
 def test_show_gracefully_handles_poster_fetch_failure(
     config_path: Path,
     calendar: FakeCalendar,

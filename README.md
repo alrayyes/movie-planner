@@ -107,12 +107,13 @@ uv run movie-planner sync refresh --force --date 2026-01-15
 
 `show` prints one entry's full metadata — ratings, links, venue, times —
 in a structured, labelled layout instead of `list`'s single line. On a
-terminal identifiable as iTerm2/WezTerm or Kitty/Ghostty, it also fetches
-and renders the poster inline (a live OMDb lookup at display time, not
-stored on the entry); anywhere else, or with no poster available, it
-just skips the image. Kitty only renders a poster that's already PNG —
-OMDb's usual JPEG posters render on iTerm2/WezTerm only. No Sixel
-support.
+terminal identifiable as iTerm2/WezTerm or Kitty/Ghostty, it also renders
+the poster inline — `poster_url` is fetched and stored the same time
+ratings are (`log`, `import`, `sync refresh`), or, for an entry logged
+before this existed, fetched live at display time instead; anywhere
+else, or with no poster available, `show` just skips the image. Kitty
+only renders a poster that's already PNG — OMDb's usual JPEG posters
+render on iTerm2/WezTerm only. No Sixel support.
 
 A venue created with a name matching a hardcoded table (Pathé's own
 Amsterdam cinemas, GSC's Malaysia locations, and a handful of
