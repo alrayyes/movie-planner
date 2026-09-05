@@ -49,6 +49,27 @@ medium, and venue, optionally filtered by date range or medium.
 - **WHEN** the user runs the list command with no filters
 - **THEN** every logged entry is shown, ordered by date
 
+### Requirement: Show one entry's full metadata
+The system SHALL let the user show a single logged entry's full
+metadata - ratings, links, venue, times - in a structured, labeled
+layout, and SHALL render its poster inline when the terminal supports
+the iTerm2 or Kitty inline-image protocol. The poster is fetched live
+from OMDb at display time using the entry's stored IMDb ID, not
+persisted on the entry.
+
+#### Scenario: Showing an entry with ratings and links
+- **WHEN** the user shows an entry with ratings and a Letterboxd link
+- **THEN** all of it is printed in a structured, labelled layout
+
+#### Scenario: Showing an entry on a terminal with no supported image protocol
+- **WHEN** the user shows an entry on a terminal that supports neither
+  the iTerm2 nor the Kitty inline-image protocol
+- **THEN** the metadata is still printed, with no poster and no error
+
+#### Scenario: Showing an entry that doesn't exist
+- **WHEN** the user shows an entry ID that isn't logged
+- **THEN** the command reports that clearly and exits non-zero
+
 ### Requirement: Update a logged entry
 The system SHALL let the user update the title, date, start/end time,
 medium, or venue of an existing entry by identifying it, and SHALL apply

@@ -90,6 +90,7 @@ Other commands:
 
 ```sh
 uv run movie-planner list --from 2026-01-01 --to 2026-01-31 --medium cinema
+uv run movie-planner show 3
 uv run movie-planner update 3 --title "Dune Part Two"
 uv run movie-planner delete 3
 uv run movie-planner locations media add cinema --physical
@@ -101,6 +102,15 @@ uv run movie-planner sync refresh --from 2026-01-01 --to 2026-01-31
 uv run movie-planner sync refresh --date 2026-01-15
 uv run movie-planner sync refresh --force --date 2026-01-15
 ```
+
+`show` prints one entry's full metadata — ratings, links, venue, times —
+in a structured, labelled layout instead of `list`'s single line. On a
+terminal identifiable as iTerm2/WezTerm or Kitty/Ghostty, it also fetches
+and renders the poster inline (a live OMDb lookup at display time, not
+stored on the entry); anywhere else, or with no poster available, it
+just skips the image. Kitty only renders a poster that's already PNG —
+OMDb's usual JPEG posters render on iTerm2/WezTerm only. No Sixel
+support.
 
 `import` accepts a `.csv` or `.json` file with the same fields as
 `examples/`, and fetches OMDb ratings the same as `log` does. `sync retry`

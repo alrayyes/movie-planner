@@ -3,16 +3,19 @@ metadata, duplicate-detection, import) into commands.
 """
 
 import dataclasses
+import re
 import sys
 from dataclasses import dataclass
 from datetime import date, time
 from pathlib import Path
 from typing import Annotated
 
+import httpx
 import typer
 
 from movie_planner import config as config_module
 from movie_planner.calendar_sync import CalendarClient, CalendarSync
+from movie_planner.display import detect_terminal_image_protocol, format_entry, render_poster
 from movie_planner.duplicates import find_duplicate
 from movie_planner.importers import parse_csv, parse_json, run_import
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings
@@ -479,6 +482,69 @@ def list_entries(
             if venue_name:
                 line += f" @ {venue_name}"
             typer.echo(line)
+    finally:
+        store.close()
+
+
+# --- show: issue #106, structured single-entry output with an inline poster ---
+
+_IMDB_ID_RE = re.compile(r"(tt\d+)")
+
+
+def _fetch_poster_bytes(url: str) -> bytes:
+    response = httpx.get(url, follow_redirects=True, timeout=10)
+    response.raise_for_status()
+    return response.content
+
+
+def _poster_url_for(cfg: config_module.Config, entry: Entry) -> str | None:
+    if not entry.imdb_url:
+        return None
+    match = _IMDB_ID_RE.search(entry.imdb_url)
+    if match is None:
+        return None
+    client = OmdbClient(cfg.omdb_api_key)
+    ratings = client.lookup(imdb_id=match.group(1))
+    return ratings.poster if ratings else None
+
+
+@app.command()
+def show(
+    ctx: typer.Context,
+    entry_id: Annotated[int, typer.Argument(help="ID of the entry to show.")],
+) -> None:
+    """Show one logged entry's full metadata, with the poster rendered
+    inline where the terminal supports it (iTerm2/WezTerm or Kitty/Ghostty
+    - see display.py for why Sixel and JPEG-on-Kitty aren't covered).
+    """
+    cfg = _cfg(ctx)
+    store = _open_store(cfg)
+    try:
+        try:
+            entry = store.get_entry(entry_id)
+        except StoreError as e:
+            typer.secho(str(e), fg=typer.colors.RED)
+            raise typer.Exit(code=1) from e
+
+        media_by_id = {m.id: m for m in store.list_media()}
+        venues_by_id = {v.id: v for v in store.list_venues()}
+        medium_name = media_by_id[entry.medium_id].name
+        venue_name = venues_by_id[entry.venue_id].name if entry.venue_id else None
+        typer.echo(format_entry(entry, medium_name=medium_name, venue_name=venue_name))
+
+        protocol = detect_terminal_image_protocol()
+        if protocol is None:
+            return
+        poster_url = _poster_url_for(cfg, entry)
+        if poster_url is None:
+            return
+        try:
+            image_bytes = _fetch_poster_bytes(poster_url)
+        except httpx.HTTPError:
+            return
+        rendered = render_poster(image_bytes, protocol)
+        if rendered:
+            typer.echo(rendered)
     finally:
         store.close()
 

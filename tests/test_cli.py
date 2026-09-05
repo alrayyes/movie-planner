@@ -276,6 +276,154 @@ def test_list_shows_logged_entries(
     assert "Grand Vista Cinema" in result.output
 
 
+# --- show ---
+
+
+def test_show_prints_structured_metadata(
+    config_path: Path, calendar: FakeCalendar, omdb_match: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "show", "1"])
+
+    assert result.exit_code == 0, result.output
+    assert "Dune" in result.output
+    assert "2026-01-01" in result.output
+    assert "cinema" in result.output
+    assert "Grand Vista Cinema" in result.output
+    assert "8.5/10" in result.output
+
+
+def test_show_missing_entry_errors(config_path: Path) -> None:
+    result = runner.invoke(app, ["--config", str(config_path), "show", "999"])
+
+    assert result.exit_code != 0
+    assert "no entry" in result.output.lower()
+
+
+def test_show_with_no_terminal_protocol_skips_image(
+    config_path: Path,
+    calendar: FakeCalendar,
+    no_omdb_match: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for var in ("KITTY_WINDOW_ID", "TERM", "TERM_PROGRAM"):
+        monkeypatch.delenv(var, raising=False)
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "show", "1"])
+
+    assert result.exit_code == 0, result.output
+    assert "\033]1337" not in result.output
+    assert "\033_G" not in result.output
+
+
+def test_show_renders_poster_when_protocol_detected(
+    config_path: Path,
+    calendar: FakeCalendar,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ratings = MovieRatings(
+        imdb="8.5/10",
+        rotten_tomatoes="91%",
+        metacritic="80",
+        imdb_id="tt1160419",
+        poster="https://m.media-amazon.com/images/dune-poster.jpg",
+    )
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: ratings)
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    monkeypatch.setenv("TERM_PROGRAM", "iTerm.app")
+    monkeypatch.setattr("movie_planner.cli._fetch_poster_bytes", lambda url: b"fake-image-bytes")
+
+    result = runner.invoke(app, ["--config", str(config_path), "show", "1"])
+
+    assert result.exit_code == 0, result.output
+    assert "\033]1337;File=" in result.output
+
+
+def test_show_gracefully_handles_poster_fetch_failure(
+    config_path: Path,
+    calendar: FakeCalendar,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ratings = MovieRatings(
+        imdb="8.5/10",
+        rotten_tomatoes="91%",
+        metacritic="80",
+        imdb_id="tt1160419",
+        poster="https://m.media-amazon.com/images/dune-poster.jpg",
+    )
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: ratings)
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    monkeypatch.setenv("TERM_PROGRAM", "iTerm.app")
+
+    def raise_error(url: str) -> bytes | None:
+        raise httpx.HTTPError("boom")
+
+    monkeypatch.setattr("movie_planner.cli._fetch_poster_bytes", raise_error)
+
+    result = runner.invoke(app, ["--config", str(config_path), "show", "1"])
+
+    assert result.exit_code == 0, result.output
+    assert "Dune" in result.output
+
+
 # --- init ---
 
 
