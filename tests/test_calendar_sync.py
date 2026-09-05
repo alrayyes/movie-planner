@@ -165,6 +165,14 @@ def test_build_description_with_nothing_present_is_none() -> None:
     assert build_description(entry) is None
 
 
+def test_build_description_includes_notes() -> None:
+    entry = _entry(notes="Took mother")
+
+    description = build_description(entry)
+
+    assert description == "Took mother"
+
+
 def test_build_description_with_only_some_fields() -> None:
     entry = _entry(imdb_rating="8.5/10")
 

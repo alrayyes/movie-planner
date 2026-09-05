@@ -314,6 +314,25 @@ def test_update_entry_sets_letterboxd_link_and_rating(store: Store) -> None:
     assert updated.letterboxd_rating == "4.5"
 
 
+def test_new_entry_has_no_notes(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+
+    assert entry.notes is None
+
+
+def test_update_entry_sets_notes(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+
+    updated = store.update_entry(entry.id, notes="Took mother")
+
+    assert updated.notes == "Took mother"
+    reloaded = store.get_entry(entry.id)
+    assert reloaded.notes == "Took mother"
+
+
 def test_update_entry_sets_imdb_url(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)

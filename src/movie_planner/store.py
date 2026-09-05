@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS entries (
     letterboxd_url TEXT,
     letterboxd_rating TEXT,
     imdb_url TEXT,
-    booking_ref TEXT
+    booking_ref TEXT,
+    notes TEXT
 );
 """
 
@@ -54,6 +55,7 @@ _MIGRATED_COLUMNS = (
     "letterboxd_rating",
     "imdb_url",
     "booking_ref",
+    "notes",
 )
 
 
@@ -94,6 +96,7 @@ class Entry:
     letterboxd_rating: str | None = None
     imdb_url: str | None = None
     booking_ref: str | None = None
+    notes: str | None = None
 
 
 _ENTRY_COLUMNS = (
@@ -112,6 +115,7 @@ _ENTRY_COLUMNS = (
     "letterboxd_rating",
     "imdb_url",
     "booking_ref",
+    "notes",
 )
 
 
@@ -138,6 +142,7 @@ def _row_to_entry(row: tuple[Any, ...]) -> Entry:
         letterboxd_rating=values["letterboxd_rating"],
         imdb_url=values["imdb_url"],
         booking_ref=values["booking_ref"],
+        notes=values["notes"],
     )
 
 
@@ -327,6 +332,7 @@ class Store:
         letterboxd_rating: str | None = _UNSET,
         imdb_url: str | None = _UNSET,
         booking_ref: str | None = _UNSET,
+        notes: str | None = _UNSET,
     ) -> Entry:
         current = self.get_entry(entry_id)
         changes = {
@@ -344,6 +350,7 @@ class Store:
             "letterboxd_rating": letterboxd_rating,
             "imdb_url": imdb_url,
             "booking_ref": booking_ref,
+            "notes": notes,
         }
         # changes is a heterogeneous dict by design (the _UNSET-sentinel
         # pattern needs one dict covering every field) - mypy can't verify

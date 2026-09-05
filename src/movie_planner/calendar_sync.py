@@ -43,6 +43,8 @@ def build_description(entry: Entry, *, screening_details: str | None = None) -> 
     if entry.letterboxd_url:
         suffix = f" ({entry.letterboxd_rating})" if entry.letterboxd_rating else ""
         lines.append(f"Letterboxd: {entry.letterboxd_url}{suffix}")
+    if entry.notes:
+        lines.append(entry.notes)
     if screening_details:
         lines.append(screening_details)
     return "\n".join(lines) if lines else None
