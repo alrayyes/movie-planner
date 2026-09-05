@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.12.0...movie-planner-v0.13.0) (2026-09-05)
+
+
+### Features
+
+* **cli:** add --no-metadata to import for rate-limited bulk imports ([#96](https://github.com/alrayyes/movie-planner/issues/96)) ([0a88998](https://github.com/alrayyes/movie-planner/commit/0a889985c657ba85b78b2f1f59d687b84d73258d)), closes [#95](https://github.com/alrayyes/movie-planner/issues/95)
+
 ## [0.12.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.11.0...movie-planner-v0.12.0) (2026-09-05)
 
 
