@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.21.2...movie-planner-v0.21.3) (2026-09-05)
+
+
+### Documentation
+
+* **import:** add a JSON Schema for the import row shape ([#136](https://github.com/alrayyes/movie-planner/issues/136)) ([8cff65d](https://github.com/alrayyes/movie-planner/commit/8cff65d3ce62bf72767b629828025c4a2285b598))
+
 ## [0.21.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.21.1...movie-planner-v0.21.2) (2026-09-05)
 
 
