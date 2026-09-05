@@ -153,7 +153,14 @@ def run_import(
         # Invariant: error is None here.
         assert row.entry is not None  # nosec B101
         r = row.entry
-        duplicate = find_duplicate(r.title, r.date, existing, threshold=threshold)
+        duplicate = find_duplicate(
+            r.title,
+            r.date,
+            existing,
+            threshold=threshold,
+            start_time=r.start_time,
+            end_time=r.end_time,
+        )
         if duplicate is not None and not force:
             skipped += 1
             skipped_details.append(

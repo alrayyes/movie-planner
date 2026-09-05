@@ -215,6 +215,55 @@ def test_log_duplicate_without_force_is_rejected_non_interactively(
     store.close()
 
 
+def test_log_overlapping_screening_without_force_is_rejected_regardless_of_title(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    first = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Solstice Run",
+            "--date",
+            "2026-01-01",
+            "--start-time",
+            "19:00",
+            "--end-time",
+            "21:00",
+            "--medium",
+            "cinema",
+        ],
+    )
+    assert first.exit_code == 0, first.output
+
+    second = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "A Completely Different Film",
+            "--date",
+            "2026-01-01",
+            "--start-time",
+            "19:30",
+            "--end-time",
+            "21:30",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    assert second.exit_code != 0
+    assert "duplicate" in second.output.lower()
+    store = _store(config_path)
+    assert len(store.list_entries()) == 1
+    store.close()
+
+
 def test_log_duplicate_with_force_is_persisted(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None
 ) -> None:

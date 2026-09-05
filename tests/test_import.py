@@ -426,6 +426,36 @@ def test_run_import_skips_a_duplicate_by_default(store: Store) -> None:
     assert "row 1" in summary.skipped_details[0]
 
 
+def test_run_import_skips_an_overlapping_screening_regardless_of_title(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    store.create_entry(
+        title="Solstice Run",
+        date=date(2024, 6, 2),
+        medium_id=medium.id,
+        start_time=time(19, 0),
+        end_time=time(21, 0),
+    )
+    rows = [
+        ParsedRow(
+            row_number=1,
+            entry=ImportRow(
+                title="A Completely Different Film",
+                date=date(2024, 6, 2),
+                medium="cinema",
+                start_time=time(19, 30),
+                end_time=time(21, 30),
+            ),
+            error=None,
+        )
+    ]
+
+    summary = run_import(store, rows)
+
+    assert summary.imported == 0
+    assert summary.skipped_duplicates == 1
+    assert len(store.list_entries()) == 1
+
+
 def test_run_import_force_persists_duplicates(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     store.create_entry(title="Solstice Run", date=date(2024, 6, 2), medium_id=medium.id)
