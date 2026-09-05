@@ -57,12 +57,22 @@
       "movie-planner-web",
       "nixpkgs",
       "stdout",
+      "stdin",
+      "stderr",
       "subpackage",
       "subpackages",
       "toolchain",
       "toolchains",
       "uv",
-      "venv"
+      "venv",
+      "mbox",
+      "cron",
+      "subcommand",
+      "pathe-mail-import",
+      "pathe-translate",
+      "VEVENT",
+      "uv-managed",
+      "mbox-format"
     ]
   },
   "ltex.disabledRules": {
