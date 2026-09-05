@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.19.1...movie-planner-v0.20.0) (2026-09-05)
+
+
+### Features
+
+* fetch director, actors, genre, and release year from OMDb ([#127](https://github.com/alrayyes/movie-planner/issues/127)) ([47240fa](https://github.com/alrayyes/movie-planner/commit/47240fac6a614f2f0de67dbab335808e6dd51b74))
+
 ## [0.19.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.19.0...movie-planner-v0.19.1) (2026-09-05)
 
 
