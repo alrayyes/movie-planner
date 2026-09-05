@@ -34,6 +34,8 @@ distros?
 isort
 subpackages?
 stdout
+stdin
+stderr
 stdlib
 toolchain
 toolchains
@@ -60,3 +62,8 @@ geocoding
 backfilled
 GSC's?
 movie-planner-web
+pathe-mail-import
+pathe-translate
+mbox
+cron
+subcommand

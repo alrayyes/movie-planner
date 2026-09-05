@@ -173,3 +173,24 @@
   entry; equivalence with the single-command path is established via
   that path's own separately-passing tests rather than a literal
   side-by-side diff in one test
+
+## 9. Container image (found missing while writing docs - the spec/design
+already called for this, no task had ever tracked actually building it)
+
+- [x] 9.1 Add a `pathe-mail-import` named stage to the existing
+  `Dockerfile`, sharing the same `builder` stage `movie-planner`'s own
+  image already uses; kept before the `movie-planner` stage so it
+  stays the last stage and the existing default `docker build .`
+  target is unaffected; verify both `docker build .` (unchanged) and
+  `docker build --target pathe-mail-import .` succeed, and that the
+  latter's `ENTRYPOINT` actually runs `pathe-mail-import --help`
+- [x] 9.2 Wire the new target into the same three places the existing
+  one is checked: CI's `docker` job, and both the glob-scoped
+  pre-commit and the unconditional pre-push `docker-build` hooks;
+  verify `hadolint` and a local build of both targets pass
+- [x] 9.3 Correct `specs/pathe-mail-fetch/spec.md`'s "Ship as its own
+  container image" requirement, which said "SHALL be published" -
+  narrowed to "buildable", since publishing to a registry (GHCR
+  tagging/versioning, a release-job step) is a separate, undecided
+  scope this session didn't take on; a deliberate, documented gap, not
+  a silent one

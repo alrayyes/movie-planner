@@ -31,6 +31,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends binutils=2.40-2
 RUN uv sync --frozen --no-editable && \
   uv run pyinstaller --onefile --name movie-planner --distpath /dist /opt/venv/bin/movie-planner
 
+# Its own image, sharing no runtime container with movie-planner's own -
+# separate credentials, separate mounted config, separate least-privilege
+# footprint. See openspec/changes/add-imap-pathe-mail-import/design.md's
+# "Separate Docker image" decision. Not the default `docker build .`
+# target - build with `--target pathe-mail-import` explicitly; the
+# movie-planner stage below stays last so the existing default build
+# (and the release job that publishes it) is unaffected by this stage
+# existing at all.
+FROM python:3.14-slim-bookworm@sha256:416f0db2a2b561945630cef9877a7ea0581b27449eb9fd9df42f03e1b74b5b63 AS pathe-mail-import
+
+RUN useradd --create-home --uid 1000 pathemailimport
+COPY --from=builder --chown=pathemailimport:pathemailimport /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+USER pathemailimport
+WORKDIR /home/pathemailimport
+ENTRYPOINT ["pathe-mail-import"]
+
 FROM python:3.14-slim-bookworm@sha256:416f0db2a2b561945630cef9877a7ea0581b27449eb9fd9df42f03e1b74b5b63
 
 RUN useradd --create-home --uid 1000 movieplanner

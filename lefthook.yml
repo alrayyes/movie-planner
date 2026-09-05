@@ -82,6 +82,17 @@ pre-commit:
         - "src/**"
       run: docker build -t movie-planner:pre-commit-check . && docker rmi movie-planner:pre-commit-check
 
+    - name: docker-build (pathe-mail-import)
+      glob:
+        - "Dockerfile"
+        - "pyproject.toml"
+        - "uv.lock"
+        - "README.md"
+        - "src/**"
+      run:
+        docker build --target pathe-mail-import -t pathe-mail-import:pre-commit-check . && docker
+        rmi pathe-mail-import:pre-commit-check
+
 commit-msg:
   jobs:
     # Resolved from node_modules rather than fetched by bunx: commitlint has to
@@ -159,3 +170,8 @@ pre-push:
 
     - name: docker-build
       run: docker build -t movie-planner:pre-push-check . && docker rmi movie-planner:pre-push-check
+
+    - name: docker-build (pathe-mail-import)
+      run:
+        docker build --target pathe-mail-import -t pathe-mail-import:pre-push-check . && docker rmi
+        pathe-mail-import:pre-push-check
