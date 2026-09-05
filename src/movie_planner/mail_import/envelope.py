@@ -12,6 +12,7 @@ import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from html import unescape
 from typing import Protocol
 
 
@@ -96,6 +97,25 @@ def extract_envelope(raw: str) -> MailEnvelope:
     )
 
 
+_BLOCK_BREAK_RE = re.compile(r"(?i)<(?:br|/p|/h[1-6]|/tr|/li|/div)\s*/?>")
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _html_to_text(html: str) -> str:
+    """A deliberately simple HTML-to-plain-text conversion - enough for
+    a chain's own regex-based translation script to work against, not a
+    faithful rendering. Real Pathé confirmations are HTML-only (movie-
+    planner#158), and this is chain-agnostic so any future chain's own
+    translation script benefits the same way, not just Pathé's.
+    """
+    text = _BLOCK_BREAK_RE.sub("\n", html)
+    text = _TAG_RE.sub("", text)
+    text = unescape(text).replace("\xa0", " ")
+    text = re.sub(r"[ \t]+", " ", text)
+    lines = (line.strip() for line in text.splitlines())
+    return "\n".join(line for line in lines if line)
+
+
 def _extract_body(msg: email.message.EmailMessage) -> str:
     if not msg.is_multipart():
         return msg.get_content()  # type: ignore[no-any-return]
@@ -105,4 +125,19 @@ def _extract_body(msg: email.message.EmailMessage) -> str:
     for sub in msg.walk():
         if sub.get_content_type() == "text/plain":
             return sub.get_content()  # type: ignore[no-any-return]
-    raise MailFetchError("could not find a text/plain part in the email")
+
+    html_part = msg.get_body(preferencelist=("html",))
+    if html_part is None:
+        for sub in msg.walk():
+            if sub.get_content_type() == "text/html":
+                html_part = sub
+                break
+    if html_part is not None:
+        return _html_to_text(html_part.get_content())
+
+    # Genuinely no readable text anywhere (e.g. an attachment-only
+    # message) - an empty body simply won't match any chain's
+    # translation script, so it surfaces in the "not recognized"
+    # review table like any other unrecognized email, rather than
+    # vanishing via a caught-and-dropped MailFetchError.
+    return ""

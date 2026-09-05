@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 
 import pytest
+from fixtures import PATHE_EMAIL_HTML_ONLY, PATHE_HTML_BOOKING_REF
 
 from movie_planner.mail_import.envelope import (
     MailFetchError,
@@ -51,3 +53,36 @@ def test_sender_domain_extracts_and_lowercases_the_domain() -> None:
 
 def test_sender_domain_with_no_address_is_none() -> None:
     assert sender_domain("not an email address") is None
+
+
+# --- HTML-only fallback: movie-planner#158 ---
+
+
+def test_extract_envelope_falls_back_to_html_when_no_plain_part() -> None:
+    envelope = extract_envelope(PATHE_EMAIL_HTML_ONLY)
+
+    assert envelope.from_address == "Pathé <no-reply@service.pathe.nl>"
+    assert "Spider-Man: Brand New Day" in envelope.body
+    assert PATHE_HTML_BOOKING_REF in envelope.body
+    # Tags themselves shouldn't leak into the plain-text body a
+    # translation script parses.
+    assert "<h2" not in envelope.body
+    assert "<p>" not in envelope.body
+
+
+def test_extract_envelope_html_fallback_collapses_nbsp_and_tags_to_plain_lines() -> None:
+    envelope = extract_envelope(PATHE_EMAIL_HTML_ONLY)
+
+    assert "Expected end time: 16:30" in envelope.body
+
+
+def test_extract_envelope_with_neither_plain_nor_html_returns_empty_body() -> None:
+    msg = EmailMessage()
+    msg["From"] = "Cinema Chain <noreply@example-chain.com>"
+    msg["Subject"] = "Your booking confirmation"
+    msg["Date"] = "Sat, 04 Jul 2026 19:00:00 +0200"
+    msg.add_attachment(b"not text", maintype="application", subtype="octet-stream")
+
+    envelope = extract_envelope(msg.as_string())
+
+    assert envelope.body == ""

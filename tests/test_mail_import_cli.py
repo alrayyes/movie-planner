@@ -47,7 +47,7 @@ def test_init_non_interactive_with_all_flags_writes_config(tmp_path: Path) -> No
     assert data["mail"]["imap"]["port"] == 1143
     assert data["mail"]["imap"]["password_command"] == "printf hunter2"
     assert "password" not in data["mail"]["imap"]
-    assert data["chains"][0]["sender_domain"] == "pathe.nl"
+    assert data["chains"][0]["sender_domain"] == "service.pathe.nl"
     assert data["chains"][0]["translate"] == "pathe-translate"
 
 
@@ -139,7 +139,7 @@ def test_init_interactive_prompts_for_missing_values(
     assert data["mail"]["imap"]["host"] == "127.0.0.1"
     assert data["mail"]["imap"]["port"] == 993
     assert data["mail"]["imap"]["password"] == "hunter2"
-    assert data["chains"][0]["sender_domain"] == "pathe.nl"
+    assert data["chains"][0]["sender_domain"] == "service.pathe.nl"
 
 
 def test_init_interactive_password_command_path(
@@ -359,3 +359,46 @@ translate = "irrelevant"
 
     assert result.exit_code == 0, result.output
     assert result.stdout.strip() == ""
+
+
+# --- real HTML-only Pathé confirmations: movie-planner#158 ---
+
+
+def test_fetch_recognizes_real_html_only_confirmations(tmp_path: Path) -> None:
+    import mailbox
+
+    from fixtures import PATHE_EMAIL_HTML_ONLY
+
+    box = mailbox.mbox(str(tmp_path / "INBOX"))
+    try:
+        box.add(mailbox.mboxMessage(PATHE_EMAIL_HTML_ONLY))
+        box.add(mailbox.mboxMessage(PATHE_EMAIL_HTML_ONLY))
+    finally:
+        box.close()
+
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f"""\
+[mail]
+source = "mbox"
+
+[mail.mbox]
+path = "{tmp_path / "INBOX"}"
+
+[[chains]]
+sender_domain = "service.pathe.nl"
+translate = "{sys.executable} -m movie_planner.mail_import.pathe_translate"
+"""
+    )
+    output_path = tmp_path / "import.json"
+
+    result = runner.invoke(
+        app, ["fetch", "--config", str(config_path), "--output", str(output_path)]
+    )
+
+    assert result.exit_code == 0, result.output
+    rows = json.loads(output_path.read_text())
+    assert len(rows) == 2
+    assert rows[0]["title"] == "Spider-Man: Brand New Day"
+    assert rows[0]["venue"] == "Pathé De Munt"
+    assert "not recognized" not in result.output

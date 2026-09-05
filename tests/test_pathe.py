@@ -2,8 +2,15 @@ from datetime import date, time
 from email.message import EmailMessage
 
 import pytest
-from fixtures import PATHE_BOOKING_REF, PATHE_EMAIL_MIME, PATHE_EMAIL_PLAIN
+from fixtures import (
+    PATHE_BOOKING_REF,
+    PATHE_EMAIL_HTML_ONLY,
+    PATHE_EMAIL_MIME,
+    PATHE_EMAIL_PLAIN,
+    PATHE_HTML_BOOKING_REF,
+)
 
+from movie_planner.mail_import.envelope import extract_envelope
 from movie_planner.pathe import PatheEmailParseError, parse_pathe_email
 
 # --- parse_pathe_email: tasks 4.1, 4.2 ---
@@ -97,3 +104,34 @@ def test_mime_message_with_no_text_plain_part_raises() -> None:
 
     with pytest.raises(PatheEmailParseError, match="text/plain"):
         parse_pathe_email(msg.as_string())
+
+
+# --- HTML-derived text shape: movie-planner#158 ---
+#
+# pathe.py's own MIME extraction (_extract_body, above) is untouched -
+# a raw HTML-only .eml piped straight into `from-pathe-email` still
+# raises the same as before. This is the shape parse_pathe_email
+# actually receives from mail_import: envelope.py's own HTML fallback
+# already converted the email to plain text by the time it gets here.
+
+
+def test_parses_the_html_derived_plain_text_shape() -> None:
+    stripped_body = extract_envelope(PATHE_EMAIL_HTML_ONLY).body
+
+    booking = parse_pathe_email(stripped_body)
+
+    assert booking.title == "Spider-Man: Brand New Day"
+    assert booking.date == date(2026, 8, 9)
+    assert booking.start_time == time(13, 45)
+    assert booking.end_time == time(16, 30)
+    assert booking.cinema == "Pathé De Munt"
+    assert booking.booking_ref == PATHE_HTML_BOOKING_REF
+    assert booking.screening_details == "Original Version, Auditorium 1 dolby"
+
+
+def test_html_derived_shape_still_raises_when_reservation_number_is_missing() -> None:
+    stripped_body = extract_envelope(PATHE_EMAIL_HTML_ONLY).body
+    without_ref = stripped_body.replace(f"reservation no.{PATHE_HTML_BOOKING_REF}.", "")
+
+    with pytest.raises(PatheEmailParseError):
+        parse_pathe_email(without_ref)

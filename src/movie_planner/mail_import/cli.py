@@ -32,7 +32,7 @@ from movie_planner.mail_import.mbox_client import MboxMailClient
 
 app = typer.Typer(help="Fetches cinema booking confirmations from a mailbox and emits import.json.")
 
-_DEFAULT_CHAIN_SENDER_DOMAIN = "pathe.nl"
+_DEFAULT_CHAIN_SENDER_DOMAIN = "service.pathe.nl"
 _DEFAULT_CHAIN_TRANSLATE = "pathe-translate"
 
 

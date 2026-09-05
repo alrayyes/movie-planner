@@ -68,3 +68,52 @@ def _build_pathe_email_mime() -> str:
 
 
 PATHE_EMAIL_MIME = _build_pathe_email_mime()
+
+# The real shape movie-planner#158 found: Pathé's actual booking
+# confirmations are multipart/mixed with only a text/html part (plus a
+# PDF ticket attachment) - no text/plain part anywhere. Trimmed of the
+# real email's decorative CSS/marketing boilerplate, but every tag,
+# class, and phrase the parser matches against is kept verbatim from a
+# real (redacted) confirmation - see movie-planner#158's own comments
+# for the untrimmed original.
+PATHE_HTML_BOOKING_REF = "AB1CD23"
+
+_PATHE_HTML_BODY = f"""\
+<html>
+<body>
+<h1>Order successful!</h1>
+<p>Thank you for your purchase with reservation no.{PATHE_HTML_BOOKING_REF}.<br>Your tickets can be found in this email and in your My Club Pathé account.</p>
+<h2>Sunday 9 August 2026 at &nbsp;13:45 <span>Expected end time:&nbsp;16:30</span></h2>
+<h2 class="movie-title">Spider-Man: Brand New Day</h2>
+<p><a href="https://www.pathe.nl/" style="color: #606369;">Pathé De Munt</a>
+- Vijzelstraat 15 1017HD Amsterdam</p>
+<p>Original Version
+– <b>Auditorium 1 dolby</b>
+– <b>1 Seat</b>: Row&nbsp;4&nbsp;Seat&nbsp;1<br>
+<b>Number of tickets:</b> 1 Unlimited RS<br>
+<b>Price incl. VAT:</b> &euro; 0,00</p>
+<p>The screening is scheduled for <b>Sunday 9 August 2026 at 13:45</b> at <br> <b>Pathé De Munt</b></p>
+</body>
+</html>
+"""
+
+
+def _build_pathe_html_only_email() -> str:
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    msg["From"] = "Pathé <no-reply@service.pathe.nl>"
+    msg["To"] = "moviewatcher@example.com"
+    msg["Subject"] = "🎫 Ticketconfirmation Pathé"
+    msg["Date"] = "Sun, 09 Aug 2026 11:27:15 +0000"
+    msg.set_content(_PATHE_HTML_BODY, subtype="html")
+    msg.add_attachment(
+        b"%PDF-1.1 fake ticket pdf, not a real PDF",
+        maintype="application",
+        subtype="pdf",
+        filename="Ticket.pdf",
+    )
+    return msg.as_string()
+
+
+PATHE_EMAIL_HTML_ONLY = _build_pathe_html_only_email()
