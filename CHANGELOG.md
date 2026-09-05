@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.5.1...movie-planner-v1.5.2) (2026-09-05)
+
+
+### Bug Fixes
+
+* **mail-import:** parse real, HTML-only Pathé confirmations ([#163](https://github.com/alrayyes/movie-planner/issues/163)) ([6d7b45f](https://github.com/alrayyes/movie-planner/commit/6d7b45f895e86956458a399107bd40797b57d12d))
+
 ## [1.5.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.5.0...movie-planner-v1.5.1) (2026-09-05)
 
 
