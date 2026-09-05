@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.17.0...movie-planner-v0.17.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* persist and push poster_url, detect Ghostty for inline posters ([#117](https://github.com/alrayyes/movie-planner/issues/117)) ([bf5adf3](https://github.com/alrayyes/movie-planner/commit/bf5adf3ef6d4a4146f2a00679ccfc2f075fc1392)), closes [#114](https://github.com/alrayyes/movie-planner/issues/114)
+
 ## [0.17.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.16.0...movie-planner-v0.17.0) (2026-09-05)
 
 
