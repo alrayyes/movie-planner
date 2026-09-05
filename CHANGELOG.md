@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.14.0...movie-planner-v0.15.0) (2026-09-05)
+
+
+### Features
+
+* **cli:** add show command with structured output and inline posters ([#107](https://github.com/alrayyes/movie-planner/issues/107)) ([fbe50f9](https://github.com/alrayyes/movie-planner/commit/fbe50f9e38432f1ba6df66e7ae6fcf9af18bfccb)), closes [#106](https://github.com/alrayyes/movie-planner/issues/106)
+
 ## [0.14.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v0.13.1...movie-planner-v0.14.0) (2026-09-05)
 
 
