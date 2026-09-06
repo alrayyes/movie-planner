@@ -96,6 +96,32 @@ def test_extract_envelope_falls_back_to_html_when_the_plain_part_has_no_digits()
     assert "Booking number" in envelope.body
 
 
+def test_extract_envelope_falls_back_to_html_when_the_placeholder_has_a_url_with_digits() -> None:
+    # movie-planner#200: a "view this in your browser" placeholder whose
+    # tracking URL happens to contain a digit defeats the plain digit
+    # check above - the placeholder itself has no *real* digit (a date,
+    # a time, a seat), just one buried in a URL. Found on real, much
+    # older Pathé confirmations (2013-2019) that use this exact shape.
+    msg = EmailMessage()
+    msg["From"] = "Cinema Chain <noreply@example-chain.com>"
+    msg["Subject"] = "Booking confirmation"
+    msg["Date"] = "Sat, 04 Jul 2026 19:00:00 +0200"
+    msg.set_content(
+        "Probably your email client doesn't support HTML.\n"
+        "Visit the following page to read this message in your browser:\n"
+        "http://chain.example/x/?S7Y1NPqfa2tsbvy.yNbM3NzcxPx.gW1xclFmQUl8cWkSiJWUCgAA12\n"
+    )
+    msg.add_alternative(
+        "<html><body><h1>Good Boy</h1><p>Saturday 4 July 2026, 19:00</p></body></html>",
+        subtype="html",
+    )
+
+    envelope = extract_envelope(msg.as_string())
+
+    assert "Good Boy" in envelope.body
+    assert "chain.example" not in envelope.body
+
+
 # --- mislabeled text/plain attachment: movie-planner#191 ---
 
 
