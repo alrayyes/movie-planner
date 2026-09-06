@@ -70,6 +70,25 @@ either.
     example `2021`) - not the watched date, which is `DTSTART`/`DTEND`
     instead.
 
+A real example — an entry at a known venue, with a genre tag and
+coordinates on record, exactly as `build_vevent` produces it:
+
+```text
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//movie-planner//EN
+BEGIN:VEVENT
+SUMMARY:Insidious: Out of the Further
+DTSTART:20260827T134000
+DTEND:20260827T154600
+UID:0199c1f2-3a4b-7def-8a9b-0123456789ab
+GEO:52.3633802;4.8838439
+LOCATION:City\, Amsterdam\, Netherlands
+X-GENRE:Horror
+END:VEVENT
+END:VCALENDAR
+```
+
 ## DESCRIPTION content
 
 Plain text, newline-separated. Lines appear in this order, each
@@ -134,6 +153,17 @@ consumer reading the calendar only ever sees the result on
 `LOCATION`/the `Chain:` line above - it has no way to tell "no chain
 data available" apart from "not in the table at all"; both just omit
 the fields.
+
+**Known gap (issue #196):** a venue name that bakes a screen/format
+into it ("De Munt 4DX", "De Munt Dolby Atmos") already resolves to the
+_same_ chain/city/country/coordinates as its plain-name counterpart
+("De Munt") - but each distinct string still becomes its own separate
+`Venue` row, so `list --chain`/`--city`, a venue picklist, or any
+per-venue count sees them as different venues. Not yet fixed - a
+venue-identity migration is scoped in #196, pending sign-off before
+implementation (it rewrites real historical data: local venue rows,
+and, via a re-push, real calendar `LOCATION` values already sitting on
+someone's CalDAV server).
 
 Screening details aren't stored anywhere on the entry itself — only
 `from-pathe-email` ever supplies them for a push. `sync refresh`,
