@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.8.0...movie-planner-v1.8.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* **store:** backfill venue coordinates independently of chain/city/country ([#186](https://github.com/alrayyes/movie-planner/issues/186)) ([d740f98](https://github.com/alrayyes/movie-planner/commit/d740f98e1aee5239610d9790340f9529372cb8f2)), closes [#185](https://github.com/alrayyes/movie-planner/issues/185)
+
 ## [1.8.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.7.0...movie-planner-v1.8.0) (2026-09-06)
 
 
