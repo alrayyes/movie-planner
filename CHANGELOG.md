@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.13.2...movie-planner-v1.13.3) (2026-09-06)
+
+
+### Bug Fixes
+
+* **venues:** alias the pre-[#227](https://github.com/alrayyes/movie-planner/issues/227) ", Amsterdam" cinema strings too ([#233](https://github.com/alrayyes/movie-planner/issues/233)) ([9a4cde0](https://github.com/alrayyes/movie-planner/commit/9a4cde0b54f8c9cf9b7d770b90a8360af51a7179))
+
 ## [1.13.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.13.1...movie-planner-v1.13.2) (2026-09-06)
 
 
