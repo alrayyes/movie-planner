@@ -228,6 +228,10 @@ def test_lookup_caches_no_match_too() -> None:
         ("Ant-Man and The Wasp 4DX 3D", "Ant-Man and The Wasp"),
         ("Insidious: Chapter 3 (OV)", "Insidious: Chapter 3"),
         ("Wreck-It Ralph 3D OV O3D", "Wreck-It Ralph"),
+        # Dutch "Original Version" - movie-planner#224.
+        ("Sausage Party (Originele versie)", "Sausage Party"),
+        ("Incredibles 2 (Originele versie)", "Incredibles 2"),
+        ("The Lego Movie 2 (Originele versie)", "The Lego Movie 2"),
     ],
 )
 def test_lookup_strips_a_format_suffix_before_searching(

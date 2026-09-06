@@ -62,7 +62,11 @@ def _na_or(value: object) -> str | None:
 # the search string - the stored entry.title is never touched, since
 # the format is real information, just not part of the movie's name.
 _FORMAT_SUFFIX_RE = re.compile(
-    r"\s*\(?\b(?:OV|NL|DOV|O3D|3D|4DX|IMAX|Dolby|Cinema|Atmos)\b\)?\s*$",
+    r"\s*\(?\b(?:OV|NL|DOV|O3D|3D|4DX|IMAX|Dolby|Cinema|Atmos"
+    # Dutch "Original Version" (movie-planner#224) - stripped word by
+    # word, same as "Dolby Cinema" already is, so "(Originele versie)"
+    # resolves in two passes rather than needing its own phrase match.
+    r"|Originele|versie)\b\)?\s*$",
     re.IGNORECASE,
 )
 
