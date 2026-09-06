@@ -23,7 +23,11 @@ either.
   it (the leading 48 bits are a Unix millisecond timestamp per RFC
   9562), but shouldn't assume any other structure. An entry synced
   before this changed keeps its existing `uuid4` UID - this isn't
-  retroactive.
+  retroactive. If the calendar no longer has an entry's UID (the
+  calendar was wiped or rebuilt outside movie-planner), the next
+  `sync refresh`/`sync retry` recovers automatically: it treats the
+  entry as never synced, generates a fresh UID, and pushes a new
+  event, rather than warning forever about the same missing UID.
 - **SUMMARY** — the movie title, verbatim.
 - **LOCATION** — present only when the entry has a venue (only a
   physical-place medium - a cinema, not `netflix`/`youtube`/etc. - can
