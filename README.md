@@ -216,6 +216,16 @@ section without disturbing the other's. An older config file with
 wrapper) still loads exactly as before — nothing to migrate for an
 existing setup.
 
+The `[movie_planner]` table is there so this file can be shared with
+[pathe-mail-import](docs/pathe-mail-import.md), which keeps its own
+settings under `[mail_import]` in the same file — point both tools'
+`--config` (or `$XDG_CONFIG_HOME/*/config.toml`) at one path, and
+`movie-planner init`/`pathe-mail-import init` each add their own
+section without disturbing the other's. An older config file with
+`[caldav]`/`[omdb]`/`[storage]` at the top level (no `[movie_planner]`
+wrapper) still loads exactly as before — nothing to migrate for an
+existing setup.
+
 Instead of `caldav.password` in plain text, `caldav.password_command` runs
 a command and uses its stdout as the password — a password manager CLI, for
 example. Set only one of the two.

@@ -1307,6 +1307,29 @@ def test_from_pathe_email_via_file_creates_new_entry(
     store.close()
 
 
+def test_from_pathe_email_via_file_handles_a_real_html_only_confirmation(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    # movie-planner#162: a real Pathé confirmation piped/pointed at
+    # directly, with no text/plain part at all, still logs the booking
+    # instead of failing on "could not find a text/plain part".
+    from fixtures import PATHE_EMAIL_HTML_ONLY, PATHE_HTML_BOOKING_REF
+
+    email_path = tmp_path / "ticket.eml"
+    email_path.write_text(PATHE_EMAIL_HTML_ONLY)
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "from-pathe-email", str(email_path)], input="y\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.title == "Spider-Man: Brand New Day"
+    assert entry.booking_ref == PATHE_HTML_BOOKING_REF
+    store.close()
+
+
 def test_from_pathe_email_via_stdin_uses_tty_confirmation(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.5](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.5.4...movie-planner-v1.5.5) (2026-09-06)
+
+
+### Bug Fixes
+
+* **pathe:** from-pathe-email handles a real HTML-only confirmation ([#178](https://github.com/alrayyes/movie-planner/issues/178)) ([b1c4803](https://github.com/alrayyes/movie-planner/commit/b1c4803845aa48be59f68df9b3e34761298ceba9)), closes [#162](https://github.com/alrayyes/movie-planner/issues/162)
+
+## [1.5.4](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.5.3...movie-planner-v1.5.4) (2026-09-06)
+
+
+### Bug Fixes
+
+* **mail-import:** parse a third real Pathé template ([#174](https://github.com/alrayyes/movie-planner/issues/174)) ([7a19b22](https://github.com/alrayyes/movie-planner/commit/7a19b225b98b007b58c81051b68250e668057346)), closes [#171](https://github.com/alrayyes/movie-planner/issues/171)
+
 ## [1.5.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.5.2...movie-planner-v1.5.3) (2026-09-06)
 
 
