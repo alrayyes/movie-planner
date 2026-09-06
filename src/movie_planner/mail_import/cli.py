@@ -121,29 +121,78 @@ def _resolve_password(
 @app.command()
 def init(
     config: Annotated[
-        Path | None, typer.Option(help="Path to write config.toml. Defaults to the XDG location.")
+        Path | None,
+        typer.Option(
+            help="Path to write config.toml. Defaults to the XDG location "
+            "($XDG_CONFIG_HOME/pathe-mail-import/config.toml, or "
+            "~/.config/pathe-mail-import/config.toml if that's unset). Point this at the "
+            "same path as movie-planner's own config to share one file (issue #157)."
+        ),
     ] = None,
     force: Annotated[
-        bool, typer.Option("--force", help="Overwrite an existing config file.")
+        bool,
+        typer.Option(
+            "--force",
+            help="Overwrite the whole file, including any [movie_planner] section "
+            "movie-planner already wrote there. Without --force, adding this tool's own "
+            "[mail_import] section to a file that already has one is refused rather than "
+            "silently replacing it - --force is the explicit 'yes, start over' for that.",
+        ),
     ] = False,
-    source: Annotated[str | None, typer.Option(help='Mail source: "imap" or "mbox".')] = None,
-    imap_host: Annotated[str | None, typer.Option(help="IMAP host.")] = None,
-    imap_port: Annotated[int | None, typer.Option(help="IMAP port.")] = None,
-    imap_username: Annotated[str | None, typer.Option(help="IMAP username.")] = None,
+    source: Annotated[
+        str | None,
+        typer.Option(
+            help='Mail source: "imap" (a real mailbox, fetched live over the network) or '
+            '"mbox" (a local mbox-format file - mutt\'s own storage, or a Thunderbird '
+            "local folder, which is also plain mbox). Prompted for interactively if omitted."
+        ),
+    ] = None,
+    imap_host: Annotated[
+        str | None, typer.Option(help="IMAP server hostname or IP. Required for --source imap.")
+    ] = None,
+    imap_port: Annotated[
+        int | None,
+        typer.Option(help="IMAP server port. Defaults to 993 (implicit TLS) if left blank."),
+    ] = None,
+    imap_username: Annotated[
+        str | None, typer.Option(help="IMAP login username. Required for --source imap.")
+    ] = None,
     imap_password_command: Annotated[
         str | None,
         typer.Option(
-            help="Command to run for the IMAP password. The literal password is never "
-            "accepted as a flag - only this, or a masked interactive prompt."
+            help="Command to run for the IMAP password, printing it to stdout - a password "
+            "manager CLI, for example. The literal password is never accepted as a flag "
+            "(it would leak into shell history and the process list) - only this, or a "
+            "masked interactive prompt when running in a terminal."
         ),
     ] = None,
-    mbox_path: Annotated[Path | None, typer.Option(help="Path to a local mbox file.")] = None,
+    mbox_path: Annotated[
+        Path | None,
+        typer.Option(
+            help="Path to a local mbox file (INBOX, typically). Required for --source mbox. "
+            "A second config edit can add mail.mbox.extra_paths afterward to also scan an "
+            "Archive folder or similar (issue #188) - not offered as an init prompt, since "
+            "most setups only need the one file."
+        ),
+    ] = None,
     chain_sender_domain: Annotated[
-        str | None, typer.Option(help="Sender domain for the first configured chain.")
+        str | None,
+        typer.Option(
+            help="Sender domain for the first configured chain - only email from this "
+            "domain is fetched and handed to --chain-translate. Real Pathé confirmations "
+            "come from service.pathe.nl specifically, not the bare pathe.nl domain (other "
+            "Pathé mail - the newsletter, a membership invoice - uses other subdomains and "
+            "is correctly left unrecognized by a chain scoped this narrowly)."
+        ),
     ] = None,
     chain_translate: Annotated[
         str | None,
-        typer.Option(help="Translation script command for the first configured chain."),
+        typer.Option(
+            help="Translation script command for the first configured chain - reads one "
+            "JSON envelope per line on stdin, writes one import.json row per line on "
+            "stdout for anything it recognizes. pathe-translate (installed alongside this "
+            "tool) is the only one that ships today."
+        ),
     ] = None,
 ) -> None:
     """Write a starter config.toml, ready to edit. Prompts for anything
@@ -274,11 +323,19 @@ def _print_review_table(envelopes: list[MailEnvelope]) -> None:
 @app.command()
 def fetch(
     config: Annotated[
-        Path | None, typer.Option(help="Path to config.toml. Defaults to the XDG location.")
+        Path | None,
+        typer.Option(
+            help="Path to config.toml. Defaults to the XDG location "
+            "($XDG_CONFIG_HOME/pathe-mail-import/config.toml)."
+        ),
     ] = None,
-    output: Annotated[Path, typer.Option(help="Where to write the import-ready JSON.")] = Path(
-        "import.json"
-    ),
+    output: Annotated[
+        Path,
+        typer.Option(
+            help="Where to write the import-ready JSON - feed this straight to "
+            "'movie-planner import <file>' afterward. Ignored with --envelopes-only."
+        ),
+    ] = Path("import.json"),
     envelopes_only: Annotated[
         bool,
         typer.Option(
