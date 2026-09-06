@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.6](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.9.5...movie-planner-v1.9.6) (2026-09-06)
+
+
+### Bug Fixes
+
+* **pathe:** parse the three remaining 2013-2019 Dutch templates ([#200](https://github.com/alrayyes/movie-planner/issues/200)) ([#209](https://github.com/alrayyes/movie-planner/issues/209)) ([ce6dc2e](https://github.com/alrayyes/movie-planner/commit/ce6dc2e90a8c1f58345e815f64d5279285049455))
+
 ## [1.9.5](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.9.4...movie-planner-v1.9.5) (2026-09-06)
 
 
