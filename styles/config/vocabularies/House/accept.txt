@@ -67,3 +67,8 @@ pathe-translate
 mbox
 cron
 subcommand
+Munt
+Atmos
+picklist
+namespaced
+deduplicat(e|ed|es|ing)
