@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 
 import icalendar
+from caldav.lib.error import NotFoundError
 
 
 @dataclass
@@ -40,4 +41,10 @@ class FakeCalendar:
     def event_by_uid(self, uid: str) -> FakeEvent:
         if self.fail_next:
             raise ConnectionError("simulated failure")
+        # The real caldav library raises its own NotFoundError for an
+        # unknown UID, not a bare KeyError - matched here so
+        # CalendarSync's recovery path (movie-planner#166) is exercised
+        # the same way it would be against a real server.
+        if uid not in self.events_by_uid:
+            raise NotFoundError(f"{uid} not found on server")
         return self.events_by_uid[uid]

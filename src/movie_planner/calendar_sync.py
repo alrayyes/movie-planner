@@ -10,6 +10,7 @@ from typing import Protocol, cast
 
 import icalendar
 from caldav.davclient import DAVClient
+from caldav.lib.error import NotFoundError
 
 from movie_planner.store import Entry, Store
 
@@ -223,6 +224,15 @@ class CalendarSync:
         )
         try:
             self._client.update_event(entry.caldav_uid, ical_text)
+        except NotFoundError:
+            # The calendar no longer has this UID - wiped or rebuilt
+            # out-of-band (movie-planner#166). Treat the entry as never
+            # synced instead of failing forever: clear the stale UID and
+            # create a fresh event.
+            never_synced = self._store.update_entry(entry.id, caldav_uid=None)
+            self.push_new(
+                never_synced, venue=venue, chain=chain, screening_details=screening_details
+            )
         except Exception as e:
             raise CalendarSyncError(
                 f"could not sync the update to '{entry.title}' to the calendar: {e}"

@@ -553,6 +553,28 @@ def test_push_update_on_never_synced_entry_raises(store: Store) -> None:
         sync.push_update(entry, venue=None)
 
 
+def test_push_update_recreates_the_event_when_the_caldav_uid_is_stale(store: Store) -> None:
+    # movie-planner#166: an external wipe/rebuild of the calendar leaves
+    # every entry's caldav_uid pointing at an event that no longer
+    # exists - push_update should recover by treating the entry as
+    # never synced, not fail forever.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None)
+    stale_uid = entry.caldav_uid
+    assert stale_uid is not None
+    del calendar.events_by_uid[stale_uid]  # simulates an external wipe
+
+    sync.push_update(entry, venue=None)  # does not raise
+
+    refreshed = store.get_entry(entry.id)
+    assert refreshed.caldav_uid is not None
+    assert refreshed.caldav_uid != stale_uid
+    assert refreshed.caldav_uid in calendar.events_by_uid
+
+
 def test_push_update_failure_is_wrapped_and_retryable(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
