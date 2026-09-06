@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.4](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.9.3...movie-planner-v1.9.4) (2026-09-06)
+
+
+### Bug Fixes
+
+* **mail-import:** a URL's own digits no longer defeat placeholder detection ([#202](https://github.com/alrayyes/movie-planner/issues/202)) ([9ed2522](https://github.com/alrayyes/movie-planner/commit/9ed25225fd55f4276334c656519b73a5a75c4f4c))
+
 ## [1.9.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.9.2...movie-planner-v1.9.3) (2026-09-06)
 
 
