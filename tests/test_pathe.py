@@ -13,7 +13,7 @@ from fixtures import (
 )
 
 from movie_planner.mail_import.envelope import extract_envelope
-from movie_planner.pathe import PatheEmailParseError, parse_pathe_email
+from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
 
 # --- parse_pathe_email: tasks 4.1, 4.2 ---
 
@@ -95,7 +95,10 @@ def test_missing_booking_number_raises() -> None:
         parse_pathe_email(without_booking_ref)
 
 
-def test_mime_message_with_no_text_plain_part_raises() -> None:
+def test_mime_message_with_neither_plain_nor_recognizable_html_raises() -> None:
+    # No text/plain part, and the html part isn't a Pathé booking shape
+    # either (movie-planner#162 added the html fallback below) - still
+    # raises, just for the actual reason now.
     msg = EmailMessage()
     msg["From"] = "Pathé Nederland <noreply@pathe.nl>"
     msg["To"] = "john@example.com"
@@ -104,17 +107,29 @@ def test_mime_message_with_no_text_plain_part_raises() -> None:
     msg.add_alternative("<html><body>secondary</body></html>", subtype="html")
     assert msg.is_multipart()
 
+    with pytest.raises(PatheEmailParseError, match="could not parse this as a Pathé"):
+        parse_pathe_email(msg.as_string())
+
+
+def test_mime_message_with_no_plain_or_html_part_raises_the_original_message() -> None:
+    msg = EmailMessage()
+    msg["From"] = "Pathé Nederland <noreply@pathe.nl>"
+    msg["To"] = "john@example.com"
+    msg["Subject"] = "Your ticket(s) for The Dog Stars"
+    msg.add_attachment(b"not text", maintype="application", subtype="octet-stream")
+    assert msg.is_multipart()
+
     with pytest.raises(PatheEmailParseError, match="text/plain"):
         parse_pathe_email(msg.as_string())
 
 
 # --- HTML-derived text shape: movie-planner#158 ---
 #
-# pathe.py's own MIME extraction (_extract_body, above) is untouched -
-# a raw HTML-only .eml piped straight into `from-pathe-email` still
-# raises the same as before. This is the shape parse_pathe_email
-# actually receives from mail_import: envelope.py's own HTML fallback
-# already converted the email to plain text by the time it gets here.
+# This is the shape parse_pathe_email actually receives from
+# mail_import: envelope.py's own HTML fallback already converted the
+# email to plain text by the time it gets here. pathe.py's own MIME
+# extraction (_extract_body, above) gained the same HTML fallback
+# later, for `from-pathe-email` itself - see movie-planner#162, below.
 
 
 def test_parses_the_html_derived_plain_text_shape() -> None:
@@ -159,3 +174,17 @@ def test_parses_the_legacy_html_derived_shape() -> None:
     assert booking.cinema == "Pathé City"
     assert booking.booking_ref == PATHE_LEGACY_HTML_BOOKING_REF
     assert booking.screening_details == "Original Version, Auditorium 4 - Row 2 Seat 4"
+
+
+# --- from-pathe-email's own MIME extraction falls back to HTML too: movie-planner#162 ---
+
+
+def test_parses_a_real_html_only_email_piped_directly() -> None:
+    # Unlike the tests above, this pipes the raw HTML-only .eml straight
+    # into parse_pathe_email - no mail_import.envelope involved - the
+    # shape `from-pathe-email` itself receives.
+    booking = parse_pathe_email(PATHE_EMAIL_HTML_ONLY)
+
+    assert isinstance(booking, PatheBooking)
+    assert booking.title == "Spider-Man: Brand New Day"
+    assert booking.booking_ref == PATHE_HTML_BOOKING_REF

@@ -101,7 +101,7 @@ _BLOCK_BREAK_RE = re.compile(r"(?i)<(?:br|/p|/h[1-6]|/tr|/li|/div)\s*/?>")
 _TAG_RE = re.compile(r"<[^>]+>")
 
 
-def _html_to_text(html: str) -> str:
+def html_to_text(html: str) -> str:
     """A deliberately simple HTML-to-plain-text conversion - enough for
     a chain's own regex-based translation script to work against, not a
     faithful rendering. Real Pathé confirmations are HTML-only (movie-
@@ -149,7 +149,7 @@ def _extract_body(msg: email.message.EmailMessage) -> str:
             return plain_content
 
     if html_part is not None:
-        return _html_to_text(html_part.get_content())
+        return html_to_text(html_part.get_content())
 
     # Genuinely no readable text anywhere (e.g. an attachment-only
     # message) - an empty body simply won't match any chain's

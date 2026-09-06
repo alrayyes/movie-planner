@@ -9,6 +9,8 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, time
 
+from movie_planner.mail_import.envelope import html_to_text
+
 # A raw piped `.eml` has real RFC 822 headers before the first blank line;
 # already-extracted plain text doesn't. This is how the two are told apart.
 _HEADER_RE = re.compile(
@@ -85,6 +87,21 @@ def _extract_body(raw: str) -> str:
     for sub in msg.walk():
         if sub.get_content_type() == "text/plain":
             return sub.get_content()  # type: ignore[no-any-return]
+
+    # A real Pathé confirmation is HTML-only, no text/plain part at all
+    # (movie-planner#158) - the same fallback mail_import.envelope's
+    # own extraction already uses for `pathe-mail-import fetch`,
+    # reused here rather than a second, divergent implementation
+    # (movie-planner#162).
+    html_part = msg.get_body(preferencelist=("html",))
+    if html_part is None:
+        for sub in msg.walk():
+            if sub.get_content_type() == "text/html":
+                html_part = sub
+                break
+    if html_part is not None:
+        return html_to_text(html_part.get_content())
+
     raise PatheEmailParseError("could not find a text/plain part in the email")
 
 
