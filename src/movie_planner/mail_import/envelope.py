@@ -117,6 +117,7 @@ def html_to_text(html: str) -> str:
 
 
 _DIGIT_RE = re.compile(r"\d")
+_URL_RE = re.compile(r"https?://\S+")
 
 
 def _extract_body(msg: email.message.EmailMessage) -> str:
@@ -150,13 +151,16 @@ def _extract_body(msg: email.message.EmailMessage) -> str:
 
     if plain_part is not None:
         plain_content: str = plain_part.get_content()
-        # A digit-free text/plain part alongside a real HTML
+        # A text/plain part with no *real* digit alongside a real HTML
         # alternative is a generated "view this in an HTML-capable
         # client" placeholder, not real content (movie-planner#171) -
         # every booking confirmation this module handles has at least
         # one digit (a date, a time, a seat), so a plain part with none
-        # is never the one worth handing a translation script.
-        if html_part is None or _DIGIT_RE.search(plain_content):
+        # is never the one worth handing a translation script. A
+        # tracking URL in the placeholder's own "click here" link can
+        # itself contain a digit, though (movie-planner#200) - stripped
+        # first so it can't be mistaken for real content.
+        if html_part is None or _DIGIT_RE.search(_URL_RE.sub("", plain_content)):
             return plain_content
 
     if html_part is not None:
