@@ -77,6 +77,8 @@ _MIGRATED_COLUMNS: tuple[tuple[str, str], ...] = (
     ("genre", "TEXT"),
     ("release_year", "INTEGER"),
     ("source", "TEXT"),
+    ("row", "TEXT"),
+    ("seat", "TEXT"),
 )
 
 _MIGRATED_VENUE_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -152,6 +154,10 @@ class Entry:
     genre: str | None = None
     release_year: int | None = None
     source: str | None = None
+    # Row/seat as structured values (movie-planner#218) - only ever set
+    # from a Pathé booking parse, never manually via `log`/`update`.
+    row: str | None = None
+    seat: str | None = None
 
 
 _ENTRY_COLUMNS = (
@@ -177,6 +183,8 @@ _ENTRY_COLUMNS = (
     "genre",
     "release_year",
     "source",
+    "row",
+    "seat",
 )
 
 
@@ -210,6 +218,8 @@ def _row_to_entry(row: tuple[Any, ...]) -> Entry:
         genre=values["genre"],
         release_year=values["release_year"],
         source=values["source"],
+        row=values["row"],
+        seat=values["seat"],
     )
 
 
@@ -466,10 +476,12 @@ class Store:
         start_time: datetime.time | None = None,
         end_time: datetime.time | None = None,
         venue_id: int | None = None,
+        row: str | None = None,
+        seat: str | None = None,
     ) -> Entry:
         cur = self._conn.execute(
-            "INSERT INTO entries (title, date, start_time, end_time, medium_id, venue_id) "
-            "VALUES (?, ?, ?, ?, ?, ?)",  # caldav_uid is set later, once synced
+            "INSERT INTO entries (title, date, start_time, end_time, medium_id, venue_id, "
+            "row, seat) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",  # caldav_uid is set later, once synced
             (
                 title,
                 date.isoformat(),
@@ -477,6 +489,8 @@ class Store:
                 end_time.isoformat() if end_time else None,
                 medium_id,
                 venue_id,
+                row,
+                seat,
             ),
         )
         self._conn.commit()
@@ -549,6 +563,8 @@ class Store:
         genre: str | None = _UNSET,
         release_year: int | None = _UNSET,
         source: str | None = _UNSET,
+        row: str | None = _UNSET,
+        seat: str | None = _UNSET,
     ) -> Entry:
         current = self.get_entry(entry_id)
         changes = {
@@ -573,6 +589,8 @@ class Store:
             "genre": genre,
             "release_year": release_year,
             "source": source,
+            "row": row,
+            "seat": seat,
         }
         # changes is a heterogeneous dict by design (the _UNSET-sentinel
         # pattern needs one dict covering every field) - mypy can't verify

@@ -41,6 +41,10 @@ def _row_from_envelope(envelope: dict[str, Any]) -> dict[str, Any]:
         row["end_time"] = booking.end_time.isoformat()
     if booking.cinema:
         row["venue"] = booking.cinema
+    if booking.row:
+        row["row"] = booking.row
+    if booking.seat:
+        row["seat"] = booking.seat
     return row
 
 

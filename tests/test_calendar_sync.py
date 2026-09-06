@@ -502,6 +502,52 @@ def test_push_new_includes_city_and_country_as_x_properties(store: Store) -> Non
     assert "X-COUNTRY:Netherlands" in ical_text
 
 
+def test_push_new_includes_row_and_seat_as_x_properties(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(
+        title="Dune", date=date(2026, 1, 1), medium_id=medium.id, row="5", seat="17"
+    )
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-ROW:5" in ical_text
+    assert "X-SEAT:17" in ical_text
+
+
+def test_push_new_omits_row_and_seat_when_entry_has_none(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-ROW" not in ical_text
+    assert "X-SEAT" not in ical_text
+
+
+def test_push_update_refreshes_row_and_seat(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None)
+    entry = store.update_entry(entry.id, row="5", seat="17")
+
+    sync.push_update(entry, venue=None)
+
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "X-ROW:5" in ical_text
+    assert "X-SEAT:17" in ical_text
+
+
 def test_push_new_omits_city_and_country_for_an_unrecognized_venue(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)

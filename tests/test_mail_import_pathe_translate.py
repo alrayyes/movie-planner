@@ -39,6 +39,8 @@ def test_translate_a_recognized_booking_prints_a_row_and_exits_zero() -> None:
     assert row["start_time"] == "12:40:00"
     assert row["end_time"] == "14:58:00"
     assert row["venue"] == "Pathé De Munt"
+    assert row["row"] == "5"
+    assert row["seat"] == "17"
     assert "notes" not in row
     assert "booking_ref" not in row
     assert PATHE_BOOKING_REF not in json.dumps(row)

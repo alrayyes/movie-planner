@@ -35,6 +35,8 @@ class ImportRow:
     letterboxd_url: str | None = None
     letterboxd_rating: str | None = None
     source: str | None = None
+    row: str | None = None
+    seat: str | None = None
 
 
 @dataclass(frozen=True)
@@ -111,6 +113,8 @@ def _row_from_dict(row_number: int, raw: dict[str, Any]) -> ParsedRow:
             letterboxd_url=raw.get("letterboxd_url") or None,
             letterboxd_rating=raw.get("letterboxd_rating") or None,
             source=raw.get("source") or None,
+            row=raw.get("row") or None,
+            seat=raw.get("seat") or None,
         )
     except (KeyError, ValueError) as e:
         return ParsedRow(row_number=row_number, entry=None, error=str(e))
@@ -203,6 +207,8 @@ def run_import(
             "letterboxd_url": r.letterboxd_url,
             "letterboxd_rating": r.letterboxd_rating,
             "source": r.source,
+            "row": r.row,
+            "seat": r.seat,
         }
         supplied_fields = {k: v for k, v in supplied_fields.items() if v is not None}
         if supplied_fields:

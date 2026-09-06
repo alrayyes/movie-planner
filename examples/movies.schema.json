@@ -48,6 +48,14 @@
         "source": {
           "type": "string",
           "description": "Opaque provenance label for whatever produced this row (for example, a sender domain like \"pathe.nl\" for a mail-import tool's output). movie-planner stores it as given and never interprets it."
+        },
+        "row": {
+          "type": "string",
+          "description": "Seat row, as text (a real cinema's own numbering may not be numeric-only). Only ever set by a Pathé booking confirmation parse."
+        },
+        "seat": {
+          "type": "string",
+          "description": "Seat number, as text - same provenance as row."
         }
       }
     }

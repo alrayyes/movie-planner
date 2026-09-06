@@ -391,6 +391,44 @@ def test_run_import_with_no_source_leaves_it_unset(store: Store) -> None:
     assert entry.source is None
 
 
+def test_run_import_stores_row_and_seat_when_supplied(store: Store) -> None:
+    rows = [
+        ParsedRow(
+            row_number=1,
+            entry=ImportRow(
+                title="Dune",
+                date=date(2026, 1, 1),
+                medium="cinema",
+                row="5",
+                seat="17",
+            ),
+            error=None,
+        )
+    ]
+
+    run_import(store, rows)
+
+    (entry,) = store.list_entries()
+    assert entry.row == "5"
+    assert entry.seat == "17"
+
+
+def test_run_import_with_no_row_or_seat_leaves_them_unset(store: Store) -> None:
+    rows = [
+        ParsedRow(
+            row_number=1,
+            entry=ImportRow(title="Dune", date=date(2026, 1, 1), medium="cinema"),
+            error=None,
+        )
+    ]
+
+    run_import(store, rows)
+
+    (entry,) = store.list_entries()
+    assert entry.row is None
+    assert entry.seat is None
+
+
 def test_run_import_reuses_existing_medium_and_venue(store: Store) -> None:
     existing_medium = store.add_medium("cinema", is_physical_place=True)
     existing_venue = store.add_venue("Grand Vista Cinema")

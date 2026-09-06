@@ -17,6 +17,8 @@ known time at all.
   fresh API call. `source` is also optional - a plain-text label for
   whatever produced the row (a mail-import tool tagging it with a sender
   domain, say). It's stored as given; nothing here ever interprets it.
+  `row`/`seat` are optional too - a Pathé booking confirmation's own
+  seat assignment, as text (never assumed numeric-only).
 - [`movies.schema.json`](movies.schema.json) is the JSON Schema for one
   row - required/optional fields, types, and the date/time formats
   expected. It's the same field-name shape whether the row came from
