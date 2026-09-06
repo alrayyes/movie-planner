@@ -101,30 +101,21 @@ api_key = "..."
 db_path = "~/.local/share/movie-planner/movies.db"
 """
 
-# The shape init writes by default (issue #157): namespaced under
-# [movie_planner], so this config file can be shared with
-# pathe-mail-import's own [mail_import] section. load_config still
-# reads the older bare shape above unchanged - only what init writes
-# is new.
-_STARTER_CONFIG_NAMESPACED = """\
-[movie_planner.caldav]
-url = "https://baikal.example.com/dav.php/calendars/moviewatcher/movies/"
-username = "moviewatcher"
-password = "..."
-# Or, instead of a plaintext password above, run a command that prints
-# it to stdout (e.g. a password manager) - set only one of the two:
-# password_command = "pass show caldav/movie-planner"
-
-[movie_planner.omdb]
-api_key = "..."
-
-[movie_planner.storage]
-db_path = "~/.local/share/movie-planner/movies.db"
-"""
-
 
 def _is_interactive() -> bool:
     return sys.stdin.isatty()
+
+
+def _required_value(value: str | None, *, prompt: str, flag: str, interactive: bool) -> str:
+    if value:
+        return value
+    if interactive:
+        return str(typer.prompt(prompt))
+    typer.secho(
+        f"No {flag} given and not running interactively; pass {flag} explicitly.",
+        fg=typer.colors.RED,
+    )
+    raise typer.Exit(code=1)
 
 
 def _confirm_via_tty(message: str) -> bool:
@@ -207,11 +198,18 @@ def init(
         bool, typer.Option("--force", help="Overwrite an existing config file.")
     ] = False,
 ) -> None:
-    """Write a starter config.toml, ready to edit. Sharing the file
-    with pathe-mail-import (issue #157): if it already exists but has
-    no [movie_planner] section yet - e.g. pathe-mail-import already
-    wrote its own [mail_import] section there - this adds movie-
-    planner's section alongside it, no --force needed.
+    """Write a starter config.toml, ready to edit. Prompts for the
+    CalDAV URL, CalDAV username, and OMDb API key - unless already
+    given as a flag or environment variable - or fails clearly instead
+    of hanging when not running in a terminal (issue #144). The CalDAV
+    password stays out of it, same as everywhere else: edit it in by
+    hand afterwards, as `password` or `password_command`.
+
+    Sharing the file with pathe-mail-import (issue #157): if it
+    already exists but has no [movie_planner] section yet - e.g.
+    pathe-mail-import already wrote its own [mail_import] section
+    there - this adds movie-planner's section alongside it, no
+    --force needed.
     """
     overrides: _ConfigOverrides = ctx.obj
     config_path = overrides.config_path or config_module.default_config_path()
@@ -228,13 +226,47 @@ def init(
             )
             raise typer.Exit(code=1)
 
+    interactive = _is_interactive()
+    caldav_url = _required_value(
+        overrides.caldav_url, prompt="CalDAV URL", flag="--caldav-url", interactive=interactive
+    )
+    caldav_username = _required_value(
+        overrides.caldav_username,
+        prompt="CalDAV username",
+        flag="--caldav-username",
+        interactive=interactive,
+    )
+    omdb_api_key = _required_value(
+        overrides.omdb_api_key,
+        prompt="OMDb API key",
+        flag="--omdb-api-key",
+        interactive=interactive,
+    )
+
+    content = f"""\
+[movie_planner.caldav]
+url = "{caldav_url}"
+username = "{caldav_username}"
+password = "..."
+# Or, instead of a plaintext password above, run a command that prints
+# it to stdout (e.g. a password manager) - set only one of the two:
+# password_command = "pass show caldav/movie-planner"
+
+[movie_planner.omdb]
+api_key = "{omdb_api_key}"
+
+[movie_planner.storage]
+db_path = "~/.local/share/movie-planner/movies.db"
+"""
+
     if force:
-        _write_starter_config(config_path)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(content)
     else:
-        config_file.write_section(config_path, _STARTER_CONFIG_NAMESPACED)
+        config_file.write_section(config_path, content)
     typer.echo(
-        f"Wrote a starter config to {config_path}. Edit it with your CalDAV "
-        "credentials and OMDb API key before running any other command."
+        f"Wrote a starter config to {config_path}. Edit in your CalDAV "
+        "password before running any other command."
     )
 
 

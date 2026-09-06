@@ -666,24 +666,33 @@ def test_show_gracefully_handles_poster_fetch_failure(
 
 # --- init ---
 
+_INIT_FLAGS = [
+    "--caldav-url",
+    "https://baikal.example.com/dav.php/calendars/moviewatcher/movies/",
+    "--caldav-username",
+    "moviewatcher",
+    "--omdb-api-key",
+    "abc123",
+]
+
 
 def test_init_writes_a_starter_config(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
 
-    result = runner.invoke(app, ["--config", str(config_path), "init"])
+    result = runner.invoke(app, ["--config", str(config_path), *_INIT_FLAGS, "init"])
 
     assert result.exit_code == 0, result.output
     assert config_path.is_file()
     loaded = config_module.load_config(config_path)
-    assert loaded.caldav_url
-    assert loaded.omdb_api_key
+    assert loaded.caldav_url == "https://baikal.example.com/dav.php/calendars/moviewatcher/movies/"
+    assert loaded.omdb_api_key == "abc123"
 
 
 def test_init_refuses_to_overwrite_without_force(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text("existing content")
 
-    result = runner.invoke(app, ["--config", str(config_path), "init"])
+    result = runner.invoke(app, ["--config", str(config_path), *_INIT_FLAGS, "init"])
 
     assert result.exit_code != 0
     assert config_path.read_text() == "existing content"
@@ -693,7 +702,7 @@ def test_init_force_overwrites(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text("existing content")
 
-    result = runner.invoke(app, ["--config", str(config_path), "init", "--force"])
+    result = runner.invoke(app, ["--config", str(config_path), *_INIT_FLAGS, "init", "--force"])
 
     assert result.exit_code == 0, result.output
     assert config_path.read_text() != "existing content"
@@ -704,7 +713,7 @@ def test_init_writes_the_namespaced_section(tmp_path: Path) -> None:
     # ready to share a config file with pathe-mail-import.
     config_path = tmp_path / "config.toml"
 
-    result = runner.invoke(app, ["--config", str(config_path), "init"])
+    result = runner.invoke(app, ["--config", str(config_path), *_INIT_FLAGS, "init"])
 
     assert result.exit_code == 0, result.output
     assert "[movie_planner" in config_path.read_text()
@@ -716,7 +725,7 @@ def test_init_adds_its_section_to_an_existing_shared_config_without_force(
     config_path = tmp_path / "config.toml"
     config_path.write_text('[mail_import]\nsource = "mbox"\n')
 
-    result = runner.invoke(app, ["--config", str(config_path), "init"])
+    result = runner.invoke(app, ["--config", str(config_path), *_INIT_FLAGS, "init"])
 
     assert result.exit_code == 0, result.output
     text = config_path.read_text()
@@ -727,11 +736,63 @@ def test_init_adds_its_section_to_an_existing_shared_config_without_force(
 
 def test_init_refuses_to_overwrite_an_existing_section_without_force(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
-    runner.invoke(app, ["--config", str(config_path), "init"])
+    runner.invoke(app, ["--config", str(config_path), *_INIT_FLAGS, "init"])
 
-    result = runner.invoke(app, ["--config", str(config_path), "init"])
+    result = runner.invoke(app, ["--config", str(config_path), *_INIT_FLAGS, "init"])
 
     assert result.exit_code != 0
+
+
+# --- init prompts interactively: issue #144 ---
+
+
+def test_init_non_interactive_missing_value_fails_clearly(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "--caldav-url", "https://example.com", "init"]
+    )
+
+    assert result.exit_code != 0
+    assert "--caldav-username" in result.output
+    assert not config_path.exists()
+
+
+def test_init_interactive_prompts_for_missing_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "config.toml"
+    monkeypatch.setattr("movie_planner.cli._is_interactive", lambda: True)
+
+    result = runner.invoke(
+        app,
+        ["--config", str(config_path), "init"],
+        input="https://baikal.example.com/dav.php/calendars/moviewatcher/movies/\nmoviewatcher\nabc123\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    loaded = config_module.load_config(config_path)
+    assert loaded.caldav_url == "https://baikal.example.com/dav.php/calendars/moviewatcher/movies/"
+    assert loaded.caldav_username == "moviewatcher"
+    assert loaded.omdb_api_key == "abc123"
+
+
+def test_init_flag_skips_the_prompt_for_that_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "config.toml"
+    monkeypatch.setattr("movie_planner.cli._is_interactive", lambda: True)
+
+    result = runner.invoke(
+        app,
+        ["--config", str(config_path), "--caldav-url", "https://example.com", "init"],
+        # only username and api key are prompted for
+        input="moviewatcher\nabc123\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    loaded = config_module.load_config(config_path)
+    assert loaded.caldav_url == "https://example.com"
 
 
 def test_missing_config_non_interactively_points_at_init(tmp_path: Path) -> None:
