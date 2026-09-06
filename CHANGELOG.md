@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.9.2...movie-planner-v1.9.3) (2026-09-06)
+
+
+### Documentation
+
+* **contributing:** require OMDb-minimization as an explicit AC ([#198](https://github.com/alrayyes/movie-planner/issues/198)) ([3a674cf](https://github.com/alrayyes/movie-planner/commit/3a674cf60359b94b50a9439545d1f9e0145911c0))
+
 ## [1.9.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.9.1...movie-planner-v1.9.2) (2026-09-06)
 
 
