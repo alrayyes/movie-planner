@@ -93,6 +93,10 @@ _MIGRATED_COLUMNS: tuple[tuple[str, str], ...] = (
     ("box_office", "TEXT"),
     ("production", "TEXT"),
     ("website", "TEXT"),
+    # TMDb's own YouTube trailer link (issue #236) - not an OMDb field,
+    # looked up separately by imdb_id once OMDb has matched a title. Same
+    # "never on create_entry" convention as the OMDb-derived fields above.
+    ("trailer_url", "TEXT"),
 )
 
 _MIGRATED_VENUE_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -188,6 +192,10 @@ class Entry:
     box_office: str | None = None
     production: str | None = None
     website: str | None = None
+    # TMDb's own YouTube trailer link (issue #236) - see MovieRatings in
+    # omdb.py; this one comes from tmdb.py instead, looked up by imdb_id
+    # once OMDb has matched a title.
+    trailer_url: str | None = None
 
 
 _ENTRY_COLUMNS = (
@@ -229,6 +237,7 @@ _ENTRY_COLUMNS = (
     "box_office",
     "production",
     "website",
+    "trailer_url",
 )
 
 
@@ -278,6 +287,7 @@ def _row_to_entry(row: tuple[Any, ...]) -> Entry:
         box_office=values["box_office"],
         production=values["production"],
         website=values["website"],
+        trailer_url=values["trailer_url"],
     )
 
 
@@ -637,6 +647,7 @@ class Store:
         box_office: str | None = _UNSET,
         production: str | None = _UNSET,
         website: str | None = _UNSET,
+        trailer_url: str | None = _UNSET,
     ) -> Entry:
         current = self.get_entry(entry_id)
         changes = {
@@ -677,6 +688,7 @@ class Store:
             "box_office": box_office,
             "production": production,
             "website": website,
+            "trailer_url": trailer_url,
         }
         # changes is a heterogeneous dict by design (the _UNSET-sentinel
         # pattern needs one dict covering every field) - mypy can't verify

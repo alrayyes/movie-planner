@@ -91,6 +91,7 @@ def test_format_entry_includes_all_present_fields() -> None:
         imdb_url="https://www.imdb.com/title/tt1160419/",
         rotten_tomatoes_rating="91%",
         metacritic_rating="80",
+        trailer_url="https://www.youtube.com/watch?v=8g18jFHCLXk",
         letterboxd_url="https://letterboxd.com/film/dune-2021/",
         letterboxd_rating="4.5",
         notes="Enjoyed the soundtrack",
@@ -113,6 +114,7 @@ def test_format_entry_includes_all_present_fields() -> None:
     assert "80" in text
     assert "letterboxd.com/film/dune-2021" in text
     assert "4.5" in text
+    assert "youtube.com/watch?v=8g18jFHCLXk" in text
     assert "Enjoyed the soundtrack" in text
     assert "Denis Villeneuve" in text
     assert "Timothée Chalamet, Rebecca Ferguson, Zendaya" in text
@@ -142,6 +144,7 @@ def test_format_entry_omits_absent_fields() -> None:
     assert "IMDb" not in text
     assert "Rotten Tomatoes" not in text
     assert "Metacritic" not in text
+    assert "Trailer" not in text
     assert "Letterboxd" not in text
     assert "Notes" not in text
     assert "Director" not in text

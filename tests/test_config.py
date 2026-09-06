@@ -29,6 +29,22 @@ def test_load_config_reads_all_fields(tmp_path: Path) -> None:
     assert config.caldav_password == "hunter2"
     assert config.omdb_api_key == "abc123"
     assert config.db_path == Path("~/.local/share/movie-planner/movies.db").expanduser()
+    assert config.tmdb_api_key is None
+
+
+def test_load_config_reads_the_optional_tmdb_section(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        VALID_CONFIG
+        + """
+[tmdb]
+api_key = "tmdb-key-456"
+"""
+    )
+
+    config = load_config(config_path)
+
+    assert config.tmdb_api_key == "tmdb-key-456"
 
 
 NAMESPACED_CONFIG = """

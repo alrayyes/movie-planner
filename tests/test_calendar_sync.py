@@ -539,6 +539,33 @@ def test_push_new_omits_the_rest_of_omdbs_fields_when_entry_has_none(store: Stor
         assert prop not in ical_text
 
 
+def test_push_new_includes_x_trailer_url_when_entry_has_one(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.update_entry(entry.id, trailer_url="https://www.youtube.com/watch?v=8g18jFHCLXk")
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-TRAILER-URL:https://www.youtube.com/watch?v=8g18jFHCLXk" in ical_text
+
+
+def test_push_new_omits_x_trailer_url_when_entry_has_none(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-TRAILER-URL" not in ical_text
+
+
 def test_push_new_omits_director_actors_genre_and_year_when_entry_has_none(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
