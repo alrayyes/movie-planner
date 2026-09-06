@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.9.1...movie-planner-v1.9.2) (2026-09-06)
+
+
+### Documentation
+
+* **architecture:** refresh diagram and note current known gaps ([#197](https://github.com/alrayyes/movie-planner/issues/197)) ([075eb66](https://github.com/alrayyes/movie-planner/commit/075eb667c707c2da41df894aace738fb7c235309))
+
 ## [1.9.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.9.0...movie-planner-v1.9.1) (2026-09-06)
 
 
