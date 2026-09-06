@@ -488,6 +488,49 @@ def test_push_update_refreshes_director_actors_genre_and_year(store: Store) -> N
     assert "X-YEAR:2021" in ical_text
 
 
+def test_push_new_includes_city_and_country_as_x_properties(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue="Pathé De Munt", city="Amsterdam", country="Netherlands")
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-CITY:Amsterdam" in ical_text
+    assert "X-COUNTRY:Netherlands" in ical_text
+
+
+def test_push_new_omits_city_and_country_for_an_unrecognized_venue(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue="Grand Vista Cinema")
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-CITY" not in ical_text
+    assert "X-COUNTRY" not in ical_text
+
+
+def test_push_update_refreshes_city_and_country(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None)
+
+    sync.push_update(entry, venue="Pathé De Munt", city="Amsterdam", country="Netherlands")
+
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "X-CITY:Amsterdam" in ical_text
+    assert "X-COUNTRY:Netherlands" in ical_text
+
+
 def test_push_new_omits_poster_url_property_when_entry_has_none(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
