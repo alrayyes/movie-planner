@@ -137,6 +137,7 @@
             icalendar
             questionary
             rapidfuzz
+            tomlkit
             typer
           ];
 
