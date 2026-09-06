@@ -123,17 +123,28 @@ def _extract_body(msg: email.message.EmailMessage) -> str:
     if not msg.is_multipart():
         return msg.get_content()  # type: ignore[no-any-return]
 
+    # A part with Content-Disposition: attachment is never the message
+    # body, even one mislabeled as text/plain or text/html by the
+    # sender's own template (movie-planner#191 - Pathé's own mail
+    # system does exactly this for a PDF ticket). get_body() already
+    # respects this; the walk() fallback below has to check it itself.
     plain_part = msg.get_body(preferencelist=("plain",))
     if plain_part is None:
         for sub in msg.walk():
-            if sub.get_content_type() == "text/plain":
+            if (
+                sub.get_content_type() == "text/plain"
+                and sub.get_content_disposition() != "attachment"
+            ):
                 plain_part = sub
                 break
 
     html_part = msg.get_body(preferencelist=("html",))
     if html_part is None:
         for sub in msg.walk():
-            if sub.get_content_type() == "text/html":
+            if (
+                sub.get_content_type() == "text/html"
+                and sub.get_content_disposition() != "attachment"
+            ):
                 html_part = sub
                 break
 

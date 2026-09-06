@@ -2,7 +2,13 @@ from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 
 import pytest
-from fixtures import PATHE_EMAIL_HTML_ONLY, PATHE_EMAIL_LEGACY_HTML, PATHE_HTML_BOOKING_REF
+from fixtures import (
+    PATHE_EMAIL_HTML_ONLY,
+    PATHE_EMAIL_LEGACY_HTML,
+    PATHE_EMAIL_MISLABELED_ATTACHMENT,
+    PATHE_HTML_BOOKING_REF,
+    PATHE_MISLABELED_ATTACHMENT_BOOKING_REF,
+)
 
 from movie_planner.mail_import.envelope import (
     MailFetchError,
@@ -88,6 +94,21 @@ def test_extract_envelope_falls_back_to_html_when_the_plain_part_has_no_digits()
 
     assert "Insidious: Out of the Further" in envelope.body
     assert "Booking number" in envelope.body
+
+
+# --- mislabeled text/plain attachment: movie-planner#191 ---
+
+
+def test_extract_envelope_skips_a_text_plain_part_marked_as_an_attachment() -> None:
+    # Pathé's own mail template mislabels the PDF ticket attachment as
+    # Content-Type: text/plain - Content-Disposition: attachment is
+    # still correct, and is what should exclude it from ever being
+    # picked as the message body, mislabeled type or not.
+    envelope = extract_envelope(PATHE_EMAIL_MISLABELED_ATTACHMENT)
+
+    assert "Spider-Man: Brand New Day" in envelope.body
+    assert PATHE_MISLABELED_ATTACHMENT_BOOKING_REF in envelope.body
+    assert "fake ticket attachment content" not in envelope.body
 
 
 def test_extract_envelope_with_neither_plain_nor_html_returns_empty_body() -> None:
