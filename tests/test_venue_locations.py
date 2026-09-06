@@ -12,13 +12,35 @@ def test_every_alias_in_a_group_shares_the_same_canonical_name() -> None:
 
 
 def test_a_single_name_group_is_its_own_canonical_name() -> None:
-    assert KNOWN_VENUE_LOCATIONS["Tuschinski"].canonical_name == "Tuschinski"
+    # "Eye" - genuinely a one-name group, unlike "Tuschinski" below,
+    # which gained a second alias (movie-planner#227).
+    assert KNOWN_VENUE_LOCATIONS["Eye"].canonical_name == "Eye"
 
 
 def test_canonical_name_is_the_first_name_listed_in_its_group() -> None:
     # "City"/"Pathé City" - "City" is listed first, so it's canonical.
     assert KNOWN_VENUE_LOCATIONS["City"].canonical_name == "City"
     assert KNOWN_VENUE_LOCATIONS["Pathé City"].canonical_name == "City"
+
+
+def test_pathe_tuschinski_resolves_to_the_tuschinski_group() -> None:
+    # movie-planner#227: needed once pathe.py stops leaving the city
+    # baked into this template's cinema field - "Pathé Tuschinski" (no
+    # city) needs to itself already be a known alias, or the fix just
+    # trades one unresolved duplicate for another.
+    assert KNOWN_VENUE_LOCATIONS["Pathé Tuschinski"].canonical_name == "Tuschinski"
+
+
+def test_pathe_arena_no_accent_resolves_to_the_arena_group() -> None:
+    assert KNOWN_VENUE_LOCATIONS["Pathe Arena"].canonical_name == "Arena"
+
+
+def test_pathe_de_munt_lowercase_de_resolves_to_the_de_munt_group() -> None:
+    assert KNOWN_VENUE_LOCATIONS["Pathe de Munt"].canonical_name == "De Munt"
+
+
+def test_de_munt_dolby_atmos_resolves_to_the_de_munt_group() -> None:
+    assert KNOWN_VENUE_LOCATIONS["De Munt Dolby Atmos"].canonical_name == "De Munt"
 
 
 def test_every_known_venue_location_has_a_canonical_name_that_is_itself_a_key() -> None:

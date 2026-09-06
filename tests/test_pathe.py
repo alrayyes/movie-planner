@@ -223,7 +223,10 @@ def test_parses_the_ticketbevestiging_shape() -> None:
     assert booking.date == date(2014, 12, 26)
     assert booking.start_time == time(21, 5)
     assert booking.end_time is None
-    assert booking.cinema == "Pathé Tuschinski, Amsterdam"
+    # Not "Pathé Tuschinski, Amsterdam" - the trailing city is stripped
+    # (movie-planner#227), same "cinema, never the city too" behaviour
+    # every other template already has.
+    assert booking.cinema == "Pathé Tuschinski"
     assert booking.booking_ref == PATHE_TICKETBEVESTIGING_BOOKING_REF
     assert booking.screening_details == "Zaal 1, Rij: 1 Stoel: 1"
 
@@ -237,7 +240,9 @@ def test_parses_the_reservering_shape() -> None:
     assert booking.date == date(2019, 6, 13)
     assert booking.start_time == time(15, 20)
     assert booking.end_time == time(17, 39)
-    assert booking.cinema == "Pathé De Munt, Amsterdam"
+    # Not "Pathé De Munt, Amsterdam" - same city-stripping fix as
+    # ticketbevestiging above (movie-planner#227).
+    assert booking.cinema == "Pathé De Munt"
     assert booking.booking_ref == PATHE_RESERVERING_BOOKING_REF
     assert booking.screening_details == "Zaal 1, Rij: 1 stoel: 1"
 
