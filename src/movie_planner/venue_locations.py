@@ -20,6 +20,12 @@ class VenueLocation:
     # coordinates haven't been looked up yet, even if its chain/city/
     # country are already known.
     coordinates: tuple[float, float] | None = None
+    # The one name every alias in a group (see _add's `names` below)
+    # should collapse to - always itself a key in this table, so
+    # resolving an alias to its canonical name and looking that up
+    # again always finds something (issue #196). Set by _add, never
+    # passed directly.
+    canonical_name: str = ""
 
 
 KNOWN_VENUE_LOCATIONS: dict[str, VenueLocation] = {}
@@ -33,7 +39,16 @@ def _add(
     country: str,
     coordinates: tuple[float, float] | None = None,
 ) -> None:
-    location = VenueLocation(chain=chain, city=city, country=country, coordinates=coordinates)
+    # The first name in the group is the canonical one - every other
+    # name here is a screen/format-suffixed alias of the same real
+    # venue (issue #196).
+    location = VenueLocation(
+        chain=chain,
+        city=city,
+        country=country,
+        coordinates=coordinates,
+        canonical_name=names[0],
+    )
     for name in names:
         KNOWN_VENUE_LOCATIONS[name] = location
 

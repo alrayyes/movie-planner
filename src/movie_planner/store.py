@@ -114,6 +114,21 @@ class Venue:
 
 
 @dataclass(frozen=True)
+class VenueMerge:
+    """One alias venue Store.merge_venue_aliases found (or, with
+    apply=True, actually merged) into its canonical venue.
+    """
+
+    alias_name: str
+    alias_venue_id: int
+    canonical_name: str
+    # None on a dry run when the canonical venue doesn't exist yet -
+    # apply=True would create it, but a dry run never does.
+    canonical_venue_id: int | None
+    entries_moved: int
+
+
+@dataclass(frozen=True)
 class Entry:
     id: int
     title: str
@@ -298,7 +313,12 @@ class Store:
     # --- venues ---
 
     def add_venue(self, name: str) -> Venue:
+        # A known alias (a screen/format-suffixed name like "De Munt
+        # 4DX") always resolves to its canonical venue before anything
+        # else happens - never its own separate row (issue #196).
         location = KNOWN_VENUE_LOCATIONS.get(name)
+        if location is not None:
+            name = location.canonical_name
         chain = location.chain if location else None
         city = location.city if location else None
         country = location.country if location else None
@@ -342,6 +362,12 @@ class Store:
         ]
 
     def get_or_create_venue(self, name: str) -> Venue:
+        # Resolve a known alias before searching, so two different
+        # aliases of the same real venue both find (or both create)
+        # the one canonical row, never two (issue #196).
+        location = KNOWN_VENUE_LOCATIONS.get(name)
+        if location is not None:
+            name = location.canonical_name
         existing = next((v for v in self.list_venues() if v.name == name), None)
         return existing or self.add_venue(name)
 
@@ -358,6 +384,76 @@ class Store:
             raise StoreError(f"venue '{name}' is referenced by {count} {entries_word}")
         self._conn.execute("DELETE FROM venues WHERE id = ?", (venue_id,))
         self._conn.commit()
+
+    def merge_venue_aliases(self, *, apply: bool = False) -> list[VenueMerge]:
+        """Finds every venue row already in the database whose name is
+        a known alias (a screen/format-suffixed name like "De Munt
+        4DX") of another venue's canonical name - data that predates
+        add_venue/get_or_create_venue's own alias resolution above
+        (issue #196). `apply=False` (the default) only reports what
+        would merge; `apply=True` actually reassigns the alias's
+        entries to the canonical venue (creating it first if it
+        doesn't exist yet) and removes the now-orphaned alias row, all
+        in one transaction - either every merge in this call succeeds,
+        or none of them are applied.
+        """
+        merges = []
+        for venue in sorted(self.list_venues(), key=lambda v: v.name):
+            location = KNOWN_VENUE_LOCATIONS.get(venue.name)
+            if location is None or location.canonical_name == venue.name:
+                continue  # not a known alias - already canonical, or unknown entirely
+
+            (entries_moved,) = self._conn.execute(
+                "SELECT COUNT(*) FROM entries WHERE venue_id = ?", (venue.id,)
+            ).fetchone()
+            canonical_row = self._conn.execute(
+                "SELECT id FROM venues WHERE name = ?", (location.canonical_name,)
+            ).fetchone()
+            canonical_id = canonical_row[0] if canonical_row is not None else None
+
+            if apply:
+                if canonical_id is None:
+                    # Not self.add_venue() - that commits immediately,
+                    # which would break this method's own all-or-
+                    # nothing guarantee for a later alias in the same
+                    # call. location's chain/city/country/coordinates
+                    # already apply to the canonical name too - _add()
+                    # gives every alias in a group the same
+                    # VenueLocation object.
+                    latitude, longitude = location.coordinates or (None, None)
+                    cur = self._conn.execute(
+                        "INSERT INTO venues (name, chain, city, country, latitude, longitude) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        (
+                            location.canonical_name,
+                            location.chain,
+                            location.city,
+                            location.country,
+                            latitude,
+                            longitude,
+                        ),
+                    )
+                    assert cur.lastrowid is not None  # nosec B101
+                    canonical_id = cur.lastrowid
+                self._conn.execute(
+                    "UPDATE entries SET venue_id = ? WHERE venue_id = ?",
+                    (canonical_id, venue.id),
+                )
+                self._conn.execute("DELETE FROM venues WHERE id = ?", (venue.id,))
+
+            merges.append(
+                VenueMerge(
+                    alias_name=venue.name,
+                    alias_venue_id=venue.id,
+                    canonical_name=location.canonical_name,
+                    canonical_venue_id=canonical_id,
+                    entries_moved=entries_moved,
+                )
+            )
+
+        if apply:
+            self._conn.commit()
+        return merges
 
     # --- entries ---
 
