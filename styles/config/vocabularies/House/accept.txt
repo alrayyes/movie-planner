@@ -44,6 +44,8 @@ CI
 YAML
 JSON
 OMDb
+TMDb
+TMDb's
 Metacritic
 Pathé
 Letterboxd
@@ -75,3 +77,4 @@ deduplicat(e|ed|es|ing)
 unredacted
 unparsed
 Maildir
+lookups?

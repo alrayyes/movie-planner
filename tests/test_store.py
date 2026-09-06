@@ -585,6 +585,27 @@ def test_update_entry_sets_poster_url(store: Store) -> None:
     assert reloaded.poster_url == "https://m.media-amazon.com/images/dune-poster.jpg"
 
 
+def test_new_entry_has_no_trailer_url(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+
+    assert entry.trailer_url is None
+
+
+def test_update_entry_sets_trailer_url(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+
+    updated = store.update_entry(
+        entry.id, trailer_url="https://www.youtube.com/watch?v=8g18jFHCLXk"
+    )
+
+    assert updated.trailer_url == "https://www.youtube.com/watch?v=8g18jFHCLXk"
+    reloaded = store.get_entry(entry.id)
+    assert reloaded.trailer_url == "https://www.youtube.com/watch?v=8g18jFHCLXk"
+
+
 def test_new_entry_has_no_director_actors_genre_or_release_year(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
 

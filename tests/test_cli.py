@@ -13,6 +13,7 @@ from movie_planner.calendar_sync import CalendarClient
 from movie_planner.cli import app
 from movie_planner.omdb import MovieRatings, OmdbClient
 from movie_planner.store import Store
+from movie_planner.tmdb import TmdbClient
 
 runner = CliRunner()
 
@@ -62,6 +63,30 @@ def config_path(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def config_path_with_tmdb(tmp_path: Path) -> Path:
+    db_path = tmp_path / "movies.db"
+    path = tmp_path / "config.toml"
+    path.write_text(
+        f"""
+        [caldav]
+        url = "https://baikal.example.com/calendars/movies/"
+        username = "moviewatcher"
+        password = "secret"
+
+        [omdb]
+        api_key = "test-key"
+
+        [tmdb]
+        api_key = "test-tmdb-key"
+
+        [storage]
+        db_path = "{db_path}"
+        """
+    )
+    return path
+
+
+@pytest.fixture
 def calendar(monkeypatch: pytest.MonkeyPatch) -> FakeCalendar:
     fake = FakeCalendar()
     monkeypatch.setattr(
@@ -85,6 +110,25 @@ def omdb_match(monkeypatch: pytest.MonkeyPatch) -> None:
         imdb="8.5/10",
         rotten_tomatoes="91%",
         metacritic="80",
+        poster="https://m.media-amazon.com/images/dune-poster.jpg",
+        director="Denis Villeneuve",
+        actors="Timothée Chalamet, Rebecca Ferguson, Zendaya",
+        genre="Action, Adventure, Drama",
+        release_year=2021,
+    )
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: ratings)
+
+
+@pytest.fixture
+def omdb_match_with_imdb_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A match that also carries imdb_id (real OMDb matches always do) -
+    # this is what builds entry.imdb_url, which trailer lookup then reads
+    # the imdb_id back out of (movie-planner#236).
+    ratings = MovieRatings(
+        imdb="8.5/10",
+        rotten_tomatoes="91%",
+        metacritic="80",
+        imdb_id="tt1160419",
         poster="https://m.media-amazon.com/images/dune-poster.jpg",
         director="Denis Villeneuve",
         actors="Timothée Chalamet, Rebecca Ferguson, Zendaya",
@@ -2227,6 +2271,119 @@ def test_omdb_api_key_flag_overrides_config_file(
 
     assert result.exit_code == 0, result.output
     assert captured["api_key"] == "override-key"
+
+
+def test_log_fetches_trailer_when_tmdb_configured(
+    config_path_with_tmdb: Path,
+    calendar: FakeCalendar,
+    omdb_match_with_imdb_id: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen_imdb_ids: list[str] = []
+
+    def lookup(self: TmdbClient, *, imdb_id: str) -> str | None:
+        seen_imdb_ids.append(imdb_id)
+        return "https://www.youtube.com/watch?v=8g18jFHCLXk"
+
+    monkeypatch.setattr("movie_planner.cli.TmdbClient.lookup_trailer_url", lookup)
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path_with_tmdb),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen_imdb_ids == ["tt1160419"]
+    store = _store(config_path_with_tmdb)
+    (entry,) = store.list_entries()
+    assert entry.trailer_url == "https://www.youtube.com/watch?v=8g18jFHCLXk"
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "X-TRAILER-URL:https://www.youtube.com/watch?v=8g18jFHCLXk" in ical_text
+    store.close()
+
+
+def test_log_skips_trailer_lookup_without_tmdb_configured(
+    config_path: Path, calendar: FakeCalendar, omdb_match_with_imdb_id: None
+) -> None:
+    """`config_path` (unlike `config_path_with_tmdb`) has no [tmdb] section -
+    trailer lookup is simply skipped, not an error, and TmdbClient is never
+    even constructed.
+    """
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.trailer_url is None
+    store.close()
+
+
+def test_tmdb_api_key_flag_overrides_config_file(
+    config_path_with_tmdb: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, str] = {}
+    original_init = TmdbClient.__init__
+
+    def capturing_init(
+        self: TmdbClient, api_key: str, http_client: httpx.Client | None = None
+    ) -> None:
+        captured["api_key"] = api_key
+        original_init(self, api_key, http_client)
+
+    monkeypatch.setattr(TmdbClient, "__init__", capturing_init)
+    monkeypatch.setattr("movie_planner.cli.TmdbClient.lookup_trailer_url", lambda self, **kw: None)
+    ratings = MovieRatings(imdb=None, rotten_tomatoes=None, metacritic=None, imdb_id="tt1160419")
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: ratings)
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path_with_tmdb),
+            "--tmdb-api-key",
+            "override-tmdb-key",
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["api_key"] == "override-tmdb-key"
 
 
 def test_no_flag_or_env_override_exists_for_the_caldav_password() -> None:

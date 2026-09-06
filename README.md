@@ -9,8 +9,9 @@ A command-line tool that logs the movies you've watched — title, date,
 start/end time, where you watched it — and syncs each viewing to a Baikal
 (CalDAV) calendar. It replaces a hand-maintained org-mode log with a guided
 prompt, enriches entries with IMDb/Rotten Tomatoes/Metacritic ratings via
-OMDb and a manually entered Letterboxd link, and catches accidental
-duplicate log entries with fuzzy title matching.
+OMDb, an optional TMDb-sourced trailer link, and a manually entered
+Letterboxd link, and catches accidental duplicate log entries with fuzzy
+title matching.
 
 Prefer a browser to a terminal? [movie-planner-web](https://github.com/alrayyes/movie-planner-web)
 is a static web client for the same CalDAV calendar and OMDb setup — no
@@ -45,6 +46,9 @@ movie-planner-web, OMDb, the calendar, and the optional
   provision one, only syncs to it.
 - **An [OMDb API key](https://www.omdbapi.com/apikey.aspx)**, for the
   IMDb/Rotten Tomatoes/Metacritic ratings fetched on each logged entry.
+- **Optional: a [TMDb API key](https://www.themoviedb.org/settings/api)**,
+  for looking up each entry's official YouTube trailer alongside the OMDb
+  fetch. Skipped entirely, no error, without one configured.
 
 ## Installation
 
@@ -195,6 +199,10 @@ password = "..."
 [movie_planner.omdb]
 api_key = "..."
 
+# Optional - trailer lookups are simply skipped without it:
+# [movie_planner.tmdb]
+# api_key = "..."
+
 [movie_planner.storage]
 db_path = "~/.local/share/movie-planner/movies.db"
 ```
@@ -207,8 +215,11 @@ without a terminal to prompt against and a required value is missing,
 it fails with a clear message instead of hanging — pass the value
 explicitly instead. Any other command run against a missing config
 file offers to write a bare placeholder copy instead, to edit by hand.
-All three sections are required; a missing file or a missing key fails
-with a message naming the problem, not a stack trace.
+`[caldav]`/`[omdb]`/`[storage]` are required; a missing file or a
+missing key in one of those three fails with a message naming the
+problem, not a stack trace. `[tmdb]` is the one optional section — add
+it (by hand, `init` doesn't prompt for it) whenever you want trailer
+lookups; nothing else is affected by leaving it out.
 
 The `[movie_planner]` table is there so this file can be shared with
 [pathe-mail-import](docs/pathe-mail-import.md), which keeps its own
@@ -235,8 +246,9 @@ a command and uses its stdout as the password — a password manager CLI, for
 example. Set only one of the two.
 
 Every setting except the CalDAV password can also be set as a flag
-(`--caldav-url`, `--caldav-username`, `--omdb-api-key`, `--db-path`) or an
-environment variable (`MOVIE_PLANNER_CALDAV_URL` and so on), overriding the
+(`--caldav-url`, `--caldav-username`, `--omdb-api-key`, `--tmdb-api-key`,
+`--db-path`) or an environment variable (`MOVIE_PLANNER_CALDAV_URL` and so
+on), overriding the
 config file for one invocation — flags win over environment variables, which
 win over the config file. The password stays config-file-only (via
 `password` or `password_command`) rather than risk landing in shell history

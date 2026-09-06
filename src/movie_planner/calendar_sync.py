@@ -212,6 +212,11 @@ def _extra_properties(
         "X-BOX-OFFICE": entry.box_office,
         "X-PRODUCTION": entry.production,
         "X-WEBSITE": entry.website,
+        # TMDb's own YouTube trailer link (issue #236) - not from OMDb,
+        # looked up separately by imdb_id once OMDb has matched a title.
+        # Same "omit, never guess" rule: no tmdb.api_key configured, or no
+        # official YouTube trailer found, and this is simply absent.
+        "X-TRAILER-URL": entry.trailer_url,
     }
     return {name: value for name, value in values.items() if value}
 

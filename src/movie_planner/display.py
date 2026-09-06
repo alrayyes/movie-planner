@@ -104,6 +104,8 @@ def format_entry(entry: Entry, *, medium_name: str, venue: Venue | None) -> str:
         lines.append(f"  Rotten Tomatoes: {entry.rotten_tomatoes_rating}")
     if entry.metacritic_rating:
         lines.append(f"  Metacritic: {entry.metacritic_rating}")
+    if entry.trailer_url:
+        lines.append(f"  Trailer: {entry.trailer_url}")
     if entry.letterboxd_url:
         suffix = f" ({entry.letterboxd_rating})" if entry.letterboxd_rating else ""
         lines.append(f"  Letterboxd: {entry.letterboxd_url}{suffix}")

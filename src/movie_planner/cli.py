@@ -25,6 +25,7 @@ from movie_planner.importers import parse_csv, parse_json, parse_json_text, run_
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
 from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
 from movie_planner.store import Entry, Store, StoreError, Venue
+from movie_planner.tmdb import TmdbClient
 
 app = typer.Typer(help="movie-planner: log watched movies and sync them to a calendar.")
 locations_app = typer.Typer(help="Manage the medium and venue lists.")
@@ -49,6 +50,7 @@ class _ConfigOverrides:
     caldav_url: str | None = None
     caldav_username: str | None = None
     omdb_api_key: str | None = None
+    tmdb_api_key: str | None = None
     db_path: Path | None = None
 
 
@@ -91,6 +93,14 @@ def callback(
             "config file. Also settable as $MOVIE_PLANNER_OMDB_API_KEY."
         ),
     ] = None,
+    tmdb_api_key: Annotated[
+        str | None,
+        typer.Option(
+            help="Override tmdb.api_key from the config file for this one invocation. Optional - "
+            "with no key set (here, in the config file, or as $MOVIE_PLANNER_TMDB_API_KEY), "
+            "trailer lookups are simply skipped rather than treated as an error."
+        ),
+    ] = None,
     db_path: Annotated[
         Path | None,
         typer.Option(
@@ -109,6 +119,7 @@ def callback(
         caldav_url=caldav_url,
         caldav_username=caldav_username,
         omdb_api_key=omdb_api_key,
+        tmdb_api_key=tmdb_api_key,
         db_path=db_path,
     )
 
@@ -124,6 +135,10 @@ password = "..."
 
 [omdb]
 api_key = "..."
+
+# Optional - trailer lookups are simply skipped without it:
+# [tmdb]
+# api_key = "..."
 
 [storage]
 db_path = "~/.local/share/movie-planner/movies.db"
@@ -184,6 +199,7 @@ def _apply_overrides(
         caldav_url=overrides.caldav_url or cfg.caldav_url,
         caldav_username=overrides.caldav_username or cfg.caldav_username,
         omdb_api_key=overrides.omdb_api_key or cfg.omdb_api_key,
+        tmdb_api_key=overrides.tmdb_api_key or cfg.tmdb_api_key,
         db_path=overrides.db_path or cfg.db_path,
     )
 
@@ -290,6 +306,10 @@ password = "..."
 
 [movie_planner.omdb]
 api_key = "{omdb_api_key}"
+
+# Optional - trailer lookups are simply skipped without it:
+# [movie_planner.tmdb]
+# api_key = "..."
 
 [movie_planner.storage]
 db_path = "~/.local/share/movie-planner/movies.db"
@@ -429,6 +449,9 @@ def _push_delete_or_warn(cfg: config_module.Config, store: Store, entry: Entry) 
         )
 
 
+_IMDB_ID_RE = re.compile(r"tt\d+")
+
+
 def _fetch_metadata_or_warn(
     cfg: config_module.Config, store: Store, entry: Entry, *, imdb_id: str | None
 ) -> Entry:
@@ -440,7 +463,30 @@ def _fetch_metadata_or_warn(
         return entry
     if not matched:
         typer.echo(f"No OMDb match found for '{entry.title}'.")
-    return updated
+        return updated
+    return _fetch_trailer_or_warn(cfg, store, updated)
+
+
+def _fetch_trailer_or_warn(cfg: config_module.Config, store: Store, entry: Entry) -> Entry:
+    """TMDb trailer lookup (issue #236) - piggybacks on the imdb_id an
+    OMDb match already produced, so it's only ever attempted right after
+    a successful OMDb fetch, never on its own. A config with no
+    tmdb.api_key set is the common case, not an error - simply skipped.
+    """
+    if not cfg.tmdb_api_key or not entry.imdb_url:
+        return entry
+    match = _IMDB_ID_RE.search(entry.imdb_url)
+    if match is None:
+        return entry
+    try:
+        client = TmdbClient(cfg.tmdb_api_key)
+        trailer_url = client.lookup_trailer_url(imdb_id=match.group())
+    except Exception as e:  # noqa: BLE001 - trailer lookup is optional, never fatal
+        typer.secho(f"Warning: could not fetch a trailer: {e}", fg=typer.colors.YELLOW)
+        return entry
+    if trailer_url is None:
+        return entry
+    return store.update_entry(entry.id, trailer_url=trailer_url)
 
 
 def _venue_location(venue: Venue | None) -> str | None:

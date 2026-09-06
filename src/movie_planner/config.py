@@ -26,6 +26,10 @@ class Config:
     caldav_password: str
     omdb_api_key: str
     db_path: Path
+    # Optional (issue #236), unlike omdb_api_key above: trailer lookup is
+    # best-effort extra, not something every install needs to configure
+    # before the tool works at all.
+    tmdb_api_key: str | None = None
 
 
 def default_config_path() -> Path:
@@ -98,6 +102,10 @@ def load_config(path: Path | None = None) -> Config:
     caldav = _require_table(data, "caldav")
     omdb = _require_table(data, "omdb")
     storage = _require_table(data, "storage")
+    # Optional table (issue #236) - a config file with no [tmdb] section
+    # at all just means no trailer lookups, not a config error.
+    tmdb = data.get("tmdb")
+    tmdb_api_key = str(tmdb["api_key"]) if isinstance(tmdb, dict) and tmdb.get("api_key") else None
 
     return Config(
         caldav_url=str(_require(caldav, "url", "caldav.url")),
@@ -105,4 +113,5 @@ def load_config(path: Path | None = None) -> Config:
         caldav_password=_resolve_password(caldav),
         omdb_api_key=str(_require(omdb, "api_key", "omdb.api_key")),
         db_path=Path(str(_require(storage, "db_path", "storage.db_path"))).expanduser(),
+        tmdb_api_key=tmdb_api_key,
     )

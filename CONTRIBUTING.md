@@ -96,6 +96,18 @@ re-fetched" - not leave it as an implicit expectation nobody wrote
 down. Concrete and testable, the same bar `skills/write-issue/`
 already holds every acceptance criterion to.
 
+## TMDb usage (trailer lookup)
+
+TMDb's free tier has no comparable daily cap to OMDb's, so this isn't the
+same minimization pressure - but `TmdbClient` still caches by `imdb_id`
+for the life of one run, same reasoning as `OmdbClient`. Trailer lookup
+only ever runs immediately after a successful OMDb match, reusing the
+`imdb_id` that match already returned rather than doing its own title
+search - see `_fetch_trailer_or_warn` in `cli.py`. It's opportunistic
+throughout: no `tmdb.api_key` configured, no match, or no official
+YouTube trailer are all the same "no trailer" outcome, never an error
+that blocks the rest of the command.
+
 ## Commit messages
 
 [Conventional Commits](https://www.conventionalcommits.org/):

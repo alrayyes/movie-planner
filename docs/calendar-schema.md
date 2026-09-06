@@ -93,6 +93,14 @@ either.
     `X-CITY`/`X-COUNTRY` above, and reusing that name would collide.
     `Plot`, `Awards`, and `Released` are longer-form text and go into
     `DESCRIPTION` instead - see below.
+  - **`X-TRAILER-URL`** — a YouTube link to the movie's official trailer
+    (issue #236), from TMDb rather than OMDb - looked up by the `imdbID`
+    an OMDb match already returned, so it only ever runs right after a
+    successful OMDb fetch, never on its own. Same "omit, never guess"
+    rule as everything else here: no `tmdb.api_key` configured (it's
+    optional, unlike `omdb.api_key`), no TMDb match, or no official
+    YouTube trailer among TMDb's videos, and the entry simply has no
+    `X-TRAILER-URL` at all.
 
 A real example — an entry at a known venue, with a genre tag and
 coordinates on record, exactly as `build_vevent` produces it:
@@ -182,6 +190,16 @@ routinely `"N/A"` even for a real match, so treating their absence as
 has no data for. A fetch already happening for another reason still
 captures these too, at no extra request cost; `sync refresh --force` is
 the explicit way to backfill them onto an already-complete older entry.
+
+`trailer_url` (issue #236) follows the same "don't factor into whether
+a fetch is needed" rule, for the same reason - `needs_omdb_fetch`
+doesn't check it either, since a title with genuinely no official
+YouTube trailer would otherwise be re-fetched forever too. It only ever
+gets set as a side effect of an OMDb fetch that was already going to
+happen (or already has a `caldav_uid` update pending), never fetched on
+its own - so an entry logged before `tmdb.api_key` was configured, or
+before #236 shipped, needs `sync refresh --force` to backfill it, same
+as the rest of OMDb's response.
 
 ## Venue chain/location
 
