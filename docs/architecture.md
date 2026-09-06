@@ -115,8 +115,3 @@ For anyone (human or agent) picking this project up mid-thread:
   email, not just the redacted fixture. Deliberately left unparsed
   rather than forcing a parser with no title to extract - a booking
   from this era can't be logged via `pathe-mail-import` at all.
-- **`pathe-mail-import` can't read a mailbox in the Maildir format**
-  (issue
-  #208) - `MboxMailClient`/`extra_paths` only ever adds more mbox
-  files, and a mutt-synced account with no mbox copy (like the archive
-  #200 found) isn't reachable this way yet.
