@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.13.1...movie-planner-v1.13.2) (2026-09-06)
+
+
+### Bug Fixes
+
+* **pathe,venues:** stop baking city into cinema, add 4 missing aliases ([#227](https://github.com/alrayyes/movie-planner/issues/227)) ([#231](https://github.com/alrayyes/movie-planner/issues/231)) ([4d76e72](https://github.com/alrayyes/movie-planner/commit/4d76e72f2fb49caeafbac59ed15cfdcd76575431))
+
 ## [1.13.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.13.0...movie-planner-v1.13.1) (2026-09-06)
 
 
