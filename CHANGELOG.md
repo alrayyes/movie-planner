@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.5](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.9.4...movie-planner-v1.9.5) (2026-09-06)
+
+
+### Bug Fixes
+
+* **cli,mail-import:** richer --help text, and a man-page generation bug ([#205](https://github.com/alrayyes/movie-planner/issues/205)) ([2173fae](https://github.com/alrayyes/movie-planner/commit/2173faec152658eac44c6689125219dec31291f1))
+
 ## [1.9.4](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.9.3...movie-planner-v1.9.4) (2026-09-06)
 
 
