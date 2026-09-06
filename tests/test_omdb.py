@@ -213,6 +213,105 @@ def test_lookup_caches_no_match_too() -> None:
     assert call_count == 1
 
 
+# --- format/edition suffix stripped from the OMDb search: issue #216 ---
+#
+# Every case here is a real title from Ryan's historical Pathé import
+# that failed OMDb lookup because of a trailing format/edition marker
+# OMDb's own search doesn't recognize.
+
+
+@pytest.mark.parametrize(
+    ("stored_title", "expected_search_title"),
+    [
+        ("Spy (OV)", "Spy"),
+        ("The Martian 3D", "The Martian"),
+        ("Ant-Man and The Wasp 4DX 3D", "Ant-Man and The Wasp"),
+        ("Insidious: Chapter 3 (OV)", "Insidious: Chapter 3"),
+        ("Wreck-It Ralph 3D OV O3D", "Wreck-It Ralph"),
+    ],
+)
+def test_lookup_strips_a_format_suffix_before_searching(
+    stored_title: str, expected_search_title: str
+) -> None:
+    seen_params = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_params.update(dict(request.url.params))
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    ratings = client.lookup(title=stored_title)
+
+    assert ratings is not None
+    assert seen_params["t"] == expected_search_title
+
+
+def test_lookup_with_and_without_a_format_suffix_share_one_cache_entry_and_call() -> None:
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    with_suffix = client.lookup(title="Insidious: Chapter 3 (OV)")
+    without_suffix = client.lookup(title="Insidious: Chapter 3")
+
+    assert with_suffix is not None
+    assert without_suffix is not None
+    assert with_suffix == without_suffix
+    assert call_count == 1
+
+
+def test_lookup_with_a_format_suffix_still_honours_the_year_hint() -> None:
+    seen_params = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_params.update(dict(request.url.params))
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    client.lookup(title="The Martian 3D", year=2015)
+
+    assert seen_params["t"] == "The Martian"
+    assert seen_params["y"] == "2015"
+
+
+def test_lookup_with_no_recognizable_suffix_is_unaffected() -> None:
+    seen_params = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_params.update(dict(request.url.params))
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    client.lookup(title="Dune")
+
+    assert seen_params["t"] == "Dune"
+
+
+def test_fetch_and_store_ratings_never_changes_the_stored_title(store: Store) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+    entry = store.create_entry(
+        title="Spy (OV)",
+        date=date(2026, 1, 1),
+        medium_id=store.add_medium("cinema", is_physical_place=True).id,
+    )
+
+    updated, matched = fetch_and_store_ratings(store, client, entry)
+
+    assert matched is True
+    assert updated.title == "Spy (OV)"
+
+
 def _entry(**overrides: object) -> Entry:
     defaults: dict[str, object] = {
         "id": 1,

@@ -55,6 +55,30 @@ def _na_or(value: object) -> str | None:
     return value if isinstance(value, str) and value != "N/A" else None
 
 
+# A Pathé confirmation title sometimes carries a trailing format/
+# edition marker OMDb's own title search doesn't recognize and never
+# matches (movie-planner#216, quantified against a real historical
+# import: 76 of 146 lookups failed on exactly this). Stripped only for
+# the search string - the stored entry.title is never touched, since
+# the format is real information, just not part of the movie's name.
+_FORMAT_SUFFIX_RE = re.compile(
+    r"\s*\(?\b(?:OV|NL|DOV|O3D|3D|4DX|IMAX|Dolby|Cinema|Atmos)\b\)?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _strip_format_suffix(title: str) -> str:
+    cleaned = title
+    while True:
+        match = _FORMAT_SUFFIX_RE.search(cleaned)
+        if not match or not cleaned[: match.start()].strip():
+            # No more trailing suffix, or stripping it would empty the
+            # title out entirely (it was the whole string, not a real
+            # suffix on a real title) - stop either way.
+            return cleaned
+        cleaned = cleaned[: match.start()]
+
+
 _YEAR_RE = re.compile(r"\d{4}")
 
 
@@ -84,16 +108,22 @@ class OmdbClient:
         if not title and not imdb_id:
             raise ValueError("lookup needs a title or imdb_id")
 
+        # Cleaned once, up front, so both the cache key and the actual
+        # search below use the same stripped title regardless of
+        # whether the year-scoped branch runs - "X (OV)" and "X" then
+        # share one cache entry and one API call (movie-planner#216).
+        search_title = _strip_format_suffix(title) if title is not None else None
+
         # A watched-year hint only makes sense for a title search - an
         # imdb_id is already exact - and is disambiguation, not a strict
         # filter: a re-watch of an older film has a watched-year that's
         # never the release year, so a year-scoped miss falls back to a
         # plain title search rather than reporting no match.
-        if title and not imdb_id and year is not None:
-            year_scoped = self._lookup_one(title=title, imdb_id=None, year=year)
+        if search_title and not imdb_id and year is not None:
+            year_scoped = self._lookup_one(title=search_title, imdb_id=None, year=year)
             if year_scoped is not None:
                 return year_scoped
-        return self._lookup_one(title=title, imdb_id=imdb_id, year=None)
+        return self._lookup_one(title=search_title, imdb_id=imdb_id, year=None)
 
     def _lookup_one(
         self, *, title: str | None, imdb_id: str | None, year: int | None
