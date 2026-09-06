@@ -3,7 +3,7 @@
 - [x] 1.1 Create the new mail-fetch module/package and its
   `[project.scripts]` entry point in `pyproject.toml`, separate from
   `movie_planner.cli`; verify `uv run <entry-point> --help` runs
-- [ ] 1.2 Create the Pathé translation-script module and its own
+- [x] 1.2 Create the Pathé translation-script module and its own
   `[project.scripts]` entry point, importing `movie_planner.pathe`
   directly; verify it runs standalone
 - [x] 1.3 Define the mail tool's own config file shape (IMAP
@@ -118,18 +118,28 @@
 
 ## 7. Docs
 
-- [ ] 7.1 Write the new tool's own `README.md` (requirements,
+- [x] 7.1 Write the new tool's own `README.md` (requirements,
   installation, config, usage, the translation-script contract for
   anyone adding a second chain), with a `--help` screenshot generated
   by `rich-codex` the same way `movie-planner`'s own README got one in
   #135
-- [ ] 7.2 Cross-link it from movie-planner's own `README.md` (a short
+
+  Landed as `docs/pathe-mail-import.md` rather than a second top-level
+  `README.md` (this is a mode of the same repo/package, not a separate
+  one) - covers all the same ground (requirements, installation,
+  config, usage, adding a second chain) plus the `--help` screenshot
+  at `docs/img/pathe-mail-import-help.svg`.
+- [x] 7.2 Cross-link it from movie-planner's own `README.md` (a short
   pointer, same shape as the existing `movie-planner-web` mention) -
   discoverable, without `movie-planner --help` ever mentioning Pathé or
   IMAP
-- [ ] 7.3 Update `CHANGELOG.md`/release notes to call out the
+- [x] 7.3 Update `CHANGELOG.md`/release notes to call out the
   **BREAKING** `booking_ref` removal from the import contract
-- [ ] 7.4 Write `docs/architecture.md`: a Mermaid diagram and short
+
+  Landed automatically via release-please from #143's own commit
+  trailer - CHANGELOG.md's "### ⚠ BREAKING CHANGES" section for that
+  release names it explicitly.
+- [x] 7.4 Write `docs/architecture.md`: a Mermaid diagram and short
   prose showing how movie-planner (CLI + SQLite store), the CalDAV
   calendar, movie-planner-web, OMDb, and this mail tool all relate -
   data flow, not implementation detail; linked from the main
