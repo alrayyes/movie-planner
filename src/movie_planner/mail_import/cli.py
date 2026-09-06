@@ -14,6 +14,7 @@ from typing import Annotated
 
 import typer
 
+from movie_planner import config_file
 from movie_planner.mail_import.config import (
     ImapSource,
     MailConfigError,
@@ -148,14 +149,24 @@ def init(
     """Write a starter config.toml, ready to edit. Prompts for anything
     not given as a flag, unless running non-interactively (no TTY), in
     which case a missing required value fails clearly rather than
-    hanging on a prompt that will never be answered.
+    hanging on a prompt that will never be answered. Sharing the file
+    with movie-planner (issue #157): if it already exists but has no
+    [mail_import] section yet - e.g. movie-planner already wrote its
+    own [movie_planner] section there - this adds this tool's section
+    alongside it, no --force needed.
     """
     config_path = config or default_config_path()
     if config_path.is_file() and not force:
-        typer.secho(
-            f"{config_path} already exists. Pass --force to overwrite it.", fg=typer.colors.RED
-        )
-        raise typer.Exit(code=1)
+        try:
+            already_configured = config_file.has_section(config_path, "mail_import")
+        except config_file.ConfigFileError:
+            already_configured = True  # unreadable existing content - don't guess, don't clobber
+        if already_configured:
+            typer.secho(
+                f"{config_path} already exists. Pass --force to overwrite it.",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(code=1)
 
     interactive = _is_interactive()
 
@@ -192,7 +203,10 @@ def init(
             imap_password_command, interactive=interactive
         )
 
-        source_block = f'[mail]\nsource = "imap"\n\n[mail.imap]\nhost = "{host}"\nport = {port}\nusername = "{username}"\n'
+        source_block = (
+            f'[mail_import.mail]\nsource = "imap"\n\n[mail_import.mail.imap]\n'
+            f'host = "{host}"\nport = {port}\nusername = "{username}"\n'
+        )
         source_block += (
             f'password_command = "{password_command}"\n'
             if password_command
@@ -205,7 +219,9 @@ def init(
             flag="--mbox-path",
             interactive=interactive,
         )
-        source_block = f'[mail]\nsource = "mbox"\n\n[mail.mbox]\npath = "{path}"\n'
+        source_block = (
+            f'[mail_import.mail]\nsource = "mbox"\n\n[mail_import.mail.mbox]\npath = "{path}"\n'
+        )
 
     sender_domain = chain_sender_domain or _required(
         None,
@@ -221,10 +237,15 @@ def init(
         interactive=interactive,
         default=_DEFAULT_CHAIN_TRANSLATE,
     )
-    chains_block = f'\n[[chains]]\nsender_domain = "{sender_domain}"\ntranslate = "{translate}"\n'
+    chains_block = (
+        f'\n[[mail_import.chains]]\nsender_domain = "{sender_domain}"\ntranslate = "{translate}"\n'
+    )
 
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(source_block + chains_block)
+    if force:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(source_block + chains_block)
+    else:
+        config_file.write_section(config_path, source_block + chains_block)
     typer.echo(f"Wrote a starter config to {config_path}.")
 
 

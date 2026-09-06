@@ -55,7 +55,7 @@ def test_init_non_interactive_with_all_flags_writes_config(tmp_path: Path) -> No
     )
 
     assert result.exit_code == 0, result.output
-    data = tomllib.loads(config_path.read_text())
+    data = tomllib.loads(config_path.read_text())["mail_import"]
     assert data["mail"]["source"] == "imap"
     assert data["mail"]["imap"]["host"] == "127.0.0.1"
     assert data["mail"]["imap"]["port"] == 1143
@@ -75,7 +75,7 @@ def test_init_non_interactive_mbox_source(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0, result.output
-    data = tomllib.loads(config_path.read_text())
+    data = tomllib.loads(config_path.read_text())["mail_import"]
     assert data["mail"]["source"] == "mbox"
     assert data["mail"]["mbox"]["path"] == str(mbox_path)
 
@@ -148,7 +148,7 @@ def test_init_interactive_prompts_for_missing_values(
     )
 
     assert result.exit_code == 0, result.output
-    data = tomllib.loads(config_path.read_text())
+    data = tomllib.loads(config_path.read_text())["mail_import"]
     assert data["mail"]["source"] == "imap"
     assert data["mail"]["imap"]["host"] == "127.0.0.1"
     assert data["mail"]["imap"]["port"] == 993
@@ -169,9 +169,37 @@ def test_init_interactive_password_command_path(
     )
 
     assert result.exit_code == 0, result.output
-    data = tomllib.loads(config_path.read_text())
+    data = tomllib.loads(config_path.read_text())["mail_import"]
     assert data["mail"]["imap"]["password_command"] == "pass show imap"
     assert "password" not in data["mail"]["imap"]
+
+
+def test_init_adds_its_section_to_an_existing_shared_config_without_force(
+    tmp_path: Path,
+) -> None:
+    # issue #157: movie-planner already wrote its own section to this
+    # file - adding pathe-mail-import's shouldn't need --force.
+    config_path = tmp_path / "config.toml"
+    config_path.write_text('[movie_planner]\ncaldav_url = "https://example.com"\n')
+
+    result = runner.invoke(
+        app,
+        [
+            "init",
+            "--config",
+            str(config_path),
+            "--source",
+            "mbox",
+            "--mbox-path",
+            str(tmp_path / "INBOX"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    text = config_path.read_text()
+    assert 'caldav_url = "https://example.com"' in text
+    data = tomllib.loads(text)
+    assert data["mail_import"]["mail"]["source"] == "mbox"
 
 
 # --- fetch: task groups 3-4 ---

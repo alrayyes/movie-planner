@@ -14,6 +14,7 @@ import httpx
 import typer
 
 from movie_planner import config as config_module
+from movie_planner import config_file
 from movie_planner.calendar_sync import CalendarClient, CalendarSync
 from movie_planner.display import detect_terminal_image_protocol, format_entry, render_poster
 from movie_planner.duplicates import find_duplicate
@@ -97,6 +98,27 @@ password = "..."
 api_key = "..."
 
 [storage]
+db_path = "~/.local/share/movie-planner/movies.db"
+"""
+
+# The shape init writes by default (issue #157): namespaced under
+# [movie_planner], so this config file can be shared with
+# pathe-mail-import's own [mail_import] section. load_config still
+# reads the older bare shape above unchanged - only what init writes
+# is new.
+_STARTER_CONFIG_NAMESPACED = """\
+[movie_planner.caldav]
+url = "https://baikal.example.com/dav.php/calendars/moviewatcher/movies/"
+username = "moviewatcher"
+password = "..."
+# Or, instead of a plaintext password above, run a command that prints
+# it to stdout (e.g. a password manager) - set only one of the two:
+# password_command = "pass show caldav/movie-planner"
+
+[movie_planner.omdb]
+api_key = "..."
+
+[movie_planner.storage]
 db_path = "~/.local/share/movie-planner/movies.db"
 """
 
@@ -185,17 +207,31 @@ def init(
         bool, typer.Option("--force", help="Overwrite an existing config file.")
     ] = False,
 ) -> None:
-    """Write a starter config.toml, ready to edit."""
+    """Write a starter config.toml, ready to edit. Sharing the file
+    with pathe-mail-import (issue #157): if it already exists but has
+    no [movie_planner] section yet - e.g. pathe-mail-import already
+    wrote its own [mail_import] section there - this adds movie-
+    planner's section alongside it, no --force needed.
+    """
     overrides: _ConfigOverrides = ctx.obj
     config_path = overrides.config_path or config_module.default_config_path()
-    if config_path.is_file() and not force:
-        typer.secho(
-            f"{config_path} already exists. Pass --force to overwrite it.",
-            fg=typer.colors.RED,
-        )
-        raise typer.Exit(code=1)
 
-    _write_starter_config(config_path)
+    if config_path.is_file() and not force:
+        try:
+            already_configured = config_file.has_section(config_path, "movie_planner")
+        except config_file.ConfigFileError:
+            already_configured = True  # unreadable existing content - don't guess, don't clobber
+        if already_configured:
+            typer.secho(
+                f"{config_path} already exists. Pass --force to overwrite it.",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(code=1)
+
+    if force:
+        _write_starter_config(config_path)
+    else:
+        config_file.write_section(config_path, _STARTER_CONFIG_NAMESPACED)
     typer.echo(
         f"Wrote a starter config to {config_path}. Edit it with your CalDAV "
         "credentials and OMDb API key before running any other command."

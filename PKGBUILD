@@ -27,6 +27,7 @@ depends=(
   'python-icalendar'
   'python-questionary'
   'python-rapidfuzz'
+  'python-tomlkit'
   'python-typer'
 )
 makedepends=(

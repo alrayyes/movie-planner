@@ -59,6 +59,44 @@ def test_load_config_reads_mbox_source(tmp_path: Path) -> None:
     assert config.source == MboxSource(path=Path("~/Mail/INBOX").expanduser())
 
 
+NAMESPACED_CONFIG = """
+[mail_import.mail]
+source = "mbox"
+
+[mail_import.mail.mbox]
+path = "~/Mail/INBOX"
+
+[[mail_import.chains]]
+sender_domain = "pathe.nl"
+translate = "pathe-translate"
+"""
+
+
+def test_load_config_reads_the_namespaced_shared_config_shape(tmp_path: Path) -> None:
+    # issue #157: pathe-mail-import and movie-planner can share one
+    # config file, each under its own top-level section.
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(NAMESPACED_CONFIG)
+
+    config = load_config(config_path)
+
+    assert config.source == MboxSource(path=Path("~/Mail/INBOX").expanduser())
+    assert config.chains == (ChainConfig(sender_domain="pathe.nl", translate="pathe-translate"),)
+
+
+def test_load_config_prefers_the_namespaced_section_when_both_are_present(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        IMAP_CONFIG + "\n" + NAMESPACED_CONFIG.replace("~/Mail/INBOX", "~/Mail/Other")
+    )
+
+    config = load_config(config_path)
+
+    assert config.source == MboxSource(path=Path("~/Mail/Other").expanduser())
+
+
 def test_load_config_rejects_an_unknown_source_kind(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(IMAP_CONFIG.replace('source = "imap"', 'source = "pop3"'))

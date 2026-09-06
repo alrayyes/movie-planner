@@ -31,6 +31,43 @@ def test_load_config_reads_all_fields(tmp_path: Path) -> None:
     assert config.db_path == Path("~/.local/share/movie-planner/movies.db").expanduser()
 
 
+NAMESPACED_CONFIG = """
+[movie_planner.caldav]
+url = "https://baikal.example.com/dav.php/calendars/moviewatcher/movies/"
+username = "moviewatcher"
+password = "hunter2"
+
+[movie_planner.omdb]
+api_key = "abc123"
+
+[movie_planner.storage]
+db_path = "~/.local/share/movie-planner/movies.db"
+"""
+
+
+def test_load_config_reads_the_namespaced_shared_config_shape(tmp_path: Path) -> None:
+    # issue #157: movie-planner and pathe-mail-import can share one
+    # config file, each under its own top-level section.
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(NAMESPACED_CONFIG)
+
+    config = load_config(config_path)
+
+    assert config.caldav_url == "https://baikal.example.com/dav.php/calendars/moviewatcher/movies/"
+    assert config.omdb_api_key == "abc123"
+
+
+def test_load_config_prefers_the_namespaced_section_when_both_are_present(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(VALID_CONFIG + "\n" + NAMESPACED_CONFIG.replace("abc123", "xyz789"))
+
+    config = load_config(config_path)
+
+    assert config.omdb_api_key == "xyz789"
+
+
 def test_load_config_missing_file_raises_clear_error(tmp_path: Path) -> None:
     missing_path = tmp_path / "does-not-exist.toml"
 

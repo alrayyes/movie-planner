@@ -141,4 +141,13 @@ def load_config(path: Path | None = None) -> MailImportConfig:
     except tomllib.TOMLDecodeError as e:
         raise MailConfigError(f"{config_path} is not valid TOML: {e}") from e
 
+    # issue #157: a config file shared with movie-planner puts this
+    # tool's own settings under a [mail_import] table instead of at the
+    # top level. Prefer that when it's there; fall back to the original
+    # top-level shape so an existing config file keeps working
+    # unchanged.
+    namespaced = data.get("mail_import")
+    if isinstance(namespaced, dict):
+        data = namespaced
+
     return MailImportConfig(source=_load_source(data), chains=_load_chains(data))

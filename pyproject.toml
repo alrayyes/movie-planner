@@ -22,6 +22,7 @@ dependencies = [
   "icalendar==7.3",
   "questionary==2.1.1",
   "rapidfuzz==3.14.5",
+  "tomlkit==0.15.1",
   "typer==0.27.1",
 ]
 scripts.movie-planner = "movie_planner:main"

@@ -86,6 +86,15 @@ def load_config(path: Path | None = None) -> Config:
     except tomllib.TOMLDecodeError as e:
         raise ConfigError(f"{config_path} is not valid TOML: {e}") from e
 
+    # issue #157: a config file shared with pathe-mail-import puts
+    # movie-planner's own settings under a [movie_planner] table
+    # instead of at the top level. Prefer that when it's there; fall
+    # back to the original top-level shape so an existing config file
+    # keeps working unchanged.
+    namespaced = data.get("movie_planner")
+    if isinstance(namespaced, dict):
+        data = namespaced
+
     caldav = _require_table(data, "caldav")
     omdb = _require_table(data, "omdb")
     storage = _require_table(data, "storage")
