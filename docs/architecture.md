@@ -19,11 +19,14 @@ flowchart LR
     subgraph mp["movie-planner"]
         Import --> Store[("SQLite store\n(source of truth)")]
         Log["movie-planner log /\nfrom-pathe-email"] --> Store
-        Store --> Sync["calendar push\n(sync only, never reads back;\nrecovers from a stale\ncaldav_uid on refresh/retry)"]
+        Store --> Sync["calendar push\n(recovers from a stale\ncaldav_uid on refresh/retry)"]
+        Pull["sync pull\n(manual, approval-gated;\neverything else stays\npush-only)"]
     end
 
     Store -- "ratings, poster,\ndirector, cast, genre" --> OMDb["OMDb API"]
     Sync -- "LOCATION, GEO,\nX-* properties" --> CalDAV[("Baikal / CalDAV calendar")]
+    CalDAV -- "new/changed/removed\ncandidates" --> Pull
+    Pull -. "only on approval" .-> Store
     CalDAV <--> Web["movie-planner-web\n(browser client)"]
 
     Config[("config.toml,\noptionally shared:\n[movie_planner] +\n[mail_import] sections")]
@@ -37,8 +40,12 @@ flowchart LR
   only source of truth, per [`docs/calendar-schema.md`](calendar-schema.md).
   It reads from a CSV/JSON file or stdin (`import`), a piped or given
   email (`from-pathe-email`), or interactive prompts (`log`) - and
-  pushes to the calendar. It never reads the calendar back, and it has
-  no idea `pathe-mail-import` or `movie-planner-web` exist.
+  pushes to the calendar. `log`/`import`/`update`/`sync refresh`/
+  `sync retry` never read the calendar back; `sync pull` (issue #235)
+  is the one, manually run exception - it reconciles calendar-side
+  changes back into the store, one approval-gated candidate at a
+  time, never automatically. It has no idea `pathe-mail-import` or
+  `movie-planner-web` exist.
 - **pathe-mail-import** ([its own doc page](pathe-mail-import.md)) is
   entirely separate - a different binary, no shared code path with
   `movie-planner`'s own CLI. Its only contact with `movie-planner` is
@@ -59,10 +66,11 @@ flowchart LR
   (`log`, `import`, `sync refresh`, `from-pathe-email`), never by the
   mail-import tool.
 - **The CalDAV calendar** (Baikal or otherwise) is a synced mirror,
-  written to but never read from by `movie-planner`.
-  **movie-planner-web** (a separate repo) is the other thing that
-  talks to it directly - a browser client reading and writing the same
-  calendar, independent of whether entries got there via `log`,
+  written to by every `movie-planner` command except `sync pull`,
+  which is the only one that also reads it back (approval-gated, see
+  above). **movie-planner-web** (a separate repo) is the other thing
+  that talks to it directly - a browser client reading and writing the
+  same calendar, independent of whether entries got there via `log`,
   `import`, or `pathe-mail-import`'s output.
 
 ## Why this shape
@@ -98,18 +106,12 @@ For anyone (human or agent) picking this project up mid-thread:
   issue #166) does. Current read: this is `retry`'s documented
   contract working as intended, not a bug - reopen the question if
   that stops feeling right in practice.
-- **`movie-planner log` sometimes doesn't add the new entry to the
-  calendar** (issue #167) - reported live, root cause not yet
-  confirmed from this sandbox; needs the exact command, full output,
-  and whether a `Warning:` line appeared.
-- **"`list` also shows cached shows"** (issue #168) - reported live,
-  needs clarification on which command and what "cached" refers to
-  before it's actionable.
-- **Whether the calendar should become the actual source of truth**,
-  instead of the local SQLite store (issue #169) - a deliberate
-  reversal of the "Why this shape" reasoning above, not something to
-  decide from a bug report. Explore-mode territory, not a ticket to
-  just implement.
+- **"`list` also shows cached shows"** (issue #168) - reported live;
+  Ryan later clarified "shows" probably means cached showings, that
+  is, viewings/entries, not TV series - but two things are still
+  unclear: what "cached" refers to (stale OMDb data, an orphaned local
+  entry, something else) and which command surfaces it, so this isn't
+  actionable yet.
 - **One real historical Pathé template (2012, `pathe.nl`) has no movie
   title anywhere** - not in the Subject, not in either MIME part, only
   an Unlimited-pass number and a poster image's numeric `movieid`

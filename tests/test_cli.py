@@ -1,4 +1,4 @@
-from datetime import time
+from datetime import date, time
 from pathlib import Path
 
 import httpx
@@ -9,7 +9,7 @@ from fixtures import PATHE_BOOKING_REF, PATHE_EMAIL_PLAIN
 from typer.testing import CliRunner
 
 from movie_planner import config as config_module
-from movie_planner.calendar_sync import CalendarClient
+from movie_planner.calendar_sync import CalendarClient, build_vevent
 from movie_planner.cli import app
 from movie_planner.omdb import MovieRatings, OmdbClient
 from movie_planner.store import Store
@@ -2391,3 +2391,390 @@ def test_no_flag_or_env_override_exists_for_the_caldav_password() -> None:
 
     assert result.exit_code == 0, result.output
     assert "--caldav-password" not in result.output
+
+
+# --- sync pull: issue #235, task group 4 ---
+
+
+def test_sync_pull_nothing_to_pull_when_calendar_matches_store(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"])
+
+    assert result.exit_code == 0, result.output
+    assert "Nothing to pull" in result.output
+
+
+def test_sync_pull_approved_new_candidate_creates_an_entry(
+    config_path: Path, calendar: FakeCalendar
+) -> None:
+    ical = build_vevent(
+        uid="web-uid-1",
+        title="Arrival",
+        entry_date=date(2026, 2, 1),
+        start_time=None,
+        end_time=None,
+        venue="Grand Vista Cinema",
+    )
+    calendar.add_event(ical)
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="y\ncinema\n")
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.title == "Arrival"
+    assert entry.date == date(2026, 2, 1)
+    assert entry.caldav_uid == "web-uid-1"
+    venue = next(v for v in store.list_venues() if v.id == entry.venue_id)
+    assert venue.name == "Grand Vista Cinema"
+    medium = next(m for m in store.list_media() if m.id == entry.medium_id)
+    assert medium.name == "cinema"
+    assert medium.is_physical_place is True
+    store.close()
+
+
+def test_sync_pull_new_candidate_medium_defaults_to_cinema_when_venue_present(
+    config_path: Path, calendar: FakeCalendar
+) -> None:
+    ical = build_vevent(
+        uid="web-uid-2",
+        title="Arrival",
+        entry_date=date(2026, 2, 1),
+        start_time=None,
+        end_time=None,
+        venue="Grand Vista Cinema",
+    )
+    calendar.add_event(ical)
+
+    # Just accepting the default ("cinema") shown on the medium prompt.
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="y\n\n")
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    medium = next(m for m in store.list_media() if m.id == entry.medium_id)
+    assert medium.name == "cinema"
+    store.close()
+
+
+def test_sync_pull_new_candidate_no_venue_has_no_default_medium(
+    config_path: Path, calendar: FakeCalendar
+) -> None:
+    ical = build_vevent(
+        uid="web-uid-3",
+        title="Some Netflix Movie",
+        entry_date=date(2026, 2, 1),
+        start_time=None,
+        end_time=None,
+        venue=None,
+    )
+    calendar.add_event(ical)
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "sync", "pull"], input="y\nnetflix\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    medium = next(m for m in store.list_media() if m.id == entry.medium_id)
+    assert medium.name == "netflix"
+    assert medium.is_physical_place is False
+    store.close()
+
+
+def test_sync_pull_declined_new_candidate_creates_nothing(
+    config_path: Path, calendar: FakeCalendar
+) -> None:
+    ical = build_vevent(
+        uid="web-uid-4",
+        title="Arrival",
+        entry_date=date(2026, 2, 1),
+        start_time=None,
+        end_time=None,
+        venue=None,
+    )
+    calendar.add_event(ical)
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="n\n")
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    assert store.list_entries() == []
+    store.close()
+
+
+def test_sync_pull_declined_candidate_is_offered_again_next_run(
+    config_path: Path, calendar: FakeCalendar
+) -> None:
+    ical = build_vevent(
+        uid="web-uid-5",
+        title="Arrival",
+        entry_date=date(2026, 2, 1),
+        start_time=None,
+        end_time=None,
+        venue=None,
+    )
+    calendar.add_event(ical)
+
+    first = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="n\n")
+    assert first.exit_code == 0, first.output
+
+    second = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="n\n")
+
+    assert second.exit_code == 0, second.output
+    assert "Arrival" in second.output
+
+
+def test_sync_pull_approved_changed_candidate_updates_the_entry(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid is not None
+    uid = entry.caldav_uid
+    store.close()
+
+    # movie-planner-web edited the title directly on the calendar.
+    ical = build_vevent(
+        uid=uid,
+        title="Dune: Part One",
+        entry_date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue=None,
+    )
+    calendar.events_by_uid[uid].data = ical
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="y\n")
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (updated,) = store.list_entries()
+    assert updated.title == "Dune: Part One"
+    store.close()
+
+
+def test_sync_pull_declined_changed_candidate_leaves_entry_unchanged(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    uid = entry.caldav_uid
+    assert uid is not None
+    store.close()
+
+    ical = build_vevent(
+        uid=uid,
+        title="Dune: Part One",
+        entry_date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue=None,
+    )
+    calendar.events_by_uid[uid].data = ical
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="n\n")
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (unchanged,) = store.list_entries()
+    assert unchanged.title == "Dune"
+    store.close()
+
+
+def test_sync_pull_missing_x_property_diff_shown_as_unknown(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    uid = entry.caldav_uid
+    assert uid is not None
+    store.update_entry(entry.id, row="5", seat="17")
+    store.close()
+
+    # No X-ROW/X-SEAT on the re-pushed event at all.
+    ical = build_vevent(
+        uid=uid,
+        title="Dune",
+        entry_date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue=None,
+    )
+    calendar.events_by_uid[uid].data = ical
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="n\n")
+
+    assert result.exit_code == 0, result.output
+    assert "unknown" in result.output.lower()
+    assert "'5'" in result.output
+
+
+def test_sync_pull_approved_removed_candidate_deletes_the_entry(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    uid = entry.caldav_uid
+    assert uid is not None
+    store.close()
+    del calendar.events_by_uid[uid]
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="y\n")
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    assert store.list_entries() == []
+    store.close()
+
+
+def test_sync_pull_declined_removed_candidate_keeps_the_entry(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    uid = entry.caldav_uid
+    assert uid is not None
+    store.close()
+    del calendar.events_by_uid[uid]
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="n\n")
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (kept,) = store.list_entries()
+    assert kept.id == entry.id
+    store.close()
+
+
+def test_sync_pull_does_not_write_to_the_store_when_no_candidates_are_approved(
+    config_path: Path, calendar: FakeCalendar
+) -> None:
+    ical = build_vevent(
+        uid="web-uid-6",
+        title="Arrival",
+        entry_date=date(2026, 2, 1),
+        start_time=None,
+        end_time=None,
+        venue=None,
+    )
+    calendar.add_event(ical)
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="n\n")
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    assert store.list_entries() == []
+    assert store.list_venues() == []
+    assert store.list_media() == []
+    store.close()
+
+
+def test_list_and_show_do_not_touch_the_calendar(
+    config_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """sync pull is the only command that reads the calendar back
+    (task 4.4) - `list` never even connects to it.
+    """
+
+    def fail_connect(*args: object, **kwargs: object) -> None:
+        raise AssertionError("list should never connect to the calendar")
+
+    monkeypatch.setattr(CalendarClient, "connect", classmethod(fail_connect))
+
+    result = runner.invoke(app, ["--config", str(config_path), "list"])
+
+    assert result.exit_code == 0, result.output

@@ -103,6 +103,18 @@ compared against the earlier declined version). Simpler than tracking
 per-user dismissals, and consistent with "the store is only ever
 changed by explicit approval."
 
+**New candidate medium: prompted at approval time, never guessed.**
+Surfaced during implementation (task group 3, tasks.md): `Store.create_entry`
+requires a `medium_id`, but no calendar field says which medium name
+a purely calendar-sourced entry should get - `LOCATION`'s presence
+says the medium is a physical place, never which one, and its absence
+doesn't distinguish `netflix` from `youtube` from anything else. This
+is the same free-text `medium` prompt `log` already asks for
+(`get_or_create_medium`), pre-filled with `"cinema"` when the event
+has a resolved venue name and left blank otherwise - one extra
+question when approving a new candidate, no default silently assumed.
+Confirmed directly, 2026-09-06.
+
 ## Risks / Trade-offs
 
 - **[Risk]** movie-planner-web's allow-list bug (#294) means a

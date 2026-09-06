@@ -160,6 +160,14 @@ class CalendarClient:
     def check_connection(self) -> None:
         self._calendar.events()
 
+    def list_events(self) -> list[str]:
+        """Raw iCalendar text for every event on the calendar - the read
+        side `sync pull` (issue #235) needs; `check_connection` above
+        deliberately doesn't route through this, it only needs
+        connectivity, not the data.
+        """
+        return [cast(_CalDAVEvent, e).data for e in self._calendar.events()]
+
     def create_event(self, ical_text: str) -> None:
         self._calendar.add_event(ical=ical_text)
 

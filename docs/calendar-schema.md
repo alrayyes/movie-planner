@@ -5,9 +5,14 @@ only data surface anything else can actually consume is what gets
 pushed to the Baikal (CalDAV) calendar — this is that contract, for
 movie-planner-web or any other CalDAV reader.
 
-Sync is push-only: movie-planner never reads the calendar back, so this
-document describes what it writes, not a two-way protocol. Everything
-here is built by `build_vevent`/`build_description` in
+Sync is push-only by default: `log`/`import`/`update`/`sync refresh`/
+`sync retry` never read the calendar back, so most of this document
+describes what movie-planner writes, not a two-way protocol. The one
+exception is `sync pull` (issue #235) - a manually run, approval-gated
+reconciliation step, not automatic - see "A note for anything else
+editing the calendar" below for exactly what it reads back and how.
+Everything here is built by
+`build_vevent`/`build_description`/`_extra_properties` in
 [`src/movie_planner/calendar_sync.py`](../src/movie_planner/calendar_sync.py) —
 keep this doc in sync with that file in the same commit that changes
 either.
@@ -238,12 +243,41 @@ holds for anything external editing the calendar directly.
 
 ## A note for anything else editing the calendar
 
-movie-planner never reads the calendar back, so it has no way to
-detect or react to an external edit. movie-planner-web (a separate,
-read/write consumer) parses `DESCRIPTION` when its own `X-*`
-properties aren't present yet, and writes those `X-*` properties on
-its first edit of an entry — after that, its own properties take
-priority over parsing `DESCRIPTION` again. If another consumer starts
-writing its own structured properties, document that alongside this
-file rather than only in that project's own repo, so the shared
-contract stays in one place.
+Aside from `sync pull` (below), movie-planner never reads the calendar
+back, so it has no way to detect or react to an external edit on its
+own. movie-planner-web (a separate, read/write consumer) parses
+`DESCRIPTION` when its own `X-*` properties aren't present yet, and
+writes those `X-*` properties on its first edit of an entry — after
+that, its own properties take priority over parsing `DESCRIPTION`
+again. If another consumer starts writing its own structured
+properties, document that alongside this file rather than only in
+that project's own repo, so the shared contract stays in one place.
+
+### `sync pull`
+
+`movie-planner sync pull` fetches every event on the calendar and
+compares it, by `UID`, against the local store's `caldav_uid`s -
+detecting a calendar event with no matching entry (candidate new
+entry), an entry whose linked event's structured fields differ
+(candidate change), and an entry whose linked event no longer exists
+(candidate removal). Every candidate is shown for approval before
+anything is written; declining one just means it's offered again next
+run, nothing is recorded to suppress it.
+
+Only the same structured fields this document already describes are
+ever read back or compared: `SUMMARY`, `DTSTART`/`DTEND`, `LOCATION`
+(resolved to a venue name the same way `Store.get_or_create_venue`
+already does, alias resolution included), and the `X-DIRECTOR`/
+`X-ACTORS`/`X-GENRE`/`X-YEAR`/`X-POSTER-URL`/`X-ROW`/`X-SEAT`
+properties. `DESCRIPTION` is never parsed - ratings, Letterboxd, chain,
+and notes have no reliable per-field boundary in that free text, so
+they're left alone entirely: unset on a new candidate, unchanged on a
+changed one. A candidate new entry's medium (a required field with no
+calendar-side signal at all) is asked for at approval time, the same
+way `log` already asks for it - never guessed or defaulted from
+`LOCATION`'s mere presence.
+
+A structured property missing entirely from an event (row/seat
+especially - see movie-planner-web#294) is shown as the field going to
+"unknown," not phrased as a confirmed deletion, since a missing
+property doesn't by itself mean someone removed it on purpose.

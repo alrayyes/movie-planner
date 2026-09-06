@@ -328,6 +328,61 @@ def test_calendar_client_check_connection_propagates_failure() -> None:
         client.check_connection()
 
 
+def test_calendar_client_list_events_returns_raw_ical_text_per_event() -> None:
+    calendar = FakeCalendar()
+    client = CalendarClient(calendar)
+    ical_a = build_vevent(
+        uid="uid-a",
+        title="Dune",
+        entry_date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue=None,
+    )
+    ical_b = build_vevent(
+        uid="uid-b",
+        title="Arrival",
+        entry_date=date(2026, 1, 2),
+        start_time=None,
+        end_time=None,
+        venue=None,
+    )
+    calendar.add_event(ical_a)
+    calendar.add_event(ical_b)
+
+    events = client.list_events()
+
+    assert sorted(events) == sorted([ical_a, ical_b])
+
+
+def test_calendar_client_list_events_empty_calendar() -> None:
+    client = CalendarClient(FakeCalendar())
+
+    assert client.list_events() == []
+
+
+def test_calendar_client_list_events_propagates_failure() -> None:
+    client = CalendarClient(FakeCalendar(fail_next=True))
+    with pytest.raises(ConnectionError):
+        client.list_events()
+
+
+def test_calendar_client_check_connection_does_not_use_list_events(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """check_connection just calls events() for connectivity - it doesn't
+    route through list_events (task 1.2).
+    """
+    client = CalendarClient(FakeCalendar())
+
+    def fail(self: CalendarClient) -> list[str]:
+        raise AssertionError("check_connection should not call list_events")
+
+    monkeypatch.setattr(CalendarClient, "list_events", fail)
+
+    client.check_connection()  # does not raise
+
+
 def test_calendar_client_create_event() -> None:
     calendar = FakeCalendar()
     client = CalendarClient(calendar)
