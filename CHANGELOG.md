@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.7.0...movie-planner-v1.8.0) (2026-09-06)
+
+
+### Features
+
+* **calendar:** surface venue GPS coordinates as VEVENT GEO ([#183](https://github.com/alrayyes/movie-planner/issues/183)) ([7c1efdc](https://github.com/alrayyes/movie-planner/commit/7c1efdcc35df21d593b260f8c8d9ccb71a3ef9e7)), closes [#170](https://github.com/alrayyes/movie-planner/issues/170)
+
 ## [1.7.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.6.0...movie-planner-v1.7.0) (2026-09-06)
 
 
