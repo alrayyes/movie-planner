@@ -195,11 +195,16 @@ api_key = "..."
 db_path = "~/.local/share/movie-planner/movies.db"
 ```
 
-Run `movie-planner init` to write a starter copy of this file, ready to
-edit — any other command run against a missing config file offers to do
-the same, interactively. All three sections are required; a missing file
-or a missing key fails with a message naming the problem, not a stack
-trace.
+Run `movie-planner init` to write this file — it prompts for the CalDAV
+URL, CalDAV username, and OMDb API key (skipping the prompt for any of
+the three already given as a flag or environment variable), then
+leaves the CalDAV password for you to fill in by hand afterward. Run
+without a terminal to prompt against and a required value is missing,
+it fails with a clear message instead of hanging — pass the value
+explicitly instead. Any other command run against a missing config
+file offers to write a bare placeholder copy instead, to edit by hand.
+All three sections are required; a missing file or a missing key fails
+with a message naming the problem, not a stack trace.
 
 The `[movie_planner]` table is there so this file can be shared with
 [pathe-mail-import](docs/pathe-mail-import.md), which keeps its own
