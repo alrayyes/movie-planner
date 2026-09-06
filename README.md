@@ -183,15 +183,15 @@ A TOML file at `$XDG_CONFIG_HOME/movie-planner/config.toml`
 (`~/.config/movie-planner/config.toml` if `XDG_CONFIG_HOME` isn't set):
 
 ```toml
-[caldav]
+[movie_planner.caldav]
 url = "https://baikal.example.com/dav.php/calendars/moviewatcher/movies/"
 username = "moviewatcher"
 password = "..."
 
-[omdb]
+[movie_planner.omdb]
 api_key = "..."
 
-[storage]
+[movie_planner.storage]
 db_path = "~/.local/share/movie-planner/movies.db"
 ```
 
@@ -200,6 +200,16 @@ edit — any other command run against a missing config file offers to do
 the same, interactively. All three sections are required; a missing file
 or a missing key fails with a message naming the problem, not a stack
 trace.
+
+The `[movie_planner]` table is there so this file can be shared with
+[pathe-mail-import](docs/pathe-mail-import.md), which keeps its own
+settings under `[mail_import]` in the same file — point both tools'
+`--config` (or `$XDG_CONFIG_HOME/*/config.toml`) at one path, and
+`movie-planner init`/`pathe-mail-import init` each add their own
+section without disturbing the other's. An older config file with
+`[caldav]`/`[omdb]`/`[storage]` at the top level (no `[movie_planner]`
+wrapper) still loads exactly as before — nothing to migrate for an
+existing setup.
 
 Instead of `caldav.password` in plain text, `caldav.password_command` runs
 a command and uses its stdout as the password — a password manager CLI, for

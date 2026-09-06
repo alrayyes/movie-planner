@@ -699,6 +699,41 @@ def test_init_force_overwrites(tmp_path: Path) -> None:
     assert config_path.read_text() != "existing content"
 
 
+def test_init_writes_the_namespaced_section(tmp_path: Path) -> None:
+    # issue #157: init writes the new [movie_planner]-namespaced shape,
+    # ready to share a config file with pathe-mail-import.
+    config_path = tmp_path / "config.toml"
+
+    result = runner.invoke(app, ["--config", str(config_path), "init"])
+
+    assert result.exit_code == 0, result.output
+    assert "[movie_planner" in config_path.read_text()
+
+
+def test_init_adds_its_section_to_an_existing_shared_config_without_force(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text('[mail_import]\nsource = "mbox"\n')
+
+    result = runner.invoke(app, ["--config", str(config_path), "init"])
+
+    assert result.exit_code == 0, result.output
+    text = config_path.read_text()
+    assert 'source = "mbox"' in text
+    loaded = config_module.load_config(config_path)
+    assert loaded.caldav_url
+
+
+def test_init_refuses_to_overwrite_an_existing_section_without_force(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    runner.invoke(app, ["--config", str(config_path), "init"])
+
+    result = runner.invoke(app, ["--config", str(config_path), "init"])
+
+    assert result.exit_code != 0
+
+
 def test_missing_config_non_interactively_points_at_init(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
 

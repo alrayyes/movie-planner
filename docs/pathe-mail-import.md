@@ -56,13 +56,17 @@ package, same caveat as the preceding paragraph.
 
 A TOML file at `$XDG_CONFIG_HOME/pathe-mail-import/config.toml`
 (`~/.config/pathe-mail-import/config.toml` if `XDG_CONFIG_HOME` isn't
-set) - entirely separate from `movie-planner`'s own `config.toml`.
+set) - its own default path, separate from `movie-planner`'s own
+`config.toml`, but the two can share one file (issue #157): point
+`--config` at the same path as `movie-planner`'s and `pathe-mail-import
+init` adds its own `[mail_import]` section alongside `movie-planner`'s
+`[movie_planner]` one, rather than overwriting the file.
 
 ```toml
-[mail]
+[mail_import.mail]
 source = "imap"          # or "mbox"
 
-[mail.imap]
+[mail_import.mail.imap]
 host = "127.0.0.1"
 port = 1143
 username = "you@example.com"
@@ -71,13 +75,17 @@ password = "..."
 # it to stdout (e.g. a password manager) - set only one of the two:
 # password_command = "pass show imap/pathe-mail-import"
 
-# [mail.mbox]
+# [mail_import.mail.mbox]
 # path = "~/Mail/INBOX"
 
-[[chains]]
+[[mail_import.chains]]
 sender_domain = "service.pathe.nl"
 translate = "pathe-translate"
 ```
+
+An older config file with `[mail]`/`[[chains]]` at the top level (no
+`[mail_import]` wrapper) still loads exactly as before - nothing to
+migrate for an existing setup.
 
 Real Pathé booking confirmations come from `service.pathe.nl`, not the
 bare `pathe.nl` domain - other Pathé mail (the newsletter, a club
