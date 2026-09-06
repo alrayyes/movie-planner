@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.15.0...movie-planner-v1.16.0) (2026-09-06)
+
+
+### Features
+
+* **sync:** add sync pull - approval-gated calendar-to-store reconciliation ([#243](https://github.com/alrayyes/movie-planner/issues/243)) ([8bdd241](https://github.com/alrayyes/movie-planner/commit/8bdd24145ec6cfaafd9a27553371239e71e179f1))
+
 ## [1.15.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.14.0...movie-planner-v1.15.0) (2026-09-06)
 
 
