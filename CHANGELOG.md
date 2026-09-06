@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.11.0...movie-planner-v1.11.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* **omdb:** strip Pathé format/edition suffixes before title search ([#216](https://github.com/alrayyes/movie-planner/issues/216)) ([#221](https://github.com/alrayyes/movie-planner/issues/221)) ([bc3a1e5](https://github.com/alrayyes/movie-planner/commit/bc3a1e56ea0c3d58e4589c08bd53da7582be0fc2))
+
 ## [1.11.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.10.1...movie-planner-v1.11.0) (2026-09-06)
 
 
