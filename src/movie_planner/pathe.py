@@ -141,6 +141,19 @@ def _extract_row_seat(body: str) -> tuple[str | None, str | None]:
     return match["row"] or match["row_nl"], match["seat"] or match["seat_nl"]
 
 
+def _cinema_without_city(raw: str) -> str:
+    """The ticketbevestiging/reservering templates' own `cinema` capture
+    includes a trailing ", <city>" (movie-planner#227) - every other
+    template keeps cinema clean, and KNOWN_VENUE_LOCATIONS already
+    supplies city itself for any venue it recognizes, so this is
+    stripped rather than kept as part of the venue name. Falls back to
+    the raw string unchanged if there's no comma at all, rather than
+    guessing which part would be the city.
+    """
+    cinema, separator, _ = raw.rpartition(",")
+    return cinema.strip() if separator else raw.strip()
+
+
 def _screening_details(body: str, *, after: int, before: int) -> str | None:
     language_block = body[after:before].strip()
     language = next((line.strip() for line in language_block.splitlines() if line.strip()), None)
@@ -340,7 +353,7 @@ def _parse_ticketbevestiging_shape(body: str, received_date: date | None) -> Pat
         date=date(_require_year(received_date), month, int(header_match["day"])),
         start_time=time.fromisoformat(header_match["start"]),
         end_time=None,
-        cinema=header_match["cinema"].strip(),
+        cinema=_cinema_without_city(header_match["cinema"]),
         booking_ref=ref_match.group(1).strip(),
         screening_details=(f"{header_match['auditorium'].strip()}, {header_match['seat'].strip()}"),
         row=row,
@@ -386,7 +399,7 @@ def _parse_reservering_shape(body: str, received_date: date | None) -> PatheBook
         date=date(_require_year(received_date), month, int(header_match["day"])),
         start_time=time.fromisoformat(header_match["start"]),
         end_time=time.fromisoformat(end) if end else None,
-        cinema=header_match["cinema"].strip(),
+        cinema=_cinema_without_city(header_match["cinema"]),
         booking_ref=ref_match.group(1).strip(),
         screening_details=screening_details,
         row=row,

@@ -60,7 +60,10 @@ def _add(
 # into the venue string rather than naming a separate physical venue -
 # these are grouped under the same real-world location.
 _PATHE = {"chain": "Pathé", "city": "Amsterdam", "country": "Netherlands"}
-_add(["Tuschinski"], **_PATHE, coordinates=(52.3665062, 4.8947073))
+# "Pathé Tuschinski" - the ticketbevestiging/reservering templates' own
+# cinema capture before movie-planner#227's fix stripped the trailing
+# ", Amsterdam" off it.
+_add(["Tuschinski", "Pathé Tuschinski"], **_PATHE, coordinates=(52.3665062, 4.8947073))
 _add(
     [
         "De Munt",
@@ -68,13 +71,24 @@ _add(
         "De Munt Dolby",
         "De Munt Relax",
         "De Munt Dolby Cinema",
+        "De Munt Dolby Atmos",
         "Pathé De Munt",
+        # No accent, lowercase "de" (movie-planner#227) - a real,
+        # verbatim capture from the historical gmail archive, source
+        # template not identified.
+        "Pathe de Munt",
     ],
     **_PATHE,
     coordinates=(52.3664519, 4.8934706),
 )
 _add(["City", "Pathé City"], **_PATHE, coordinates=(52.3633802, 4.8838439))
-_add(["Arena", "Pathé Arena"], **_PATHE, coordinates=(52.3123633, 4.9457053))
+_add(
+    # "Pathe Arena" (no accent) - the mobiel template's own real,
+    # verbatim capture (movie-planner#200/#227).
+    ["Arena", "Pathé Arena", "Pathe Arena"],
+    **_PATHE,
+    coordinates=(52.3123633, 4.9457053),
+)
 _add(
     [
         "Amsterdam Noord",
