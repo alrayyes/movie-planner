@@ -79,6 +79,20 @@ _MIGRATED_COLUMNS: tuple[tuple[str, str], ...] = (
     ("source", "TEXT"),
     ("row", "TEXT"),
     ("seat", "TEXT"),
+    ("rated", "TEXT"),
+    ("released", "TEXT"),
+    ("runtime", "TEXT"),
+    ("writer", "TEXT"),
+    ("plot", "TEXT"),
+    ("language", "TEXT"),
+    ("country", "TEXT"),
+    ("awards", "TEXT"),
+    ("metascore", "TEXT"),
+    ("imdb_votes", "TEXT"),
+    ("dvd", "TEXT"),
+    ("box_office", "TEXT"),
+    ("production", "TEXT"),
+    ("website", "TEXT"),
 )
 
 _MIGRATED_VENUE_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -158,6 +172,22 @@ class Entry:
     # from a Pathé booking parse, never manually via `log`/`update`.
     row: str | None = None
     seat: str | None = None
+    # The rest of OMDb's response (issue #237) - see MovieRatings in
+    # omdb.py for why these don't factor into needs_omdb_fetch.
+    rated: str | None = None
+    released: str | None = None
+    runtime: str | None = None
+    writer: str | None = None
+    plot: str | None = None
+    language: str | None = None
+    country: str | None = None
+    awards: str | None = None
+    metascore: str | None = None
+    imdb_votes: str | None = None
+    dvd: str | None = None
+    box_office: str | None = None
+    production: str | None = None
+    website: str | None = None
 
 
 _ENTRY_COLUMNS = (
@@ -185,6 +215,20 @@ _ENTRY_COLUMNS = (
     "source",
     "row",
     "seat",
+    "rated",
+    "released",
+    "runtime",
+    "writer",
+    "plot",
+    "language",
+    "country",
+    "awards",
+    "metascore",
+    "imdb_votes",
+    "dvd",
+    "box_office",
+    "production",
+    "website",
 )
 
 
@@ -220,6 +264,20 @@ def _row_to_entry(row: tuple[Any, ...]) -> Entry:
         source=values["source"],
         row=values["row"],
         seat=values["seat"],
+        rated=values["rated"],
+        released=values["released"],
+        runtime=values["runtime"],
+        writer=values["writer"],
+        plot=values["plot"],
+        language=values["language"],
+        country=values["country"],
+        awards=values["awards"],
+        metascore=values["metascore"],
+        imdb_votes=values["imdb_votes"],
+        dvd=values["dvd"],
+        box_office=values["box_office"],
+        production=values["production"],
+        website=values["website"],
     )
 
 
@@ -565,6 +623,20 @@ class Store:
         source: str | None = _UNSET,
         row: str | None = _UNSET,
         seat: str | None = _UNSET,
+        rated: str | None = _UNSET,
+        released: str | None = _UNSET,
+        runtime: str | None = _UNSET,
+        writer: str | None = _UNSET,
+        plot: str | None = _UNSET,
+        language: str | None = _UNSET,
+        country: str | None = _UNSET,
+        awards: str | None = _UNSET,
+        metascore: str | None = _UNSET,
+        imdb_votes: str | None = _UNSET,
+        dvd: str | None = _UNSET,
+        box_office: str | None = _UNSET,
+        production: str | None = _UNSET,
+        website: str | None = _UNSET,
     ) -> Entry:
         current = self.get_entry(entry_id)
         changes = {
@@ -591,6 +663,20 @@ class Store:
             "source": source,
             "row": row,
             "seat": seat,
+            "rated": rated,
+            "released": released,
+            "runtime": runtime,
+            "writer": writer,
+            "plot": plot,
+            "language": language,
+            "country": country,
+            "awards": awards,
+            "metascore": metascore,
+            "imdb_votes": imdb_votes,
+            "dvd": dvd,
+            "box_office": box_office,
+            "production": production,
+            "website": website,
         }
         # changes is a heterogeneous dict by design (the _UNSET-sentinel
         # pattern needs one dict covering every field) - mypy can't verify

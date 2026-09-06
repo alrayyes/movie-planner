@@ -23,6 +23,30 @@ class MovieRatings:
     actors: str | None = None
     genre: str | None = None
     release_year: int | None = None
+    # The rest of OMDb's response (issue #237) - free, since it's the
+    # same call already being made for the fields above, not a second
+    # request. Deliberately NOT added to needs_omdb_fetch below: unlike
+    # the fields above, several of these (dvd/box_office/production/
+    # website in particular) are routinely "N/A" even for a real
+    # match - treating their absence as "still needs fetching" would
+    # re-fetch forever for a title OMDb simply has no data for. A
+    # fetch already happening for another reason still captures these
+    # for free; --force is the explicit way to backfill an
+    # already-complete older entry.
+    rated: str | None = None
+    released: str | None = None
+    runtime: str | None = None
+    writer: str | None = None
+    plot: str | None = None
+    language: str | None = None
+    country: str | None = None
+    awards: str | None = None
+    metascore: str | None = None
+    imdb_votes: str | None = None
+    dvd: str | None = None
+    box_office: str | None = None
+    production: str | None = None
+    website: str | None = None
 
 
 def needs_omdb_fetch(entry: Entry) -> bool:
@@ -175,6 +199,20 @@ class OmdbClient:
             actors=_na_or(data.get("Actors")),
             genre=_na_or(data.get("Genre")),
             release_year=_parse_release_year(data.get("Year")),
+            rated=_na_or(data.get("Rated")),
+            released=_na_or(data.get("Released")),
+            runtime=_na_or(data.get("Runtime")),
+            writer=_na_or(data.get("Writer")),
+            plot=_na_or(data.get("Plot")),
+            language=_na_or(data.get("Language")),
+            country=_na_or(data.get("Country")),
+            awards=_na_or(data.get("Awards")),
+            metascore=_na_or(data.get("Metascore")),
+            imdb_votes=_na_or(data.get("imdbVotes")),
+            dvd=_na_or(data.get("DVD")),
+            box_office=_na_or(data.get("BoxOffice")),
+            production=_na_or(data.get("Production")),
+            website=_na_or(data.get("Website")),
         )
         self._cache[cache_key] = ratings
         return ratings
@@ -209,5 +247,19 @@ def fetch_and_store_ratings(
         actors=ratings.actors,
         genre=ratings.genre,
         release_year=ratings.release_year,
+        rated=ratings.rated,
+        released=ratings.released,
+        runtime=ratings.runtime,
+        writer=ratings.writer,
+        plot=ratings.plot,
+        language=ratings.language,
+        country=ratings.country,
+        awards=ratings.awards,
+        metascore=ratings.metascore,
+        imdb_votes=ratings.imdb_votes,
+        dvd=ratings.dvd,
+        box_office=ratings.box_office,
+        production=ratings.production,
+        website=ratings.website,
     )
     return updated, True

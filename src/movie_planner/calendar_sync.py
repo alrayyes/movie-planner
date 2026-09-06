@@ -46,6 +46,15 @@ def build_description(
         lines.append(f"Rotten Tomatoes: {entry.rotten_tomatoes_rating}")
     if entry.metacritic_rating:
         lines.append(f"Metacritic: {entry.metacritic_rating}")
+    # Long-form OMDb fields (issue #237) - labelled, same reasoning as
+    # Notes below: nothing but position would otherwise tell them
+    # apart from each other or from screening_details.
+    if entry.released:
+        lines.append(f"Released: {entry.released}")
+    if entry.plot:
+        lines.append(f"Plot: {entry.plot}")
+    if entry.awards:
+        lines.append(f"Awards: {entry.awards}")
     if entry.letterboxd_url:
         suffix = f" ({entry.letterboxd_rating})" if entry.letterboxd_rating else ""
         lines.append(f"Letterboxd: {entry.letterboxd_url}{suffix}")
@@ -185,6 +194,24 @@ def _extra_properties(
         # parameter is needed the way city/country above required one.
         "X-ROW": entry.row,
         "X-SEAT": entry.seat,
+        # The rest of OMDb's response (issue #237) - discrete values
+        # only; Plot/Awards/Released go into DESCRIPTION instead
+        # (build_description below), same as ratings/Letterboxd
+        # already do, since they're long-form text rather than a
+        # single value. X-MOVIE-LANGUAGE/X-MOVIE-COUNTRY, not
+        # X-LANGUAGE/X-COUNTRY - the movie's own country/language of
+        # origin is a different thing from the venue's X-CITY/
+        # X-COUNTRY (#217), and reusing that name would collide.
+        "X-RATED": entry.rated,
+        "X-RUNTIME": entry.runtime,
+        "X-MOVIE-LANGUAGE": entry.language,
+        "X-MOVIE-COUNTRY": entry.country,
+        "X-METASCORE": entry.metascore,
+        "X-IMDB-VOTES": entry.imdb_votes,
+        "X-DVD": entry.dvd,
+        "X-BOX-OFFICE": entry.box_office,
+        "X-PRODUCTION": entry.production,
+        "X-WEBSITE": entry.website,
     }
     return {name: value for name, value in values.items() if value}
 

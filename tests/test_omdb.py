@@ -13,10 +13,20 @@ from movie_planner.store import Entry, Store
 MATCH_RESPONSE = {
     "Title": "Dune",
     "Year": "2021",
+    "Rated": "PG-13",
+    "Released": "22 Oct 2021",
+    "Runtime": "155 min",
     "Director": "Denis Villeneuve",
+    "Writer": "Jon Spaihts, Denis Villeneuve, Eric Roth",
     "Actors": "Timothée Chalamet, Rebecca Ferguson, Zendaya",
+    "Plot": "Paul Atreides unites with the Fremen to seek revenge.",
+    "Language": "English, Mandarin",
+    "Country": "United States, Canada",
+    "Awards": "Won 6 Oscars. 175 wins & 235 nominations total",
     "Genre": "Action, Adventure, Drama",
     "imdbRating": "8.0",
+    "imdbVotes": "757,451",
+    "Metascore": "74",
     "Ratings": [
         {"Source": "Internet Movie Database", "Value": "8.0/10"},
         {"Source": "Rotten Tomatoes", "Value": "83%"},
@@ -24,6 +34,10 @@ MATCH_RESPONSE = {
     ],
     "imdbID": "tt1160419",
     "Poster": "https://m.media-amazon.com/images/dune-poster.jpg",
+    "DVD": "22 Nov 2021",
+    "BoxOffice": "$108,327,830",
+    "Production": "Legendary Pictures",
+    "Website": "https://www.dunemovie.com",
     "Response": "True",
 }
 
@@ -159,6 +173,98 @@ def test_lookup_treats_na_as_none_for_director_actors_and_genre() -> None:
     assert ratings.director is None
     assert ratings.actors is None
     assert ratings.genre is None
+
+
+def test_lookup_returns_the_rest_of_omdbs_response_fields() -> None:
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    ratings = client.lookup(title="Dune")
+
+    assert ratings is not None
+    assert ratings.rated == "PG-13"
+    assert ratings.released == "22 Oct 2021"
+    assert ratings.runtime == "155 min"
+    assert ratings.writer == "Jon Spaihts, Denis Villeneuve, Eric Roth"
+    assert ratings.plot == "Paul Atreides unites with the Fremen to seek revenge."
+    assert ratings.language == "English, Mandarin"
+    assert ratings.country == "United States, Canada"
+    assert ratings.awards == "Won 6 Oscars. 175 wins & 235 nominations total"
+    assert ratings.metascore == "74"
+    assert ratings.imdb_votes == "757,451"
+    assert ratings.dvd == "22 Nov 2021"
+    assert ratings.box_office == "$108,327,830"
+    assert ratings.production == "Legendary Pictures"
+    assert ratings.website == "https://www.dunemovie.com"
+
+
+def test_lookup_treats_na_as_none_for_the_rest_of_omdbs_fields() -> None:
+    na_fields = [
+        "Rated",
+        "Released",
+        "Runtime",
+        "Writer",
+        "Plot",
+        "Language",
+        "Country",
+        "Awards",
+        "Metascore",
+        "imdbVotes",
+        "DVD",
+        "BoxOffice",
+        "Production",
+        "Website",
+    ]
+    response = {**MATCH_RESPONSE, **dict.fromkeys(na_fields, "N/A")}
+    client = _client(lambda request: httpx.Response(200, json=response))
+
+    ratings = client.lookup(title="Dune")
+
+    assert ratings is not None
+    assert ratings.rated is None
+    assert ratings.released is None
+    assert ratings.runtime is None
+    assert ratings.writer is None
+    assert ratings.plot is None
+    assert ratings.language is None
+    assert ratings.country is None
+    assert ratings.awards is None
+    assert ratings.metascore is None
+    assert ratings.imdb_votes is None
+    assert ratings.dvd is None
+    assert ratings.box_office is None
+    assert ratings.production is None
+    assert ratings.website is None
+
+
+def test_lookup_with_missing_fields_leaves_the_rest_of_omdbs_fields_none() -> None:
+    response = {
+        k: v
+        for k, v in MATCH_RESPONSE.items()
+        if k
+        not in (
+            "Rated",
+            "Released",
+            "Runtime",
+            "Writer",
+            "Plot",
+            "Language",
+            "Country",
+            "Awards",
+            "Metascore",
+            "imdbVotes",
+            "DVD",
+            "BoxOffice",
+            "Production",
+            "Website",
+        )
+    }
+    client = _client(lambda request: httpx.Response(200, json=response))
+
+    ratings = client.lookup(title="Dune")
+
+    assert ratings is not None
+    assert ratings.rated is None
+    assert ratings.website is None
 
 
 def test_lookup_with_no_year_field_has_no_release_year() -> None:
@@ -596,6 +702,30 @@ def test_fetch_and_store_ratings_persists_director_actors_genre_and_release_year
     assert stored.actors == "Timothée Chalamet, Rebecca Ferguson, Zendaya"
     assert stored.genre == "Action, Adventure, Drama"
     assert stored.release_year == 2021
+
+
+def test_fetch_and_store_ratings_persists_the_rest_of_omdbs_fields(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    fetch_and_store_ratings(store, client, entry)
+
+    stored = store.get_entry(entry.id)
+    assert stored.rated == "PG-13"
+    assert stored.released == "22 Oct 2021"
+    assert stored.runtime == "155 min"
+    assert stored.writer == "Jon Spaihts, Denis Villeneuve, Eric Roth"
+    assert stored.plot == "Paul Atreides unites with the Fremen to seek revenge."
+    assert stored.language == "English, Mandarin"
+    assert stored.country == "United States, Canada"
+    assert stored.awards == "Won 6 Oscars. 175 wins & 235 nominations total"
+    assert stored.metascore == "74"
+    assert stored.imdb_votes == "757,451"
+    assert stored.dvd == "22 Nov 2021"
+    assert stored.box_office == "$108,327,830"
+    assert stored.production == "Legendary Pictures"
+    assert stored.website == "https://www.dunemovie.com"
 
 
 def test_fetch_and_store_ratings_does_not_overwrite_a_manual_imdb_url(store: Store) -> None:
