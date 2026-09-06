@@ -65,7 +65,10 @@ class PatheBooking:
     title: str
     date: date
     start_time: time
-    end_time: time
+    # None for the 2013/2014 Dutch templates (movie-planner#200), which
+    # never print an end time at all - unlike every other template found
+    # so far.
+    end_time: time | None
     cinema: str
     booking_ref: str
     # Auditorium/format/seat text - description-only, never persisted as
@@ -131,7 +134,7 @@ def _html_screening_details(body: str) -> str | None:
     return ", ".join(parts) if parts else None
 
 
-def _parse_plain_text_shape(body: str) -> PatheBooking | None:
+def _parse_plain_text_shape(body: str, received_date: date | None) -> PatheBooking | None:
     booking_match = _BOOKING_REF_RE.search(body)
     title_match = _TITLE_RE.search(body)
     datetime_match = _DATETIME_RE.search(body)
@@ -165,7 +168,7 @@ def _html_legacy_screening_details(body: str, *, after: int, before: int) -> str
     return ", ".join(parts) if parts else None
 
 
-def _parse_html_legacy_wording_shape(body: str) -> PatheBooking | None:
+def _parse_html_legacy_wording_shape(body: str, received_date: date | None) -> PatheBooking | None:
     booking_match = _BOOKING_REF_RE.search(body)
     title_match = _HTML_LEGACY_TITLE_RE.search(body)
     datetime_match = _HTML_LEGACY_DATETIME_RE.search(body)
@@ -186,7 +189,7 @@ def _parse_html_legacy_wording_shape(body: str) -> PatheBooking | None:
     )
 
 
-def _parse_html_derived_shape(body: str) -> PatheBooking | None:
+def _parse_html_derived_shape(body: str, received_date: date | None) -> PatheBooking | None:
     booking_match = _HTML_BOOKING_RE.search(body)
     ref_match = _HTML_BOOKING_REF_RE.search(body)
     if not (booking_match and ref_match):
@@ -203,6 +206,152 @@ def _parse_html_derived_shape(body: str) -> PatheBooking | None:
     )
 
 
+# Three more real templates (movie-planner#200), all HTML-behind-a-
+# placeholder like #171's, all Dutch, and all missing a year in their
+# own date text (Pathé apparently only started printing one from 2026's
+# templates onward) - `received_date` (the email's own Date header, kept
+# only after html_to_text has already thrown the header away) supplies
+# it. The 2013/2014 pair also has no end time at all, unlike every other
+# template found so far - see PatheBooking.end_time.
+_DUTCH_MONTHS = {
+    "januari": 1,
+    "februari": 2,
+    "maart": 3,
+    "april": 4,
+    "mei": 5,
+    "juni": 6,
+    "juli": 7,
+    "augustus": 8,
+    "september": 9,
+    "oktober": 10,
+    "november": 11,
+    "december": 12,
+}
+
+
+def _require_year(received_date: date | None) -> int:
+    if received_date is None:
+        raise PatheEmailParseError(
+            "this template's date has no year of its own - pass the email's "
+            "own Date header as received_date to infer one"
+        )
+    return received_date.year
+
+
+# "Pathé Mobiel" (movie-planner#200, ~2013, e.pathe.nl): title, then
+# "<weekday>dag <day> <month>, <HH:MM>", then the cinema name - all on
+# their own lines, no end time.
+_MOBIEL_HEADER_RE = re.compile(
+    r"(?P<title>[^\n]+)\n"
+    r"\w+dag (?P<day>\d{1,2}) (?P<month>[a-zA-Z]+), (?P<start>\d{2}:\d{2})\n"
+    r"(?P<cinema>[^\n]+)"
+)
+_MOBIEL_REF_RE = re.compile(r"Referentie:\s*(\S+)")
+_MOBIEL_SCREENING_RE = re.compile(r"^(Zaal[^\n]*)\n([^\n]+)$", re.MULTILINE)
+
+
+def _parse_mobiel_shape(body: str, received_date: date | None) -> PatheBooking | None:
+    header_match = _MOBIEL_HEADER_RE.search(body)
+    ref_match = _MOBIEL_REF_RE.search(body)
+    if not (header_match and ref_match):
+        return None
+    month = _DUTCH_MONTHS.get(header_match["month"].lower())
+    if month is None:
+        return None
+
+    screening_match = _MOBIEL_SCREENING_RE.search(body)
+    screening_details = (
+        f"{screening_match.group(1).strip()}, {screening_match.group(2).strip()}"
+        if screening_match
+        else None
+    )
+    return PatheBooking(
+        title=header_match["title"].strip(),
+        date=date(_require_year(received_date), month, int(header_match["day"])),
+        start_time=time.fromisoformat(header_match["start"]),
+        end_time=None,
+        cinema=header_match["cinema"].strip(),
+        booking_ref=ref_match.group(1).strip(),
+        screening_details=screening_details,
+    )
+
+
+# "Ticketbevestiging" (movie-planner#200, ~2014, pathe.emsecure.net):
+# title, then "<weekday>dag <day> <month> om <HH:MM>", then
+# "<cinema>, <city>: Zaal <N>" on one line, then the seat line - no end
+# time here either.
+_TICKETBEVESTIGING_HEADER_RE = re.compile(
+    r"(?P<title>[^\n]+)\n"
+    r"\w+dag (?P<day>\d{1,2}) (?P<month>[a-zA-Z]+) om (?P<start>\d{2}:\d{2})\n"
+    r"(?P<cinema>[^\n]+?):\s*(?P<auditorium>Zaal[^\n]*)\n"
+    r"(?P<seat>[^\n]+)"
+)
+_TICKETBEVESTIGING_REF_RE = re.compile(r"Referentie:\s*(\S+)")
+
+
+def _parse_ticketbevestiging_shape(body: str, received_date: date | None) -> PatheBooking | None:
+    header_match = _TICKETBEVESTIGING_HEADER_RE.search(body)
+    ref_match = _TICKETBEVESTIGING_REF_RE.search(body)
+    if not (header_match and ref_match):
+        return None
+    month = _DUTCH_MONTHS.get(header_match["month"].lower())
+    if month is None:
+        return None
+
+    return PatheBooking(
+        title=header_match["title"].strip(),
+        date=date(_require_year(received_date), month, int(header_match["day"])),
+        start_time=time.fromisoformat(header_match["start"]),
+        end_time=None,
+        cinema=header_match["cinema"].strip(),
+        booking_ref=ref_match.group(1).strip(),
+        screening_details=(f"{header_match['auditorium'].strip()}, {header_match['seat'].strip()}"),
+    )
+
+
+# "Reservering <title> - Referentie: ..." (movie-planner#200, 2019,
+# info.pathe.nl): title, an optional "(OV)"/language-tag line, then
+# "<weekday>dag <day> <month> om <HH:MM> tot <HH:MM>", then the cinema,
+# then "Zaal <N>" and the seat line further down - the only one of the
+# three that does carry an end time.
+_RESERVERING_HEADER_RE = re.compile(
+    r"(?P<title>[^\n]+)\n"
+    r"(?:\([^\n]*\)\n)?"
+    r"\w+dag (?P<day>\d{1,2}) (?P<month>[a-zA-Z]+) om (?P<start>\d{2}:\d{2})"
+    r"(?: tot (?P<end>\d{2}:\d{2}))?\n"
+    r"(?P<cinema>[^\n]+)"
+)
+_RESERVERING_REF_RE = re.compile(r"Referentie:\s*(\S+)")
+_RESERVERING_SCREENING_RE = re.compile(r"^(Zaal[^\n]*)\n([^\n]+)$", re.MULTILINE)
+
+
+def _parse_reservering_shape(body: str, received_date: date | None) -> PatheBooking | None:
+    header_match = _RESERVERING_HEADER_RE.search(body)
+    ref_match = _RESERVERING_REF_RE.search(body)
+    if not (header_match and ref_match):
+        return None
+    month = _DUTCH_MONTHS.get(header_match["month"].lower())
+    if month is None:
+        return None
+
+    screening_match = _RESERVERING_SCREENING_RE.search(body)
+    screening_details = (
+        f"{screening_match.group(1).strip()}, {screening_match.group(2).strip()}"
+        if screening_match
+        else None
+    )
+    end = header_match["end"]
+    return PatheBooking(
+        title=header_match["title"].strip(),
+        date=date(_require_year(received_date), month, int(header_match["day"])),
+        start_time=time.fromisoformat(header_match["start"]),
+        end_time=time.fromisoformat(end) if end else None,
+        cinema=header_match["cinema"].strip(),
+        booking_ref=ref_match.group(1).strip(),
+        screening_details=screening_details,
+    )
+
+
 @dataclass(frozen=True)
 class _Template:
     """One named, dated Pathé confirmation template - self-documenting
@@ -214,7 +363,7 @@ class _Template:
 
     name: str
     era: str
-    parse: Callable[[str], PatheBooking | None]
+    parse: Callable[[str, date | None], PatheBooking | None]
 
 
 _TEMPLATES: tuple[_Template, ...] = (
@@ -223,14 +372,25 @@ _TEMPLATES: tuple[_Template, ...] = (
     _Template(
         "html-legacy-wording", "2026, third template (#171)", _parse_html_legacy_wording_shape
     ),
+    _Template("mobiel", "2013, e.pathe.nl 'Pathé Mobiel' (#200)", _parse_mobiel_shape),
+    _Template(
+        "ticketbevestiging",
+        "2014, pathe.emsecure.net 'Ticketbevestiging' (#200)",
+        _parse_ticketbevestiging_shape,
+    ),
+    _Template("reservering", "2019, info.pathe.nl (#200)", _parse_reservering_shape),
 )
 
 
-def parse_pathe_email(raw: str) -> PatheBooking:
+def parse_pathe_email(raw: str, *, received_date: date | None = None) -> PatheBooking:
+    """`received_date` is the email's own Date header - needed only for
+    the three Dutch templates above, whose date text has no year of its
+    own (movie-planner#200); every other template ignores it.
+    """
     body = _extract_body(raw)
 
     for template in _TEMPLATES:
-        booking = template.parse(body)
+        booking = template.parse(body, received_date)
         if booking is not None:
             return booking
     raise PatheEmailParseError("could not parse this as a Pathé booking confirmation email")

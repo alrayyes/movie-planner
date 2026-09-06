@@ -100,6 +100,22 @@ bare `pathe.nl` domain - other Pathé mail (the newsletter, a club
 membership invoice) uses other subdomains and is correctly left
 unrecognized by a chain scoped this narrowly.
 
+**One project's history can span more than one mail account, not just
+more than one folder of the same account** (issue #200). `extra_paths`
+above only adds more mbox files to a single `MboxMailClient` run - a
+completely different account (a different mailbox, possibly a different
+provider) needs its own `pathe-mail-import fetch --config <path>`
+invocation against its own config file. Worth knowing too:
+`MboxMailClient` only reads the mbox format - it can't read a Maildir
+mailbox (one message per file, mutt's own default local sync format)
+regardless of how many `extra_paths` are given. Getting at an archive
+that's only ever synced to Maildir today means either a
+`MaildirMailClient` this tool doesn't have yet, or re-syncing that
+account into a mail client that
+does use mbox for local storage (Thunderbird's own default) first - see
+[issue #208](https://github.com/alrayyes/movie-planner/issues/208) for
+the follow-up.
+
 Run `pathe-mail-import init` to write a starter copy interactively -
 it prompts for anything not given as a flag, or fails clearly (rather
 than hanging) if it isn't running in a terminal and a required value

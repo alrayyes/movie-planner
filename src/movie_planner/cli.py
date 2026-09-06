@@ -3,6 +3,9 @@ metadata, duplicate-detection, import) into commands.
 """
 
 import dataclasses
+import email
+import email.policy
+import email.utils
 import re
 import sys
 from dataclasses import dataclass
@@ -1105,9 +1108,12 @@ def import_command(
 
 
 def _echo_parsed_booking(booking: PatheBooking) -> None:
+    times = (
+        f"{booking.start_time}-{booking.end_time}" if booking.end_time else f"{booking.start_time}"
+    )
     typer.echo(f"Booking {booking.booking_ref}:")
     typer.echo(f"  {booking.title}")
-    typer.echo(f"  {booking.date} {booking.start_time}-{booking.end_time}")
+    typer.echo(f"  {booking.date} {times}")
     typer.echo(f"  {booking.cinema}")
     if booking.screening_details:
         typer.echo(f"  {booking.screening_details}")
@@ -1151,8 +1157,20 @@ def from_pathe_email(
     from_stdin = path is None
     raw = sys.stdin.read() if path is None else path.read_text(encoding="utf-8")
 
+    # Only the three Dutch templates parse_pathe_email itself can't date
+    # (movie-planner#200) actually need this - a message with no
+    # parseable Date header (e.g. already-extracted plain text with no
+    # headers at all) just leaves it None, same as those templates would
+    # get with no year in their own text either way.
     try:
-        booking = parse_pathe_email(raw)
+        received_date = email.utils.parsedate_to_datetime(
+            str(email.message_from_string(raw, policy=email.policy.default).get("Date"))
+        ).date()
+    except TypeError, ValueError:
+        received_date = None
+
+    try:
+        booking = parse_pathe_email(raw, received_date=received_date)
     except PatheEmailParseError as e:
         typer.secho(str(e), fg=typer.colors.RED)
         raise typer.Exit(code=1) from e

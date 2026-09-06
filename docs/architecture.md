@@ -108,3 +108,15 @@ For anyone (human or agent) picking this project up mid-thread:
   reversal of the "Why this shape" reasoning above, not something to
   decide from a bug report. Explore-mode territory, not a ticket to
   just implement.
+- **One real historical Pathé template (2012, `pathe.nl`) has no movie
+  title anywhere** - not in the Subject, not in either MIME part, only
+  an Unlimited-pass number and a poster image's numeric `movieid`
+  parameter (issue #200). Confirmed against the original unredacted
+  email, not just the redacted fixture. Deliberately left unparsed
+  rather than forcing a parser with no title to extract - a booking
+  from this era can't be logged via `pathe-mail-import` at all.
+- **`pathe-mail-import` can't read a mailbox in the Maildir format**
+  (issue
+  #208) - `MboxMailClient`/`extra_paths` only ever adds more mbox
+  files, and a mutt-synced account with no mbox copy (like the archive
+  #200 found) isn't reachable this way yet.
