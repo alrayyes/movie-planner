@@ -1416,6 +1416,32 @@ def test_from_pathe_email_via_file_creates_new_entry(
     assert entry.title == "The Dog Stars"
     assert entry.booking_ref == PATHE_BOOKING_REF
     assert entry.caldav_uid in calendar.events_by_uid
+    assert entry.row == "5"
+    assert entry.seat == "17"
+    store.close()
+
+
+def test_from_pathe_email_matching_by_booking_ref_updates_row_and_seat(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    # A re-sent confirmation (movie-planner#166's own matching logic)
+    # should refresh row/seat too, same as every other Pathé-sourced
+    # field already does.
+    first_path = tmp_path / "first.eml"
+    first_path.write_text(PATHE_EMAIL_PLAIN)
+    runner.invoke(app, ["--config", str(config_path), "from-pathe-email", str(first_path), "--yes"])
+
+    second_path = tmp_path / "second.eml"
+    second_path.write_text(PATHE_EMAIL_PLAIN.replace("Row 5 Seat 17", "Row 9 Seat 3"))
+    result = runner.invoke(
+        app, ["--config", str(config_path), "from-pathe-email", str(second_path), "--yes"]
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.row == "9"
+    assert entry.seat == "3"
     store.close()
 
 

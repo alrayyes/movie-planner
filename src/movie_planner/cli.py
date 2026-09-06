@@ -1269,6 +1269,8 @@ def from_pathe_email(
                 medium_id=medium_row.id,
                 venue_id=venue_row.id,
                 booking_ref=booking.booking_ref,
+                row=booking.row,
+                seat=booking.seat,
             )
         else:
             entry = store.create_entry(
@@ -1278,6 +1280,8 @@ def from_pathe_email(
                 end_time=booking.end_time,
                 medium_id=medium_row.id,
                 venue_id=venue_row.id,
+                row=booking.row,
+                seat=booking.seat,
             )
             entry = store.update_entry(entry.id, booking_ref=booking.booking_ref)
 

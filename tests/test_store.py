@@ -492,6 +492,78 @@ def test_update_entry_sets_notes(store: Store) -> None:
     assert reloaded.notes == "Enjoyed the soundtrack"
 
 
+# --- row/seat: issue #218 ---
+
+
+def test_new_entry_has_no_row_or_seat(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+
+    assert entry.row is None
+    assert entry.seat is None
+
+
+def test_create_entry_sets_row_and_seat(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+
+    entry = store.create_entry(
+        title="Dune", date=date(2024, 3, 15), medium_id=medium.id, row="5", seat="17"
+    )
+
+    assert entry.row == "5"
+    assert entry.seat == "17"
+
+
+def test_update_entry_sets_row_and_seat(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+
+    updated = store.update_entry(entry.id, row="5", seat="17")
+
+    assert updated.row == "5"
+    assert updated.seat == "17"
+    reloaded = store.get_entry(entry.id)
+    assert reloaded.row == "5"
+    assert reloaded.seat == "17"
+
+
+def test_migrates_a_database_created_before_row_and_seat_existed(tmp_path: Path) -> None:
+    import sqlite3
+
+    db_path = tmp_path / "movies.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE media (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            is_physical_place INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE venues (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+        CREATE TABLE entries (
+            id INTEGER PRIMARY KEY, title TEXT NOT NULL, date TEXT NOT NULL,
+            start_time TEXT, end_time TEXT,
+            medium_id INTEGER NOT NULL REFERENCES media(id),
+            venue_id INTEGER REFERENCES venues(id)
+        );
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    s = Store(db_path)
+    try:
+        medium = s.add_medium("cinema", is_physical_place=True)
+        entry = s.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+        assert entry.row is None
+        assert entry.seat is None
+        updated = s.update_entry(entry.id, row="5", seat="17")
+        assert updated.row == "5"
+        assert updated.seat == "17"
+    finally:
+        s.close()
+
+
 def test_new_entry_has_no_poster_url(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
 

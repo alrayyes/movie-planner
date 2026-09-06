@@ -74,6 +74,11 @@ class PatheBooking:
     # Auditorium/format/seat text - description-only, never persisted as
     # its own column. See design.md's "Description content" decision.
     screening_details: str | None
+    # Row/seat as structured values (movie-planner#218), unlike
+    # screening_details above - str, not int: a real seat could in
+    # principle carry a letter, and neither is ever used numerically.
+    row: str | None = None
+    seat: str | None = None
 
 
 def _extract_body(raw: str) -> str:
@@ -117,6 +122,25 @@ def _extract_body(raw: str) -> str:
     raise PatheEmailParseError("could not find a text/plain part in the email")
 
 
+# One shared, whole-body search for every template (movie-planner#218)
+# rather than six separate per-template regexes - every known template's
+# row/seat phrasing is either "Row <N> Seat <N>" (English) or
+# "Rij:? <N> Stoel:? <N>" (Dutch), regardless of what else differs
+# between them.
+_ROW_SEAT_RE = re.compile(
+    r"Row\s*(?P<row>\d+)\s*Seat\s*(?P<seat>\d+)"
+    r"|Rij:?\s*(?P<row_nl>\d+)\s*Stoel:?\s*(?P<seat_nl>\d+)",
+    re.IGNORECASE,
+)
+
+
+def _extract_row_seat(body: str) -> tuple[str | None, str | None]:
+    match = _ROW_SEAT_RE.search(body)
+    if not match:
+        return None, None
+    return match["row"] or match["row_nl"], match["seat"] or match["seat_nl"]
+
+
 def _screening_details(body: str, *, after: int, before: int) -> str | None:
     language_block = body[after:before].strip()
     language = next((line.strip() for line in language_block.splitlines() if line.strip()), None)
@@ -142,6 +166,7 @@ def _parse_plain_text_shape(body: str, received_date: date | None) -> PatheBooki
     if not (booking_match and title_match and datetime_match and cinema_match):
         return None
 
+    row, seat = _extract_row_seat(body)
     return PatheBooking(
         title=title_match.group(1).strip(),
         date=datetime.strptime(datetime_match.group(1), "%d/%m/%y").date(),
@@ -152,6 +177,8 @@ def _parse_plain_text_shape(body: str, received_date: date | None) -> PatheBooki
         screening_details=_screening_details(
             body, after=title_match.end(), before=datetime_match.start()
         ),
+        row=row,
+        seat=seat,
     )
 
 
@@ -176,6 +203,7 @@ def _parse_html_legacy_wording_shape(body: str, received_date: date | None) -> P
     if not (booking_match and title_match and datetime_match and cinema_match):
         return None
 
+    row, seat = _extract_row_seat(body)
     return PatheBooking(
         title=title_match.group(1).strip(),
         date=datetime.strptime(datetime_match.group(1), "%d/%m/%y").date(),
@@ -186,6 +214,8 @@ def _parse_html_legacy_wording_shape(body: str, received_date: date | None) -> P
         screening_details=_html_legacy_screening_details(
             body, after=title_match.end(), before=datetime_match.start()
         ),
+        row=row,
+        seat=seat,
     )
 
 
@@ -195,6 +225,7 @@ def _parse_html_derived_shape(body: str, received_date: date | None) -> PatheBoo
     if not (booking_match and ref_match):
         return None
 
+    row, seat = _extract_row_seat(body)
     return PatheBooking(
         title=booking_match["title"].strip(),
         date=datetime.strptime(booking_match["date"], "%d %B %Y").date(),
@@ -203,6 +234,8 @@ def _parse_html_derived_shape(body: str, received_date: date | None) -> PatheBoo
         cinema=booking_match["cinema"].strip(),
         booking_ref=ref_match.group(1).strip(),
         screening_details=_html_screening_details(body),
+        row=row,
+        seat=seat,
     )
 
 
@@ -265,6 +298,7 @@ def _parse_mobiel_shape(body: str, received_date: date | None) -> PatheBooking |
         if screening_match
         else None
     )
+    row, seat = _extract_row_seat(body)
     return PatheBooking(
         title=header_match["title"].strip(),
         date=date(_require_year(received_date), month, int(header_match["day"])),
@@ -273,6 +307,8 @@ def _parse_mobiel_shape(body: str, received_date: date | None) -> PatheBooking |
         cinema=header_match["cinema"].strip(),
         booking_ref=ref_match.group(1).strip(),
         screening_details=screening_details,
+        row=row,
+        seat=seat,
     )
 
 
@@ -298,6 +334,7 @@ def _parse_ticketbevestiging_shape(body: str, received_date: date | None) -> Pat
     if month is None:
         return None
 
+    row, seat = _extract_row_seat(body)
     return PatheBooking(
         title=header_match["title"].strip(),
         date=date(_require_year(received_date), month, int(header_match["day"])),
@@ -306,6 +343,8 @@ def _parse_ticketbevestiging_shape(body: str, received_date: date | None) -> Pat
         cinema=header_match["cinema"].strip(),
         booking_ref=ref_match.group(1).strip(),
         screening_details=(f"{header_match['auditorium'].strip()}, {header_match['seat'].strip()}"),
+        row=row,
+        seat=seat,
     )
 
 
@@ -341,6 +380,7 @@ def _parse_reservering_shape(body: str, received_date: date | None) -> PatheBook
         else None
     )
     end = header_match["end"]
+    row, seat = _extract_row_seat(body)
     return PatheBooking(
         title=header_match["title"].strip(),
         date=date(_require_year(received_date), month, int(header_match["day"])),
@@ -349,6 +389,8 @@ def _parse_reservering_shape(body: str, received_date: date | None) -> PatheBook
         cinema=header_match["cinema"].strip(),
         booking_ref=ref_match.group(1).strip(),
         screening_details=screening_details,
+        row=row,
+        seat=seat,
     )
 
 

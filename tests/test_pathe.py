@@ -270,3 +270,65 @@ def test_parses_a_real_email_with_a_mislabeled_attachment_piped_directly() -> No
     assert isinstance(booking, PatheBooking)
     assert booking.title == "Spider-Man: Brand New Day"
     assert booking.booking_ref == PATHE_MISLABELED_ATTACHMENT_BOOKING_REF
+
+
+# --- row/seat as structured fields: issue #218 ---
+
+
+def test_plain_text_shape_extracts_row_and_seat() -> None:
+    booking = parse_pathe_email(PATHE_EMAIL_PLAIN)
+
+    assert booking.row == "5"
+    assert booking.seat == "17"
+
+
+def test_html_derived_shape_extracts_row_and_seat() -> None:
+    booking = parse_pathe_email(PATHE_EMAIL_HTML_ONLY)
+
+    assert booking.row == "4"
+    assert booking.seat == "1"
+
+
+def test_legacy_html_derived_shape_extracts_row_and_seat() -> None:
+    stripped_body = extract_envelope(PATHE_EMAIL_LEGACY_HTML).body
+
+    booking = parse_pathe_email(stripped_body)
+
+    assert booking.row == "2"
+    assert booking.seat == "4"
+
+
+def test_mobiel_shape_extracts_row_and_seat() -> None:
+    envelope = extract_envelope(PATHE_EMAIL_MOBIEL)
+
+    booking = parse_pathe_email(envelope.body, received_date=envelope.date.date())
+
+    assert booking.row == "1"
+    assert booking.seat == "1"
+
+
+def test_ticketbevestiging_shape_extracts_row_and_seat() -> None:
+    envelope = extract_envelope(PATHE_EMAIL_TICKETBEVESTIGING)
+
+    booking = parse_pathe_email(envelope.body, received_date=envelope.date.date())
+
+    assert booking.row == "1"
+    assert booking.seat == "1"
+
+
+def test_reservering_shape_extracts_row_and_seat() -> None:
+    envelope = extract_envelope(PATHE_EMAIL_RESERVERING)
+
+    booking = parse_pathe_email(envelope.body, received_date=envelope.date.date())
+
+    assert booking.row == "1"
+    assert booking.seat == "1"
+
+
+def test_row_and_seat_are_none_when_not_present() -> None:
+    without_seat = PATHE_EMAIL_PLAIN.replace("Auditorium 1 DOLBY - Row 5 Seat 17", "")
+
+    booking = parse_pathe_email(without_seat)
+
+    assert booking.row is None
+    assert booking.seat is None

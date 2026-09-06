@@ -180,6 +180,11 @@ def _extra_properties(
         # hardcoded chain/location table.
         "X-CITY": city,
         "X-COUNTRY": country,
+        # Structured, unlike screening_details' free text (issue #218) -
+        # already on Entry itself, so no extra push_new/push_update
+        # parameter is needed the way city/country above required one.
+        "X-ROW": entry.row,
+        "X-SEAT": entry.seat,
     }
     return {name: value for name, value in values.items() if value}
 

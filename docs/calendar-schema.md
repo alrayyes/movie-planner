@@ -75,6 +75,14 @@ either.
     reader can consume without parsing `LOCATION` apart. Additive, not
     a replacement, same "omit, never guess" rule `GEO` already
     follows: a venue not in the table gets neither property.
+  - **`X-ROW`**/**`X-SEAT`** — an entry's seat assignment, as text (for
+    example `5`/`17`) - only ever set from a Pathé booking confirmation
+    parse (issue #218), never from a manually logged entry. Same
+    "omit, never guess" rule: an entry with no known row/seat gets
+    neither property, same as `screening_details` below being the only
+    other place this text shows up (in `DESCRIPTION`, free-form,
+    combined with the auditorium/format) - these two properties are
+    the structured equivalent, not a replacement for it.
 
 A real example — an entry at a known venue, with a genre tag and
 coordinates on record, exactly as `build_vevent` produces it:
