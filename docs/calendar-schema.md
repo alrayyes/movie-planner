@@ -83,6 +83,16 @@ either.
     other place this text shows up (in `DESCRIPTION`, free-form,
     combined with the auditorium/format) - these two properties are
     the structured equivalent, not a replacement for it.
+  - **`X-RATED`**, **`X-RUNTIME`**, **`X-MOVIE-LANGUAGE`**,
+    **`X-MOVIE-COUNTRY`**, **`X-METASCORE`**, **`X-IMDB-VOTES`**,
+    **`X-DVD`**, **`X-BOX-OFFICE`**, **`X-PRODUCTION`**, **`X-WEBSITE`**
+    — the rest of OMDb's own response fields (issue #237), verbatim,
+    no normalization. `X-MOVIE-LANGUAGE`/`X-MOVIE-COUNTRY`, not
+    `X-LANGUAGE`/`X-COUNTRY` - these are the _movie's_ own
+    country/language of origin, a different thing from the _venue's_
+    `X-CITY`/`X-COUNTRY` above, and reusing that name would collide.
+    `Plot`, `Awards`, and `Released` are longer-form text and go into
+    `DESCRIPTION` instead - see below.
 
 A real example — an entry at a known venue, with a genre tag and
 coordinates on record, exactly as `build_vevent` produces it:
@@ -117,24 +127,29 @@ included only when its underlying field is set:
    for example `91%`
 3. **Metacritic** — `Metacritic: {metacritic_rating}`, for example
    `80` or `74/100` — OMDb's own format, not normalized
-4. **Letterboxd** — `Letterboxd: {letterboxd_url}`, or
+4. **Released** — `Released: {released}`, OMDb's own full release date
+   (for example `22 Oct 2021`) - distinct from `X-YEAR`, which is
+   parsed down to a bare four-digit year.
+5. **Plot** — `Plot: {plot}`, OMDb's synopsis, verbatim.
+6. **Awards** — `Awards: {awards}`, OMDb's own summary text, verbatim.
+7. **Letterboxd** — `Letterboxd: {letterboxd_url}`, or
    `Letterboxd: {letterboxd_url} ({letterboxd_rating})` when a rating
    is set
-5. **Chain** — `Chain: {chain}`, for example `Chain: Pathé`. Only
+8. **Chain** — `Chain: {chain}`, for example `Chain: Pathé`. Only
    present when the venue matches the hardcoded chain/location table
    (see below); city/country for that same venue go on `LOCATION`
    instead, not here.
-6. **Notes** — `Notes: {notes}`. Personal context about the viewing
+9. **Notes** — `Notes: {notes}`. Personal context about the viewing
    (who it was watched with, a reaction) - stored on `notes` and
    unlike screening details, does persist across a `sync refresh` or
    `update` that changes nothing else. Labelled, unlike screening
    details below, specifically so the two can't be confused when an
    entry has both: nothing but position would otherwise tell them
    apart, since both are free text.
-7. **Screening details** — free text, no label prefix. Only present
-   for an entry sourced from a Pathé booking confirmation email
-   (auditorium/format/seat, parsed from that email). Provenance for
-   the calendar event, not a stored field on the entry itself.
+10. **Screening details** — free text, no label prefix. Only present
+    for an entry sourced from a Pathé booking confirmation email
+    (auditorium/format/seat, parsed from that email). Provenance for
+    the calendar event, not a stored field on the entry itself.
 
 Ratings come straight from OMDb, not normalized — string fields, not
 floats, with no guaranteed format beyond whatever OMDb returned that
@@ -146,14 +161,27 @@ set by hand, which is never overwritten — see
 [`src/movie_planner/omdb.py`](../src/movie_planner/omdb.py)'s
 `fetch_and_store_ratings`.
 
-`poster_url`, `director`, `actors`, `genre`, and `release_year` all
-come straight from OMDb's own `Poster`/`Director`/`Actors`/`Genre`/
-`Year` fields on every successful match - no manual-override
-protection the way `imdb_url` has, since there's no way to set any of
-them by hand. All are overwritten on every fetch, same as the ratings
-themselves. `Year` is parsed down to a single four-digit release year
-(OMDb sometimes returns a range like `2019-2023` for a series; the
-first year in it is what's stored).
+`poster_url`, `director`, `actors`, `genre`, `release_year`, and the
+rest of OMDb's response (issue #237: `rated`, `released`, `runtime`,
+`writer`, `plot`, `language`, `country`, `awards`, `metascore`,
+`imdb_votes`, `dvd`, `box_office`, `production`, `website`) all come
+straight from OMDb's own response fields on every successful match -
+no manual-override protection the way `imdb_url` has, since there's no
+way to set any of them by hand. All are overwritten on every fetch,
+same as the ratings themselves. `Year` is parsed down to a single
+four-digit release year (OMDb sometimes returns a range like
+`2019-2023` for a series; the first year in it is what's stored) -
+`released`, unlike it, keeps OMDb's own full date string unparsed.
+
+The fields added in #237 deliberately don't factor into whether an
+entry "needs" an OMDb fetch (`needs_omdb_fetch` in
+[`src/movie_planner/omdb.py`](../src/movie_planner/omdb.py)): several
+of them (`dvd`/`box_office`/`production`/`website` especially) are
+routinely `"N/A"` even for a real match, so treating their absence as
+"still needs fetching" would re-fetch forever for a title OMDb simply
+has no data for. A fetch already happening for another reason still
+captures these too, at no extra request cost; `sync refresh --force` is
+the explicit way to backfill them onto an already-complete older entry.
 
 ## Venue chain/location
 

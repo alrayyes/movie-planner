@@ -209,6 +209,9 @@ def test_build_description_includes_all_present_fields() -> None:
         imdb_rating="8.5/10",
         rotten_tomatoes_rating="91%",
         metacritic_rating="80",
+        released="22 Oct 2021",
+        plot="Paul Atreides unites with the Fremen.",
+        awards="Won 6 Oscars.",
         letterboxd_url="https://letterboxd.com/film/dune-2021/",
         letterboxd_rating="4.5",
     )
@@ -219,9 +222,23 @@ def test_build_description_includes_all_present_fields() -> None:
     assert "IMDb: 8.5/10" in description
     assert "Rotten Tomatoes: 91%" in description
     assert "Metacritic: 80" in description
+    assert "Released: 22 Oct 2021" in description
+    assert "Plot: Paul Atreides unites with the Fremen." in description
+    assert "Awards: Won 6 Oscars." in description
     assert "https://letterboxd.com/film/dune-2021/" in description
     assert "4.5" in description
     assert "Original Version" in description
+
+
+def test_build_description_omits_released_plot_and_awards_when_absent() -> None:
+    entry = _entry(imdb_rating="8.5/10")
+
+    description = build_description(entry)
+
+    assert description is not None
+    assert "Released" not in description
+    assert "Plot" not in description
+    assert "Awards" not in description
 
 
 def test_build_description_with_nothing_present_is_none() -> None:
@@ -454,6 +471,72 @@ def test_push_new_includes_director_actors_genre_and_year_as_x_properties(store:
     assert "X-ACTORS:Timothée Chalamet, Rebecca Ferguson, Zendaya" in ical_text
     assert "X-GENRE:Action, Adventure, Drama" in ical_text
     assert "X-YEAR:2021" in ical_text
+
+
+def test_push_new_includes_the_rest_of_omdbs_fields_as_x_properties(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.update_entry(
+        entry.id,
+        rated="PG-13",
+        runtime="155 min",
+        language="English, Mandarin",
+        country="United States, Canada",
+        # Not stored on this entry, so X-CITY/X-COUNTRY (issue #217,
+        # venue-derived) are unaffected below, confirming the two
+        # never collide despite the movie's own "country" field.
+        metascore="74",
+        imdb_votes="757,451",
+        dvd="22 Nov 2021",
+        box_office="$108,327,830",
+        production="Legendary Pictures",
+        website="https://www.dunemovie.com",
+    )
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-RATED:PG-13" in ical_text
+    assert "X-RUNTIME:155 min" in ical_text
+    assert "X-MOVIE-LANGUAGE:English, Mandarin" in ical_text
+    assert "X-MOVIE-COUNTRY:United States, Canada" in ical_text
+    # Not the venue's X-CITY/X-COUNTRY (issue #217) - genuinely
+    # different data, so it needs its own, differently-named property.
+    assert "X-COUNTRY:" not in ical_text
+    assert "X-METASCORE:74" in ical_text
+    assert "X-IMDB-VOTES:757,451" in ical_text
+    assert "X-DVD:22 Nov 2021" in ical_text
+    assert "X-BOX-OFFICE:$108,327,830" in ical_text
+    assert "X-PRODUCTION:Legendary Pictures" in ical_text
+    assert "X-WEBSITE:https://www.dunemovie.com" in ical_text
+
+
+def test_push_new_omits_the_rest_of_omdbs_fields_when_entry_has_none(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    for prop in (
+        "X-RATED",
+        "X-RUNTIME",
+        "X-MOVIE-LANGUAGE",
+        "X-MOVIE-COUNTRY",
+        "X-METASCORE",
+        "X-IMDB-VOTES",
+        "X-DVD",
+        "X-BOX-OFFICE",
+        "X-PRODUCTION",
+        "X-WEBSITE",
+    ):
+        assert prop not in ical_text
 
 
 def test_push_new_omits_director_actors_genre_and_year_when_entry_has_none(store: Store) -> None:
