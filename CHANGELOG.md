@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.10.1...movie-planner-v1.11.0) (2026-09-06)
+
+
+### Features
+
+* **venues:** collapse screen/format-suffixed venue aliases ([#196](https://github.com/alrayyes/movie-planner/issues/196)) ([#219](https://github.com/alrayyes/movie-planner/issues/219)) ([fcbf168](https://github.com/alrayyes/movie-planner/commit/fcbf168969038cf556ad29cca5622b43418acc1f))
+
 ## [1.10.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.10.0...movie-planner-v1.10.1) (2026-09-06)
 
 
