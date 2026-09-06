@@ -18,13 +18,21 @@ import typer
 
 from movie_planner import config as config_module
 from movie_planner import config_file
+from movie_planner.calendar_pull import (
+    Candidate,
+    ChangedCandidate,
+    NewCandidate,
+    ParsedEvent,
+    RemovedCandidate,
+    detect_candidates,
+)
 from movie_planner.calendar_sync import CalendarClient, CalendarSync
 from movie_planner.display import detect_terminal_image_protocol, format_entry, render_poster
 from movie_planner.duplicates import find_duplicate
 from movie_planner.importers import parse_csv, parse_json, parse_json_text, run_import
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
 from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
-from movie_planner.store import Entry, Store, StoreError, Venue
+from movie_planner.store import Entry, Medium, Store, StoreError, Venue
 from movie_planner.tmdb import TmdbClient
 
 app = typer.Typer(help="movie-planner: log watched movies and sync them to a calendar.")
@@ -1452,6 +1460,158 @@ def sync_refresh(
                 fetched += 1
 
         typer.echo(f"Refreshed {len(entries)} entries ({fetched} metadata fetches).")
+    finally:
+        store.close()
+
+
+# --- sync pull: issue #235/#168, calendar-side changes back into the store ---
+
+
+def _format_time_range(parsed: ParsedEvent) -> str:
+    if parsed.start_time and parsed.end_time:
+        return f" {parsed.start_time.isoformat(timespec='minutes')}-{parsed.end_time.isoformat(timespec='minutes')}"
+    if parsed.start_time:
+        return f" {parsed.start_time.isoformat(timespec='minutes')}"
+    return ""
+
+
+def _describe_new_candidate(parsed: ParsedEvent) -> str:
+    venue_part = f" @ {parsed.venue_name}" if parsed.venue_name else ""
+    return f"New entry: '{parsed.title}' on {parsed.date}{_format_time_range(parsed)}{venue_part}"
+
+
+def _format_diff_value(value: object) -> str:
+    # design.md's "a missing X-* property is 'unknown', not 'user deleted
+    # this'" - the same phrasing applies to any field whose calendar-side
+    # value is simply absent, not just the OMDb/booking-derived ones the
+    # spec scenario names explicitly.
+    return "unknown" if value is None else repr(value)
+
+
+def _describe_changed_candidate(candidate: ChangedCandidate) -> str:
+    lines = [f"Changed entry {candidate.entry.id}: '{candidate.entry.title}'"]
+    for diff in candidate.diffs:
+        lines.append(
+            f"  {diff.field}: {_format_diff_value(diff.stored)} -> "
+            f"{_format_diff_value(diff.calendar)}"
+        )
+    return "\n".join(lines)
+
+
+def _describe_removed_candidate(candidate: RemovedCandidate) -> str:
+    entry = candidate.entry
+    return f"Removed entry {entry.id}: '{entry.title}' ({entry.date}) - no longer on the calendar"
+
+
+def _prompt_medium_name(store: Store, parsed: ParsedEvent) -> Medium:
+    # design.md's "New candidate medium: prompted at approval time,
+    # never guessed" - the same free-text prompt `log` already asks for,
+    # pre-filled with "cinema" only when the candidate has a resolved
+    # venue name (LOCATION says physical place; nothing says which one
+    # when it's absent, so no default is offered there).
+    if parsed.venue_name:
+        name = str(typer.prompt("Medium for this entry", default="cinema"))
+    else:
+        name = str(typer.prompt("Medium for this entry"))
+    return store.get_or_create_medium(name, is_physical_place=parsed.venue_name is not None)
+
+
+def _apply_new_candidate(store: Store, parsed: ParsedEvent) -> None:
+    medium_row = _prompt_medium_name(store, parsed)
+    venue_row = store.get_or_create_venue(parsed.venue_name) if parsed.venue_name else None
+    entry = store.create_entry(
+        title=parsed.title,
+        date=parsed.date,
+        medium_id=medium_row.id,
+        start_time=parsed.start_time,
+        end_time=parsed.end_time,
+        venue_id=venue_row.id if venue_row else None,
+        row=parsed.row,
+        seat=parsed.seat,
+    )
+    # caldav_uid links this new local entry back to the event it came
+    # from - without it, the next `sync retry`/`refresh` would push a
+    # second, duplicate event for it.
+    store.update_entry(
+        entry.id,
+        caldav_uid=parsed.uid,
+        director=parsed.director,
+        actors=parsed.actors,
+        genre=parsed.genre,
+        release_year=parsed.release_year,
+        poster_url=parsed.poster_url,
+    )
+
+
+def _apply_changed_candidate(store: Store, candidate: ChangedCandidate) -> None:
+    parsed = candidate.parsed
+    venue_row = store.get_or_create_venue(parsed.venue_name) if parsed.venue_name else None
+    store.update_entry(
+        candidate.entry.id,
+        title=parsed.title,
+        date=parsed.date,
+        start_time=parsed.start_time,
+        end_time=parsed.end_time,
+        venue_id=venue_row.id if venue_row else None,
+        director=parsed.director,
+        actors=parsed.actors,
+        genre=parsed.genre,
+        release_year=parsed.release_year,
+        poster_url=parsed.poster_url,
+        row=parsed.row,
+        seat=parsed.seat,
+    )
+
+
+def _handle_candidate(store: Store, candidate: Candidate) -> bool:
+    """Shows one candidate and applies it if approved - spec.md's "every
+    candidate change requires explicit approval", one at a time, same
+    confirm-before-write shape `from-pathe-email` already uses. Returns
+    whether it was approved, for the summary count.
+    """
+    if isinstance(candidate, NewCandidate):
+        typer.echo(_describe_new_candidate(candidate.parsed))
+        if not typer.confirm("Log this as a new entry?"):
+            return False
+        _apply_new_candidate(store, candidate.parsed)
+        return True
+    if isinstance(candidate, ChangedCandidate):
+        typer.echo(_describe_changed_candidate(candidate))
+        if not typer.confirm("Apply this change to the local store?"):
+            return False
+        _apply_changed_candidate(store, candidate)
+        return True
+    typer.echo(_describe_removed_candidate(candidate))
+    if not typer.confirm("Remove this entry from the local store?"):
+        return False
+    store.delete_entry(candidate.entry.id)
+    return True
+
+
+@sync_app.command("pull")
+def sync_pull(ctx: typer.Context) -> None:
+    """Reads every event on the configured calendar back and reconciles
+    it against the local store - the read side of an otherwise
+    push-only sync (issue #168/#235). Presents each new/changed/removed
+    candidate one at a time for approval; nothing is written to the
+    store without it, and a declined candidate is simply offered again
+    next time, not recorded anywhere. `list`/`show` are entirely
+    unaffected - they still only ever read the local store.
+    """
+    cfg = _cfg(ctx)
+    store = _open_store(cfg)
+    try:
+        client = _connect_calendar(cfg)
+        candidates = detect_candidates(store, client.list_events())
+        if not candidates:
+            typer.echo("Nothing to pull - the calendar matches the local store.")
+            return
+
+        approved = 0
+        for candidate in candidates:
+            if _handle_candidate(store, candidate):
+                approved += 1
+        typer.echo(f"Applied {approved} of {len(candidates)} candidates.")
     finally:
         store.close()
 

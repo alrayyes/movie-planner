@@ -93,28 +93,28 @@ be implemented:
 
 ## 4. `sync pull` command and approval flow
 
-- [ ] 4.1 Add `movie-planner sync pull`, fetching every event via
+- [x] 4.1 Add `movie-planner sync pull`, fetching every event via
   `list_events`, running detection (group 3), and presenting each
   candidate one at a time with its diff and a y/N prompt, same
   confirmation pattern `from-pathe-email` already uses; verify via a
   CLI test simulating approve and decline on different candidate
   types
-- [ ] 4.2 Verify an approved new candidate creates a local entry via
+- [x] 4.2 Verify an approved new candidate creates a local entry via
   `Store.create_entry`, an approved change updates via
   `Store.update_entry`, and an approved removal deletes via
   `Store.delete_entry`
-- [ ] 4.3 Verify a declined candidate leaves the store unchanged and
+- [x] 4.3 Verify a declined candidate leaves the store unchanged and
   is offered again on a subsequent `sync pull` run with no
   intervening calendar change
-- [ ] 4.4 Verify `list`/`show` are untouched by this change - they
+- [x] 4.4 Verify `list`/`show` are untouched by this change - they
   still read only the local store, never the calendar
 
 ## 5. Docs
 
-- [ ] 5.1 Update `docs/architecture.md`'s diagram and "What each
+- [x] 5.1 Update `docs/architecture.md`'s diagram and "What each
   piece actually knows about" section to show `sync pull` as the one
   path data flows calendar-to-store, keeping the rest of the
   push-only description accurate
-- [ ] 5.2 Update `README.md`'s sync section to mention `sync pull`
+- [x] 5.2 Update `README.md`'s sync section to mention `sync pull`
   alongside `sync refresh`/`sync retry`, noting it's a manually-run,
   approval-gated reconciliation step, not automatic
