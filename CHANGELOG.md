@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.14.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.13.3...movie-planner-v1.14.0) (2026-09-06)
+
+
+### Features
+
+* **omdb:** capture the rest of OMDb's response fields ([#237](https://github.com/alrayyes/movie-planner/issues/237)) ([#239](https://github.com/alrayyes/movie-planner/issues/239)) ([4b69ac2](https://github.com/alrayyes/movie-planner/commit/4b69ac2197fccf2a3ead0adc2f68a66d21cf9656))
+
+
+### Documentation
+
+* **openspec:** design capture for calendar sync pull ([#235](https://github.com/alrayyes/movie-planner/issues/235)) ([#238](https://github.com/alrayyes/movie-planner/issues/238)) ([ed67031](https://github.com/alrayyes/movie-planner/commit/ed67031d6677d612a675e8fe6b7efd598d047dce))
+
 ## [1.13.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.13.2...movie-planner-v1.13.3) (2026-09-06)
 
 
