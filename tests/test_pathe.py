@@ -7,9 +7,11 @@ from fixtures import (
     PATHE_EMAIL_HTML_ONLY,
     PATHE_EMAIL_LEGACY_HTML,
     PATHE_EMAIL_MIME,
+    PATHE_EMAIL_MISLABELED_ATTACHMENT,
     PATHE_EMAIL_PLAIN,
     PATHE_HTML_BOOKING_REF,
     PATHE_LEGACY_HTML_BOOKING_REF,
+    PATHE_MISLABELED_ATTACHMENT_BOOKING_REF,
 )
 
 from movie_planner.mail_import.envelope import extract_envelope
@@ -188,3 +190,19 @@ def test_parses_a_real_html_only_email_piped_directly() -> None:
     assert isinstance(booking, PatheBooking)
     assert booking.title == "Spider-Man: Brand New Day"
     assert booking.booking_ref == PATHE_HTML_BOOKING_REF
+
+
+# --- mislabeled text/plain attachment: movie-planner#193 ---
+
+
+def test_parses_a_real_email_with_a_mislabeled_attachment_piped_directly() -> None:
+    # Same bug mail_import.envelope had (movie-planner#191) in pathe.py's
+    # own, independent MIME extraction: a PDF ticket mislabeled
+    # Content-Type: text/plain by Pathé's own template shouldn't be
+    # picked as the body just because Content-Disposition says
+    # attachment.
+    booking = parse_pathe_email(PATHE_EMAIL_MISLABELED_ATTACHMENT)
+
+    assert isinstance(booking, PatheBooking)
+    assert booking.title == "Spider-Man: Brand New Day"
+    assert booking.booking_ref == PATHE_MISLABELED_ATTACHMENT_BOOKING_REF
