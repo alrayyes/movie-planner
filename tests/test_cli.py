@@ -1388,6 +1388,30 @@ def test_from_pathe_email_via_file_handles_a_real_html_only_confirmation(
     store.close()
 
 
+def test_from_pathe_email_via_file_handles_a_mislabeled_attachment(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    # movie-planner#193: the same bug #191 fixed in mail_import's own
+    # extraction - a PDF ticket mislabeled Content-Type: text/plain by
+    # Pathé's own template shouldn't be picked as the body just because
+    # Content-Disposition says attachment.
+    from fixtures import PATHE_EMAIL_MISLABELED_ATTACHMENT, PATHE_MISLABELED_ATTACHMENT_BOOKING_REF
+
+    email_path = tmp_path / "ticket.eml"
+    email_path.write_text(PATHE_EMAIL_MISLABELED_ATTACHMENT)
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "from-pathe-email", str(email_path)], input="y\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.title == "Spider-Man: Brand New Day"
+    assert entry.booking_ref == PATHE_MISLABELED_ATTACHMENT_BOOKING_REF
+    store.close()
+
+
 def test_from_pathe_email_via_stdin_uses_tty_confirmation(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
