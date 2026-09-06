@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.14.0...movie-planner-v1.15.0) (2026-09-06)
+
+
+### Features
+
+* **trailer:** look up an entry's official trailer via TMDb ([#241](https://github.com/alrayyes/movie-planner/issues/241)) ([8700171](https://github.com/alrayyes/movie-planner/commit/8700171df1f857e3b48edc6296e9b5e903e7afcf))
+
 ## [1.14.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.13.3...movie-planner-v1.14.0) (2026-09-06)
 
 
