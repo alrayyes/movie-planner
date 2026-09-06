@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.5.5...movie-planner-v1.6.0) (2026-09-06)
+
+
+### Features
+
+* **config:** let movie-planner and pathe-mail-import share one file ([#176](https://github.com/alrayyes/movie-planner/issues/176)) ([7d1e07d](https://github.com/alrayyes/movie-planner/commit/7d1e07db6d9af9fe3367982bce4d7fb500269c23))
+
 ## [1.5.5](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.5.4...movie-planner-v1.5.5) (2026-09-06)
 
 
