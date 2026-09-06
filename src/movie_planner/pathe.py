@@ -35,6 +35,21 @@ _HTML_BOOKING_RE = re.compile(
 _HTML_BOOKING_REF_RE = re.compile(r"reservation no\.([^\s.]+)\.")
 _HTML_LANGUAGE_AUDITORIUM_RE = re.compile(r"([^\n]*)\n[–-]\s*(Auditorium[^\n]+)")
 
+# A third real Pathé template (movie-planner#171) - structurally like
+# the old plain-text template above (title before the date/time,
+# "Booking number"/"N°...") but with no "====" title underline, and the
+# HTML source's own line-wrapping lands a newline inside the date/time
+# text where the old template had a single space. Anchored on the
+# "Scan the QR code..." disclaimer sentence both templates share, since
+# there's no underline to find the title with here.
+_HTML_LEGACY_TITLE_RE = re.compile(r"Scan the QR code at the cinema\.[^\n]*\n+([^\n]+)")
+_HTML_LEGACY_DATETIME_RE = re.compile(
+    r"\b\w+day (\d{2}/\d{2}/\d{2}),\s*(\d{2}:\d{2}) Expected to end at (\d{2}:\d{2})"
+)
+_HTML_LEGACY_AUDITORIUM_RE = re.compile(
+    r"^(Auditorium[^\n]*?)\s*[-–]\s*\n+\s*(Row[^\n]*)$", re.MULTILINE
+)
+
 
 class PatheEmailParseError(Exception):
     """Raised when the given content doesn't match the expected Pathé
@@ -111,6 +126,40 @@ def _parse_plain_text_shape(body: str) -> PatheBooking | None:
     )
 
 
+def _html_legacy_screening_details(body: str, *, after: int, before: int) -> str | None:
+    language_block = body[after:before].strip()
+    language = next((line.strip() for line in language_block.splitlines() if line.strip()), None)
+    auditorium_match = _HTML_LEGACY_AUDITORIUM_RE.search(body)
+    auditorium = (
+        f"{auditorium_match.group(1).strip()} - {auditorium_match.group(2).strip()}"
+        if auditorium_match
+        else None
+    )
+    parts = [p for p in (language, auditorium) if p]
+    return ", ".join(parts) if parts else None
+
+
+def _parse_html_legacy_wording_shape(body: str) -> PatheBooking | None:
+    booking_match = _BOOKING_REF_RE.search(body)
+    title_match = _HTML_LEGACY_TITLE_RE.search(body)
+    datetime_match = _HTML_LEGACY_DATETIME_RE.search(body)
+    cinema_match = _CINEMA_RE.search(body)
+    if not (booking_match and title_match and datetime_match and cinema_match):
+        return None
+
+    return PatheBooking(
+        title=title_match.group(1).strip(),
+        date=datetime.strptime(datetime_match.group(1), "%d/%m/%y").date(),
+        start_time=time.fromisoformat(datetime_match.group(2)),
+        end_time=time.fromisoformat(datetime_match.group(3)),
+        cinema=cinema_match.group(1).strip(),
+        booking_ref=booking_match.group(1).strip(),
+        screening_details=_html_legacy_screening_details(
+            body, after=title_match.end(), before=datetime_match.start()
+        ),
+    )
+
+
 def _parse_html_derived_shape(body: str) -> PatheBooking | None:
     booking_match = _HTML_BOOKING_RE.search(body)
     ref_match = _HTML_BOOKING_REF_RE.search(body)
@@ -131,7 +180,11 @@ def _parse_html_derived_shape(body: str) -> PatheBooking | None:
 def parse_pathe_email(raw: str) -> PatheBooking:
     body = _extract_body(raw)
 
-    booking = _parse_plain_text_shape(body) or _parse_html_derived_shape(body)
+    booking = (
+        _parse_plain_text_shape(body)
+        or _parse_html_derived_shape(body)
+        or _parse_html_legacy_wording_shape(body)
+    )
     if booking is None:
         raise PatheEmailParseError("could not parse this as a Pathé booking confirmation email")
     return booking

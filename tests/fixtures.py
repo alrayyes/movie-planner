@@ -117,3 +117,69 @@ def _build_pathe_html_only_email() -> str:
 
 
 PATHE_EMAIL_HTML_ONLY = _build_pathe_html_only_email()
+
+# The real shape movie-planner#171 found: a *third* Pathé confirmation
+# template, structurally closer to the old plain-text template
+# (PATHE_EMAIL_PLAIN above) than #158's HTML template - it says
+# "Booking number"/"N°..." and puts the title before the date/time -
+# but as multipart/alternative with a non-informative "view this in
+# HTML" text/plain part (movie-planner#171's other half: envelope.py
+# handing that stub to a translation script instead of falling back to
+# the real HTML). Trimmed of the real email's decorative CSS/marketing
+# boilerplate; the source's own soft line-wrapping inside a paragraph
+# (no real HTML tag or entity involved) is kept exactly where the real
+# email has it - that literal newline between "27/08/26," and "13:40"
+# is what movie-planner#171 is actually about. See movie-planner#171's
+# own first comment for the untrimmed original.
+PATHE_LEGACY_HTML_BOOKING_REF = "N°AB1CD23"
+
+_PATHE_LEGACY_HTML_BODY = f"""\
+<html>
+<body>
+<style>.some-marketing-css {{ color: #1f2326; }}</style>
+<p>Booking number</p>
+<p>{PATHE_LEGACY_HTML_BOOKING_REF}</p>
+<p>Hi User,</p>
+<p>Thank you for your order! You will find your ticket(s) in this email and in your My Club Pathé account.</p>
+<p>Scan the QR code at the cinema. This applies to all types of tickets, including subscriptions.</p>
+<p>Insidious: Out of the Further</p>
+<p>Original Version</p>
+<p>Thursday 27/08/26,
+                      13:40 Expected to end at  15:46</p>
+<p>Pathé City</p>
+<p>Kleine-Gartmanplantsoen 15-19,
+1017RP Amsterdam</p>
+<p><span>Auditorium 4</span> -
+
+                        Row&nbsp;2&nbsp;Seat&nbsp;4
+
+</p>
+</body>
+</html>
+"""
+
+
+def _build_pathe_legacy_html_email() -> str:
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    msg["From"] = "Pathé <no-reply@service.pathe.nl>"
+    msg["To"] = "moviewatcher@example.com"
+    msg["Subject"] = "🎫 Your filmticket(s) for Pathé"
+    msg["Date"] = "Thu, 27 Aug 2026 10:42:07 +0000"
+    # A real Pathé confirmation of this template carries a generated,
+    # non-informative text/plain alternative alongside the real HTML -
+    # exactly the "view this in an HTML-capable client" filler
+    # envelope.py's extraction needs to see through (movie-planner#171).
+    msg.set_content("This is a multipart/mixed message with an HTML part and a PDF attachment.\n")
+    msg.add_alternative(_PATHE_LEGACY_HTML_BODY, subtype="html")
+    msg.add_attachment(
+        b"%PDF-1.1 fake ticket pdf, not a real PDF",
+        maintype="application",
+        subtype="pdf",
+        filename="Ticket.pdf",
+    )
+    return msg.as_string()
+
+
+PATHE_EMAIL_LEGACY_HTML = _build_pathe_legacy_html_email()
