@@ -18,20 +18,27 @@ watching the exit code at all (piped case) - see design.md's
 
 import json
 import sys
+from datetime import datetime
 from typing import Any
 
 from movie_planner.pathe import PatheEmailParseError, parse_pathe_email
 
 
 def _row_from_envelope(envelope: dict[str, Any]) -> dict[str, Any]:
-    booking = parse_pathe_email(str(envelope["body"]))
+    # The envelope's own "date" field (the email's Date header) is the
+    # only source of a year for the Dutch templates parse_pathe_email
+    # itself can't date (movie-planner#200) - every other template
+    # ignores it.
+    received_date = datetime.fromisoformat(str(envelope["date"])).date()
+    booking = parse_pathe_email(str(envelope["body"]), received_date=received_date)
     row: dict[str, Any] = {
         "title": booking.title,
         "date": booking.date.isoformat(),
         "medium": "cinema",
         "start_time": booking.start_time.isoformat(),
-        "end_time": booking.end_time.isoformat(),
     }
+    if booking.end_time is not None:
+        row["end_time"] = booking.end_time.isoformat()
     if booking.cinema:
         row["venue"] = booking.cinema
     return row

@@ -212,3 +212,133 @@ def _build_pathe_mislabeled_attachment_email() -> str:
 
 
 PATHE_EMAIL_MISLABELED_ATTACHMENT = _build_pathe_mislabeled_attachment_email()
+
+# The real shapes movie-planner#200 found: three more templates from
+# Ryan's historical (2009-2019) Pathé archive, each a real, redacted
+# .eml - trimmed of decorative CSS/marketing boilerplate the same way
+# PATHE_EMAIL_LEGACY_HTML above is, keeping every phrase and tag the
+# parser actually matches against verbatim. See movie-planner#200's own
+# comments for the untrimmed originals. All three are Dutch and, unlike
+# every template above, print no year in their own date text - the
+# email's own Date header (received_date) is what supplies one.
+
+# "Pathé Mobiel" (~2013, e.pathe.nl) - also has no end time at all.
+PATHE_MOBIEL_BOOKING_REF = "XXXXXXXXX"
+PATHE_MOBIEL_DATE_HEADER = "Fri, 28 Jun 2013 19:28:07 +0200"
+
+_PATHE_MOBIEL_HTML_BODY = f"""\
+<html>
+<body>
+<td style="font-weight: bold;" valign="middle">
+<span style="font-size: 14px;">World War Z 3D O3D</span><br /> <br />
+Vrijdag 28 juni, 20:30<br /> Pathe Arena<br /> <br /> Unlimited x 1<br /> <br />
+Zaal  4<br /> Row 1 Seat 1<br /> Totaal: &euro; 0.00</td>
+<td>Path&eacute; Unlimited reservering bevestigd</td>
+<td>Gebruik bij communicatie met de klantenservice de referentiecode
+<strong>{PATHE_MOBIEL_BOOKING_REF}</strong>.</td>
+<td>Referentie: {PATHE_MOBIEL_BOOKING_REF}<br /> </td>
+</body>
+</html>
+"""
+
+
+def _build_pathe_mobiel_email() -> str:
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    msg["From"] = "Pathé <aankoop@e.pathe.nl>"
+    msg["To"] = "user@example.com"
+    msg["Subject"] = "Bestelling via Pathé Mobiel (XXXXXXXXX)"
+    msg["Date"] = PATHE_MOBIEL_DATE_HEADER
+    # Same "view this in an HTML-capable client" placeholder shape as
+    # PATHE_EMAIL_LEGACY_HTML - its own tracking link contains a digit,
+    # which is the second half of movie-planner#200 (the #171
+    # digit-heuristic false-positiving on it).
+    msg.set_content(
+        "Dit is een bevestiging van uw aankoop. Waarschijnlijk ondersteunt uw "
+        "e-mail programma geen HTML.\nBezoek de volgende pagina om dit bericht "
+        "in uw internet-browser te lezen:\n\n"
+        "http://e.pathe.nl/x/?S7Y1NPqfa2tsbvy.yNbM3NzcxPx.gW1xclFmQUl8cWkSiJWUCgAA12\n"
+    )
+    msg.add_alternative(_PATHE_MOBIEL_HTML_BODY, subtype="html")
+    return msg.as_string()
+
+
+PATHE_EMAIL_MOBIEL = _build_pathe_mobiel_email()
+
+# "Ticketbevestiging" (~2014, pathe.emsecure.net) - also has no end time.
+PATHE_TICKETBEVESTIGING_BOOKING_REF = "000000000000000"
+PATHE_TICKETBEVESTIGING_DATE_HEADER = "Fri, 26 Dec 2014 11:27:09 +0100"
+
+_PATHE_TICKETBEVESTIGING_HTML_BODY = f"""\
+<html>
+<body>
+<td colspan="2" style="font-weight: bold;">The Imitation Game</td>
+<td>&nbsp;</td></tr><tr><td>
+<span class="datetime">Vrijdag 26 december om 21:05</span><br /><span class="locationhall">Path&eacute; Tuschinski, Amsterdam: <span>Zaal 1</span></span><br /><span class="seats">Rij: 1 Stoel: 1</span>
+<td>Gebruik bij contact de referentiecode {PATHE_TICKETBEVESTIGING_BOOKING_REF}.</td>
+<td>Klantenservice | Referentie: {PATHE_TICKETBEVESTIGING_BOOKING_REF}</td>
+</body>
+</html>
+"""
+
+
+def _build_pathe_ticketbevestiging_email() -> str:
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    msg["From"] = "Pathé <aankoop@pathe.emsecure.net>"
+    msg["To"] = "user@example.com"
+    msg["Subject"] = "Pathé Ticketbevestiging"
+    msg["Date"] = PATHE_TICKETBEVESTIGING_DATE_HEADER
+    msg.set_content(
+        "Waarschijnlijk ondersteunt je e-mail programma geen HTML.\n"
+        "Bezoek de volgende pagina om dit bericht in je internet-browser te "
+        "lezen:\n"
+        "http://pathe.emsecure.net/optiext/optiextension.dll?ID=3D%2BxC%2BAuZN_yqmEY1O\n"
+    )
+    msg.add_alternative(_PATHE_TICKETBEVESTIGING_HTML_BODY, subtype="html")
+    return msg.as_string()
+
+
+PATHE_EMAIL_TICKETBEVESTIGING = _build_pathe_ticketbevestiging_email()
+
+# "Reservering <title> - Referentie: ..." (2019, info.pathe.nl) - the
+# only one of the three that does carry an end time, and the only one
+# with an "(OV)"/language-tag line between the title and the date.
+PATHE_RESERVERING_BOOKING_REF = "000000000000000"
+PATHE_RESERVERING_DATE_HEADER = "Thu, 13 Jun 2019 14:53:15 +0200"
+
+_PATHE_RESERVERING_HTML_BODY = f"""\
+<html>
+<body>
+<td colspan="2" style="font-weight: bold;">Long Shot
+<span style="color:#6d6e71;">(OV)</span></td><td>&nbsp;</td></tr><tr><td>
+<span class="datetime">Donderdag 13 juni om 15:20 tot 17:39</span><br /><span class="locationhall">Path&eacute; De Munt, Amsterdam</span><br /><span class="seats">Zaal  1
+ </span><br /><span class="seats">Rij: 1 stoel: 1</span>
+<td>Gebruik bij contact de referentiecode {PATHE_RESERVERING_BOOKING_REF}.</td>
+<td>Klantenservice | Referentie: {PATHE_RESERVERING_BOOKING_REF}</td>
+</body>
+</html>
+"""
+
+
+def _build_pathe_reservering_email() -> str:
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    msg["From"] = "Pathé De Munt, Amsterdam <info@info.pathe.nl>"
+    msg["To"] = "user@example.com"
+    msg["Subject"] = f"Reservering Long Shot - Referentie: {PATHE_RESERVERING_BOOKING_REF}"
+    msg["Date"] = PATHE_RESERVERING_DATE_HEADER
+    msg.set_content(
+        "Waarschijnlijk ondersteunt je e-mail programma geen HTML.\n"
+        "Bezoek de volgende pagina om dit bericht in je internet-browser te "
+        "lezen:\n"
+        "http://info.pathe.nl/optiext/optiextension.dll?ID=3D5VZMySfjxxTr_PYbXybZYMMTx\n"
+    )
+    msg.add_alternative(_PATHE_RESERVERING_HTML_BODY, subtype="html")
+    return msg.as_string()
+
+
+PATHE_EMAIL_RESERVERING = _build_pathe_reservering_email()

@@ -8,10 +8,16 @@ from fixtures import (
     PATHE_EMAIL_LEGACY_HTML,
     PATHE_EMAIL_MIME,
     PATHE_EMAIL_MISLABELED_ATTACHMENT,
+    PATHE_EMAIL_MOBIEL,
     PATHE_EMAIL_PLAIN,
+    PATHE_EMAIL_RESERVERING,
+    PATHE_EMAIL_TICKETBEVESTIGING,
     PATHE_HTML_BOOKING_REF,
     PATHE_LEGACY_HTML_BOOKING_REF,
     PATHE_MISLABELED_ATTACHMENT_BOOKING_REF,
+    PATHE_MOBIEL_BOOKING_REF,
+    PATHE_RESERVERING_BOOKING_REF,
+    PATHE_TICKETBEVESTIGING_BOOKING_REF,
 )
 
 from movie_planner.mail_import.envelope import extract_envelope
@@ -176,6 +182,64 @@ def test_parses_the_legacy_html_derived_shape() -> None:
     assert booking.cinema == "Pathé City"
     assert booking.booking_ref == PATHE_LEGACY_HTML_BOOKING_REF
     assert booking.screening_details == "Original Version, Auditorium 4 - Row 2 Seat 4"
+
+
+# --- three more real historical templates: movie-planner#200 ---
+#
+# All three are Dutch and print no year in their own date text - unlike
+# every template above, they need the email's own Date header
+# (received_date) to know which year the booking was for.
+
+
+def test_parses_the_mobiel_shape() -> None:
+    envelope = extract_envelope(PATHE_EMAIL_MOBIEL)
+
+    booking = parse_pathe_email(envelope.body, received_date=envelope.date.date())
+
+    assert booking.title == "World War Z 3D O3D"
+    assert booking.date == date(2013, 6, 28)
+    assert booking.start_time == time(20, 30)
+    assert booking.end_time is None
+    assert booking.cinema == "Pathe Arena"
+    assert booking.booking_ref == PATHE_MOBIEL_BOOKING_REF
+    assert booking.screening_details == "Zaal 4, Row 1 Seat 1"
+
+
+def test_mobiel_shape_without_received_date_raises() -> None:
+    # No year in the date text and nothing to infer one from - a clear
+    # error, not a wrong guess.
+    envelope = extract_envelope(PATHE_EMAIL_MOBIEL)
+
+    with pytest.raises(PatheEmailParseError, match="received_date"):
+        parse_pathe_email(envelope.body)
+
+
+def test_parses_the_ticketbevestiging_shape() -> None:
+    envelope = extract_envelope(PATHE_EMAIL_TICKETBEVESTIGING)
+
+    booking = parse_pathe_email(envelope.body, received_date=envelope.date.date())
+
+    assert booking.title == "The Imitation Game"
+    assert booking.date == date(2014, 12, 26)
+    assert booking.start_time == time(21, 5)
+    assert booking.end_time is None
+    assert booking.cinema == "Pathé Tuschinski, Amsterdam"
+    assert booking.booking_ref == PATHE_TICKETBEVESTIGING_BOOKING_REF
+    assert booking.screening_details == "Zaal 1, Rij: 1 Stoel: 1"
+
+
+def test_parses_the_reservering_shape() -> None:
+    envelope = extract_envelope(PATHE_EMAIL_RESERVERING)
+
+    booking = parse_pathe_email(envelope.body, received_date=envelope.date.date())
+
+    assert booking.title == "Long Shot"
+    assert booking.date == date(2019, 6, 13)
+    assert booking.start_time == time(15, 20)
+    assert booking.end_time == time(17, 39)
+    assert booking.cinema == "Pathé De Munt, Amsterdam"
+    assert booking.booking_ref == PATHE_RESERVERING_BOOKING_REF
+    assert booking.screening_details == "Zaal 1, Rij: 1 stoel: 1"
 
 
 # --- from-pathe-email's own MIME extraction falls back to HTML too: movie-planner#162 ---
