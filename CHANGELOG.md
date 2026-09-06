@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.9.6...movie-planner-v1.10.0) (2026-09-06)
+
+
+### Features
+
+* **mail-import:** add a MaildirMailClient ([#211](https://github.com/alrayyes/movie-planner/issues/211)) ([ef8627b](https://github.com/alrayyes/movie-planner/commit/ef8627bd07e9950487a519a53b5cd502521cbe82))
+
 ## [1.9.6](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.9.5...movie-planner-v1.9.6) (2026-09-06)
 
 
