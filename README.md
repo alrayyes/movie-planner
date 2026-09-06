@@ -132,7 +132,11 @@ A venue created with a name matching a hardcoded table (Pathé's own
 Amsterdam cinemas, GSC's Malaysia locations, and a handful of
 independent Amsterdam venues) gets its chain, city, and country filled
 in automatically — a name that doesn't match gets none of that, never
-a guess. `list --chain`/`--city` filter on it; `show` displays it.
+a guess. `list --chain`/`--city` filter on it; `show` displays it. Most
+of those same venues also carry known GPS coordinates, pushed to the
+calendar as the event's `GEO` property (see
+[`docs/calendar-schema.md`](docs/calendar-schema.md)) — again, only
+ever a verified value, never estimated.
 
 `import` accepts a `.csv` or `.json` file with the same fields as
 `examples/`, and fetches OMDb ratings the same as `log` does - unless a

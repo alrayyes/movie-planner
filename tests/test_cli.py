@@ -164,6 +164,64 @@ def test_log_pushes_a_known_venues_chain_and_location(
     store.close()
 
 
+def test_log_pushes_a_known_venues_geo_coordinates(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Tuschinski",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "GEO:52.3665062;4.8947073" in ical_text
+    store.close()
+
+
+def test_log_venue_with_no_known_coordinates_omits_geo(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "GEO:" not in ical_text
+    store.close()
+
+
 def test_log_venue_not_required_for_non_physical_medium(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None
 ) -> None:

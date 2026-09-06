@@ -40,6 +40,13 @@ either.
     try to map from `LOCATION`. Commas inside it are backslash-escaped
     per RFC 5545 `TEXT` escaping, same as any other `TEXT` value with a
     literal comma.
+- **GEO** — present only for a venue with known coordinates (issue
+  #170): `{latitude};{longitude}`, `icalendar`'s `vGeo` FLOAT pair. A
+  venue with no coordinates on record gets no `GEO` property at all -
+  never a guessed value, same "never a guess" rule the chain/city/
+  country table above already follows. Additive to `LOCATION`, not a
+  replacement - a client without `GEO` support still gets the address
+  string.
 - `DTSTART`/`DTEND`, depending on how much time data the entry has:
   - date only → `DTSTART` is a `DATE` value (an all-day event), no
     `DTEND`.

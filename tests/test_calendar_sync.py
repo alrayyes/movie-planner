@@ -156,6 +156,40 @@ def test_build_vevent_with_no_extra_properties_adds_none() -> None:
     assert "X-DIRECTOR" not in event
 
 
+# --- GEO: issue #170 ---
+
+
+def test_build_vevent_with_geo_adds_the_property() -> None:
+    ical_text = build_vevent(
+        uid="uid-8",
+        title="Dune",
+        entry_date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue="Tuschinski, Amsterdam, Netherlands",
+        geo=(52.3667, 4.8945),
+    )
+
+    event = _parse(ical_text)
+    geo = event["geo"]
+    assert isinstance(geo, icalendar.vGeo)
+    assert (round(geo.latitude, 4), round(geo.longitude, 4)) == (52.3667, 4.8945)
+
+
+def test_build_vevent_with_no_geo_omits_the_field() -> None:
+    ical_text = build_vevent(
+        uid="uid-9",
+        title="Dune",
+        entry_date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue=None,
+    )
+
+    event = _parse(ical_text)
+    assert "geo" not in event
+
+
 # --- build_description: task 2.1 ---
 
 

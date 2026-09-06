@@ -317,6 +317,7 @@ def _push_new_or_warn(
             venue=_venue_location(venue),
             chain=venue.chain if venue else None,
             screening_details=screening_details,
+            geo=_venue_geo(venue),
         )
     except Exception as e:  # noqa: BLE001 - any connect/push failure is a warning
         typer.secho(
@@ -343,6 +344,7 @@ def _push_update_or_warn(
             venue=_venue_location(venue),
             chain=venue.chain if venue else None,
             screening_details=screening_details,
+            geo=_venue_geo(venue),
         )
     except Exception as e:  # noqa: BLE001
         typer.secho(
@@ -413,6 +415,15 @@ def _venue_location(venue: Venue | None) -> str | None:
     if venue.city and venue.country:
         return f"{venue.name}, {venue.city}, {venue.country}"
     return venue.name
+
+
+def _venue_geo(venue: Venue | None) -> tuple[float, float] | None:
+    """The VEVENT GEO value for a venue with known coordinates (issue
+    #170), or None - never a guessed value - for one without.
+    """
+    if venue is None or venue.latitude is None or venue.longitude is None:
+        return None
+    return (venue.latitude, venue.longitude)
 
 
 # --- log: requirement "Log a watched movie interactively" ---

@@ -25,7 +25,9 @@ CREATE TABLE IF NOT EXISTS venues (
     name TEXT NOT NULL UNIQUE,
     chain TEXT,
     city TEXT,
-    country TEXT
+    country TEXT,
+    latitude REAL,
+    longitude REAL
 );
 
 CREATE TABLE IF NOT EXISTS entries (
@@ -77,10 +79,12 @@ _MIGRATED_COLUMNS: tuple[tuple[str, str], ...] = (
     ("source", "TEXT"),
 )
 
-_MIGRATED_VENUE_COLUMNS = (
-    "chain",
-    "city",
-    "country",
+_MIGRATED_VENUE_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("chain", "TEXT"),
+    ("city", "TEXT"),
+    ("country", "TEXT"),
+    ("latitude", "REAL"),
+    ("longitude", "REAL"),
 )
 
 
@@ -105,6 +109,8 @@ class Venue:
     chain: str | None = None
     city: str | None = None
     country: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 @dataclass(frozen=True)
@@ -222,9 +228,9 @@ class Store:
         )
 
         venue_columns = {row[1] for row in self._conn.execute("PRAGMA table_info(venues)")}
-        for column in _MIGRATED_VENUE_COLUMNS:
+        for column, sql_type in _MIGRATED_VENUE_COLUMNS:
             if column not in venue_columns:
-                self._conn.execute(f"ALTER TABLE venues ADD COLUMN {column} TEXT")
+                self._conn.execute(f"ALTER TABLE venues ADD COLUMN {column} {sql_type}")
         self._backfill_known_venue_locations()
 
     def _backfill_known_venue_locations(self) -> None:
@@ -236,9 +242,18 @@ class Store:
         for venue_id, name in rows.fetchall():
             location = KNOWN_VENUE_LOCATIONS.get(name)
             if location is not None:
+                latitude, longitude = location.coordinates or (None, None)
                 self._conn.execute(
-                    "UPDATE venues SET chain = ?, city = ?, country = ? WHERE id = ?",
-                    (location.chain, location.city, location.country, venue_id),
+                    "UPDATE venues SET chain = ?, city = ?, country = ?, latitude = ?, "
+                    "longitude = ? WHERE id = ?",
+                    (
+                        location.chain,
+                        location.city,
+                        location.country,
+                        latitude,
+                        longitude,
+                        venue_id,
+                    ),
                 )
 
     def close(self) -> None:
@@ -288,21 +303,44 @@ class Store:
         chain = location.chain if location else None
         city = location.city if location else None
         country = location.country if location else None
+        latitude, longitude = (location.coordinates or (None, None)) if location else (None, None)
         try:
             cur = self._conn.execute(
-                "INSERT INTO venues (name, chain, city, country) VALUES (?, ?, ?, ?)",
-                (name, chain, city, country),
+                "INSERT INTO venues (name, chain, city, country, latitude, longitude) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (name, chain, city, country, latitude, longitude),
             )
         except sqlite3.IntegrityError as e:
             raise StoreError(f"venue '{name}' already exists") from e
         self._conn.commit()
         # Invariant: sqlite always sets lastrowid on a successful INSERT.
         assert cur.lastrowid is not None  # nosec B101
-        return Venue(id=cur.lastrowid, name=name, chain=chain, city=city, country=country)
+        return Venue(
+            id=cur.lastrowid,
+            name=name,
+            chain=chain,
+            city=city,
+            country=country,
+            latitude=latitude,
+            longitude=longitude,
+        )
 
     def list_venues(self) -> list[Venue]:
-        rows = self._conn.execute("SELECT id, name, chain, city, country FROM venues ORDER BY name")
-        return [Venue(id=r[0], name=r[1], chain=r[2], city=r[3], country=r[4]) for r in rows]
+        rows = self._conn.execute(
+            "SELECT id, name, chain, city, country, latitude, longitude FROM venues ORDER BY name"
+        )
+        return [
+            Venue(
+                id=r[0],
+                name=r[1],
+                chain=r[2],
+                city=r[3],
+                country=r[4],
+                latitude=r[5],
+                longitude=r[6],
+            )
+            for r in rows
+        ]
 
     def get_or_create_venue(self, name: str) -> Venue:
         existing = next((v for v in self.list_venues() if v.name == name), None)
