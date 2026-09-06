@@ -118,6 +118,7 @@ uv run movie-planner sync refresh
 uv run movie-planner sync refresh --from 2026-01-01 --to 2026-01-31
 uv run movie-planner sync refresh --date 2026-01-15
 uv run movie-planner sync refresh --force --date 2026-01-15
+uv run movie-planner sync pull
 ```
 
 `show` prints one entry's full metadata — ratings, links, venue, times,
@@ -165,6 +166,19 @@ combined with either. Pass `--force` to re-fetch ratings for entries
 that already have them too — useful after a wrong OMDb match, or when a
 rating's changed since — instead of the default of only fetching for
 entries still missing one.
+
+Sync is otherwise push-only — movie-planner never reads the calendar
+back on its own. `sync pull` is the one exception: it fetches every
+event on the calendar and compares it against the local store,
+showing each new, changed, or removed entry it finds one at a time
+for approval — nothing is written without an explicit yes, and
+declining leaves it to be offered again next time. It's a manually
+run, one-shot reconciliation, not a background job — for catching up
+after using [movie-planner-web](https://github.com/alrayyes/movie-planner-web)
+to create, edit, or delete an entry directly on the calendar. See
+[`docs/calendar-schema.md`](docs/calendar-schema.md) for exactly which
+fields it compares (only OMDb's/booking's own structured `X-*`
+properties — never the free-text description).
 
 A large historical import (years of entries at once) can exceed OMDb's
 daily request limit before it finishes. Pass `--no-metadata` to `import`
