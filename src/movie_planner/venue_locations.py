@@ -62,8 +62,16 @@ def _add(
 _PATHE = {"chain": "Pathé", "city": "Amsterdam", "country": "Netherlands"}
 # "Pathé Tuschinski" - the ticketbevestiging/reservering templates' own
 # cinema capture before movie-planner#227's fix stripped the trailing
-# ", Amsterdam" off it.
-_add(["Tuschinski", "Pathé Tuschinski"], **_PATHE, coordinates=(52.3665062, 4.8947073))
+# ", Amsterdam" off it. "Pathé Tuschinski, Amsterdam" (with the city
+# still attached) is the *pre-#227* shape of that same capture - a
+# one-time-only alias for rows already sitting in a database from
+# before the parser fix landed; no future parse will ever produce this
+# exact string again, since the parser itself is already fixed.
+_add(
+    ["Tuschinski", "Pathé Tuschinski", "Pathé Tuschinski, Amsterdam"],
+    **_PATHE,
+    coordinates=(52.3665062, 4.8947073),
+)
 _add(
     [
         "De Munt",
@@ -77,15 +85,17 @@ _add(
         # verbatim capture from the historical gmail archive, source
         # template not identified.
         "Pathe de Munt",
+        # Pre-#227 shape, same reasoning as Tuschinski above.
+        "Pathé De Munt, Amsterdam",
     ],
     **_PATHE,
     coordinates=(52.3664519, 4.8934706),
 )
-_add(["City", "Pathé City"], **_PATHE, coordinates=(52.3633802, 4.8838439))
+_add(["City", "Pathé City", "Pathé City, Amsterdam"], **_PATHE, coordinates=(52.3633802, 4.8838439))
 _add(
     # "Pathe Arena" (no accent) - the mobiel template's own real,
     # verbatim capture (movie-planner#200/#227).
-    ["Arena", "Pathé Arena", "Pathe Arena"],
+    ["Arena", "Pathé Arena", "Pathe Arena", "Pathé Arena, Amsterdam"],
     **_PATHE,
     coordinates=(52.3123633, 4.9457053),
 )

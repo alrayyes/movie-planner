@@ -43,6 +43,18 @@ def test_de_munt_dolby_atmos_resolves_to_the_de_munt_group() -> None:
     assert KNOWN_VENUE_LOCATIONS["De Munt Dolby Atmos"].canonical_name == "De Munt"
 
 
+def test_legacy_city_suffixed_cinema_strings_resolve_to_their_canonical_venue() -> None:
+    # The ticketbevestiging/reservering templates baked ", Amsterdam"
+    # into cinema before #227's parser fix - real rows already sitting
+    # in Ryan's database under these exact strings (a one-time-only
+    # fix; no future parse will ever produce them again, since the
+    # parser itself is already fixed).
+    assert KNOWN_VENUE_LOCATIONS["Pathé Tuschinski, Amsterdam"].canonical_name == "Tuschinski"
+    assert KNOWN_VENUE_LOCATIONS["Pathé De Munt, Amsterdam"].canonical_name == "De Munt"
+    assert KNOWN_VENUE_LOCATIONS["Pathé Arena, Amsterdam"].canonical_name == "Arena"
+    assert KNOWN_VENUE_LOCATIONS["Pathé City, Amsterdam"].canonical_name == "City"
+
+
 def test_every_known_venue_location_has_a_canonical_name_that_is_itself_a_key() -> None:
     # Every alias's canonical_name must itself be a real, resolvable key
     # in the table - otherwise resolving an alias to its canonical name
