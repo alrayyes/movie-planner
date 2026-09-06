@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.12.0...movie-planner-v1.13.0) (2026-09-06)
+
+
+### Features
+
+* **pathe,calendar:** expose row/seat as X-ROW/X-SEAT ([#218](https://github.com/alrayyes/movie-planner/issues/218)) ([#228](https://github.com/alrayyes/movie-planner/issues/228)) ([352a79f](https://github.com/alrayyes/movie-planner/commit/352a79fe47daf342ca0aa449fa37c9e51d30f6e1))
+
 ## [1.12.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.11.1...movie-planner-v1.12.0) (2026-09-06)
 
 
