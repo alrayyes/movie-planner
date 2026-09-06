@@ -31,8 +31,9 @@ def build_description(
     there's nothing to show. Nothing here is persisted on `Entry`; chain
     comes from the venue, and screening details are provenance for the
     calendar event only. See design.md's "Description content" decision.
-    City/country go on LOCATION instead, not here - see `_venue_location`
-    in cli.py.
+    City/country go on LOCATION (via `_venue_location` in cli.py) and,
+    additionally, their own X-CITY/X-COUNTRY properties (issue #217) -
+    never in the description here.
     """
     lines: list[str] = []
     if entry.imdb_rating and entry.imdb_url:
@@ -163,13 +164,22 @@ class CalendarClient:
         event.delete()
 
 
-def _extra_properties(entry: Entry) -> dict[str, str]:
+def _extra_properties(
+    entry: Entry, *, city: str | None = None, country: str | None = None
+) -> dict[str, str]:
     values: dict[str, str | None] = {
         "X-POSTER-URL": entry.poster_url,
         "X-DIRECTOR": entry.director,
         "X-ACTORS": entry.actors,
         "X-GENRE": entry.genre,
         "X-YEAR": str(entry.release_year) if entry.release_year is not None else None,
+        # Additive to LOCATION's own "venue, city, country" string
+        # (issue #217) - a structured field movie-planner-web can read
+        # without parsing LOCATION apart, same "omit, never guess" rule
+        # as everything else here: only set for a venue matching the
+        # hardcoded chain/location table.
+        "X-CITY": city,
+        "X-COUNTRY": country,
     }
     return {name: value for name, value in values.items() if value}
 
@@ -187,6 +197,8 @@ class CalendarSync:
         chain: str | None = None,
         screening_details: str | None = None,
         geo: tuple[float, float] | None = None,
+        city: str | None = None,
+        country: str | None = None,
     ) -> Entry:
         # uuid7, not uuid4: time-ordered, so newly-created entries insert
         # sequentially rather than at a random point - and it's already
@@ -200,7 +212,7 @@ class CalendarSync:
             end_time=entry.end_time,
             venue=venue,
             description=build_description(entry, chain=chain, screening_details=screening_details),
-            extra_properties=_extra_properties(entry),
+            extra_properties=_extra_properties(entry, city=city, country=country),
             geo=geo,
         )
         try:
@@ -217,6 +229,8 @@ class CalendarSync:
         chain: str | None = None,
         screening_details: str | None = None,
         geo: tuple[float, float] | None = None,
+        city: str | None = None,
+        country: str | None = None,
     ) -> None:
         if entry.caldav_uid is None:
             raise CalendarSyncError(f"'{entry.title}' has never been synced to the calendar")
@@ -228,7 +242,7 @@ class CalendarSync:
             end_time=entry.end_time,
             venue=venue,
             description=build_description(entry, chain=chain, screening_details=screening_details),
-            extra_properties=_extra_properties(entry),
+            extra_properties=_extra_properties(entry, city=city, country=country),
             geo=geo,
         )
         try:

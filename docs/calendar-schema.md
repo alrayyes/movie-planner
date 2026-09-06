@@ -69,6 +69,12 @@ either.
   - **`X-YEAR`** — the release year, as a plain integer string (for
     example `2021`) - not the watched date, which is `DTSTART`/`DTEND`
     instead.
+  - **`X-CITY`**/**`X-COUNTRY`** — a venue matching the hardcoded
+    chain/location table below, same source as the `city`/`country`
+    already baked into `LOCATION` (issue #217) - a structured field a
+    reader can consume without parsing `LOCATION` apart. Additive, not
+    a replacement, same "omit, never guess" rule `GEO` already
+    follows: a venue not in the table gets neither property.
 
 A real example — an entry at a known venue, with a genre tag and
 coordinates on record, exactly as `build_vevent` produces it:
