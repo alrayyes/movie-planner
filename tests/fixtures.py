@@ -183,3 +183,32 @@ def _build_pathe_legacy_html_email() -> str:
 
 
 PATHE_EMAIL_LEGACY_HTML = _build_pathe_legacy_html_email()
+
+# The real shape movie-planner#191 found: a real Pathé confirmation
+# whose PDF ticket attachment is mislabeled Content-Type: text/plain
+# by Pathé's own mail template - Content-Disposition: attachment is
+# still correct, and is the signal that should exclude it from ever
+# being picked as the message body. Reuses #158's real HTML booking
+# body (same template, already handled once the real body is reached).
+PATHE_MISLABELED_ATTACHMENT_BOOKING_REF = PATHE_HTML_BOOKING_REF
+
+
+def _build_pathe_mislabeled_attachment_email() -> str:
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    msg["From"] = "Pathé <no-reply@service.pathe.nl>"
+    msg["To"] = "moviewatcher@example.com"
+    msg["Subject"] = "🎫 Ticketconfirmation Pathé"
+    msg["Date"] = "Sun, 09 Aug 2026 11:27:15 +0000"
+    msg.set_content(_PATHE_HTML_BODY, subtype="html")
+    msg.add_attachment(
+        b"fake ticket attachment content 0123456789, not a real PDF",
+        maintype="text",
+        subtype="plain",
+        filename="E-billet.pdf",
+    )
+    return msg.as_string()
+
+
+PATHE_EMAIL_MISLABELED_ATTACHMENT = _build_pathe_mislabeled_attachment_email()
