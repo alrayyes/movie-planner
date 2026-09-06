@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.10.0...movie-planner-v1.10.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* **ci:** make the test job actually fail when pytest fails ([#212](https://github.com/alrayyes/movie-planner/issues/212)) ([#213](https://github.com/alrayyes/movie-planner/issues/213)) ([ab23a5b](https://github.com/alrayyes/movie-planner/commit/ab23a5b743d57d91900f1b1bbe190508b02ace07))
+
 ## [1.10.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.9.6...movie-planner-v1.10.0) (2026-09-06)
 
 
