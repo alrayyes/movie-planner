@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.5.2...movie-planner-v1.5.3) (2026-09-06)
+
+
+### Bug Fixes
+
+* **sync:** recover when an entry's caldav_uid is stale ([#172](https://github.com/alrayyes/movie-planner/issues/172)) ([3ecbe01](https://github.com/alrayyes/movie-planner/commit/3ecbe0149ca20fcfb9c7013cbcc1893bef41b23d)), closes [#166](https://github.com/alrayyes/movie-planner/issues/166)
+
 ## [1.5.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.5.1...movie-planner-v1.5.2) (2026-09-05)
 
 
