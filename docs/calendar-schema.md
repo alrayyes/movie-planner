@@ -154,16 +154,20 @@ consumer reading the calendar only ever sees the result on
 data available" apart from "not in the table at all"; both just omit
 the fields.
 
-**Known gap (issue #196):** a venue name that bakes a screen/format
-into it ("De Munt 4DX", "De Munt Dolby Atmos") already resolves to the
-_same_ chain/city/country/coordinates as its plain-name counterpart
-("De Munt") - but each distinct string still becomes its own separate
-`Venue` row, so `list --chain`/`--city`, a venue picklist, or any
-per-venue count sees them as different venues. Not yet fixed - a
-venue-identity migration is scoped in #196, pending sign-off before
-implementation (it rewrites real historical data: local venue rows,
-and, via a re-push, real calendar `LOCATION` values already sitting on
-someone's CalDAV server).
+**Venue identity (issue #196):** a venue name that bakes a screen/
+format into it ("De Munt 4DX", "De Munt Dolby Atmos") already resolves
+to the _same_ chain/city/country/coordinates as its plain-name
+counterpart ("De Munt") via `KNOWN_VENUE_LOCATIONS`'s `canonical_name`
+
+- `log`/`import`/`locations venues add` all resolve a known alias to
+  its canonical venue automatically now, rather than creating a second
+  row for it. A database with venue rows split before this fix landed
+  still needs a one-time `locations venues merge-aliases` run (dry-run
+  by default; `--apply` to actually reassign entries and remove the
+  orphaned alias rows) - and, separately, a `sync refresh --force` over
+  the affected date range afterward, since the migration only touches
+  the local store and never rewrites an already-pushed calendar event's
+  `LOCATION` on its own.
 
 Screening details aren't stored anywhere on the entry itself — only
 `from-pathe-email` ever supplies them for a push. `sync refresh`,

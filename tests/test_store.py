@@ -627,6 +627,169 @@ def test_get_or_create_venue_creates_when_missing(store: Store) -> None:
     assert store.list_venues() == [venue]
 
 
+# --- alias resolution: issue #196 ---
+
+
+def test_add_venue_with_a_known_alias_creates_the_canonical_venue_instead(store: Store) -> None:
+    venue = store.add_venue("De Munt 4DX")
+
+    assert venue.name == "De Munt"
+    assert venue.chain == "Pathé"
+
+
+def test_get_or_create_venue_resolves_a_known_alias_to_its_canonical_venue(store: Store) -> None:
+    venue = store.get_or_create_venue("De Munt 4DX")
+
+    assert venue.name == "De Munt"
+    assert store.list_venues() == [venue]
+
+
+def test_get_or_create_venue_with_two_different_aliases_returns_the_same_venue(
+    store: Store,
+) -> None:
+    first = store.get_or_create_venue("De Munt 4DX")
+    second = store.get_or_create_venue("De Munt Relax")
+
+    assert first == second
+    assert len(store.list_venues()) == 1
+
+
+def test_get_or_create_venue_with_an_alias_finds_an_already_canonical_venue(
+    store: Store,
+) -> None:
+    canonical = store.add_venue("De Munt")
+
+    fetched = store.get_or_create_venue("De Munt 4DX")
+
+    assert fetched == canonical
+    assert len(store.list_venues()) == 1
+
+
+# --- merge_venue_aliases: issue #196's migration for already-split data ---
+#
+# `add_venue`/`get_or_create_venue` above stop a *new* alias-named row
+# from ever being created - these tests are about data that predates
+# that fix, so they seed a legacy split venue row directly via SQL
+# rather than through the store's own (now alias-resolving) API, the
+# same way test_migration_backfills_location_for_an_existing_known_venue
+# above simulates pre-migration data.
+
+
+def _seed_legacy_venue(store: Store, name: str) -> int:
+    cur = store._conn.execute("INSERT INTO venues (name) VALUES (?)", (name,))
+    store._conn.commit()
+    assert cur.lastrowid is not None  # nosec B101
+    return cur.lastrowid
+
+
+def test_dry_run_reports_a_merge_without_changing_anything(store: Store) -> None:
+    alias_id = _seed_legacy_venue(store, "De Munt 4DX")
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(
+        title="Dune", date=date(2024, 3, 15), medium_id=medium.id, venue_id=alias_id
+    )
+
+    (merge,) = store.merge_venue_aliases(apply=False)
+
+    assert merge.alias_name == "De Munt 4DX"
+    assert merge.canonical_name == "De Munt"
+    assert merge.entries_moved == 1
+    assert merge.canonical_venue_id is None  # doesn't exist yet - not created by a dry run
+    # Nothing actually changed:
+    assert [v.name for v in store.list_venues()] == ["De Munt 4DX"]
+    assert store.get_entry(entry.id).venue_id == alias_id
+
+
+def test_dry_run_finds_an_already_existing_canonical_venue(store: Store) -> None:
+    canonical = store.add_venue("De Munt")
+    _seed_legacy_venue(store, "De Munt 4DX")
+
+    (merge,) = store.merge_venue_aliases(apply=False)
+
+    assert merge.canonical_venue_id == canonical.id
+
+
+def test_apply_creates_the_canonical_venue_and_moves_entries(store: Store) -> None:
+    alias_id = _seed_legacy_venue(store, "De Munt 4DX")
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(
+        title="Dune", date=date(2024, 3, 15), medium_id=medium.id, venue_id=alias_id
+    )
+
+    (merge,) = store.merge_venue_aliases(apply=True)
+
+    assert merge.entries_moved == 1
+    venues = store.list_venues()
+    assert [v.name for v in venues] == ["De Munt"]
+    canonical = venues[0]
+    assert merge.canonical_venue_id == canonical.id
+    assert store.get_entry(entry.id).venue_id == canonical.id
+
+
+def test_apply_reuses_an_already_existing_canonical_venue(store: Store) -> None:
+    canonical = store.add_venue("De Munt")
+    alias_id = _seed_legacy_venue(store, "De Munt 4DX")
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(
+        title="Dune", date=date(2024, 3, 15), medium_id=medium.id, venue_id=alias_id
+    )
+
+    store.merge_venue_aliases(apply=True)
+
+    assert [v.name for v in store.list_venues()] == ["De Munt"]
+    assert store.get_entry(entry.id).venue_id == canonical.id
+
+
+def test_apply_merges_multiple_alias_venues_into_one_canonical_venue(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    alias_a = _seed_legacy_venue(store, "De Munt 4DX")
+    alias_b = _seed_legacy_venue(store, "De Munt Relax")
+    entry_a = store.create_entry(
+        title="Dune", date=date(2024, 3, 15), medium_id=medium.id, venue_id=alias_a
+    )
+    entry_b = store.create_entry(
+        title="Nope", date=date(2024, 3, 16), medium_id=medium.id, venue_id=alias_b
+    )
+
+    merges = store.merge_venue_aliases(apply=True)
+
+    assert {m.alias_name for m in merges} == {"De Munt 4DX", "De Munt Relax"}
+    venues = store.list_venues()
+    assert [v.name for v in venues] == ["De Munt"]
+    canonical_id = venues[0].id
+    assert store.get_entry(entry_a.id).venue_id == canonical_id
+    assert store.get_entry(entry_b.id).venue_id == canonical_id
+
+
+def test_apply_removes_the_orphaned_alias_row_even_with_no_entries(store: Store) -> None:
+    _seed_legacy_venue(store, "De Munt 4DX")
+
+    store.merge_venue_aliases(apply=True)
+
+    # The alias row itself is gone; the canonical venue still gets
+    # created even though nothing referenced the alias to move over.
+    assert [v.name for v in store.list_venues()] == ["De Munt"]
+
+
+def test_no_aliases_present_returns_an_empty_list_and_changes_nothing(store: Store) -> None:
+    store.add_venue("De Munt")
+    store.add_venue("Grand Vista Cinema")
+
+    merges = store.merge_venue_aliases(apply=True)
+
+    assert merges == []
+    assert {v.name for v in store.list_venues()} == {"De Munt", "Grand Vista Cinema"}
+
+
+def test_a_venue_not_in_the_known_table_is_never_touched(store: Store) -> None:
+    store.add_venue("Grand Vista Cinema")
+
+    merges = store.merge_venue_aliases(apply=True)
+
+    assert merges == []
+    assert [v.name for v in store.list_venues()] == ["Grand Vista Cinema"]
+
+
 def test_close_does_not_raise(store: Store) -> None:
     store.close()
 

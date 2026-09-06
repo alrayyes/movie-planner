@@ -1070,6 +1070,60 @@ def test_locations_venues_add_list_remove(config_path: Path) -> None:
     assert remove.exit_code == 0, remove.output
 
 
+# --- venues merge-aliases: issue #196 ---
+
+
+def test_venues_merge_aliases_dry_run_by_default_reports_without_changing(
+    config_path: Path,
+) -> None:
+    store = _store(config_path)
+    store._conn.execute("INSERT INTO venues (name) VALUES ('De Munt 4DX')")
+    store._conn.commit()
+    store.close()
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "locations", "venues", "merge-aliases"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "De Munt 4DX" in result.output
+    assert "De Munt" in result.output
+    assert "--apply" in result.output
+    store = _store(config_path)
+    try:
+        assert [v.name for v in store.list_venues()] == ["De Munt 4DX"]
+    finally:
+        store.close()
+
+
+def test_venues_merge_aliases_apply_actually_merges(config_path: Path) -> None:
+    store = _store(config_path)
+    store._conn.execute("INSERT INTO venues (name) VALUES ('De Munt 4DX')")
+    store._conn.commit()
+    store.close()
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "locations", "venues", "merge-aliases", "--apply"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "De Munt 4DX" in result.output
+    store = _store(config_path)
+    try:
+        assert [v.name for v in store.list_venues()] == ["De Munt"]
+    finally:
+        store.close()
+
+
+def test_venues_merge_aliases_with_nothing_to_merge_says_so(config_path: Path) -> None:
+    result = runner.invoke(
+        app, ["--config", str(config_path), "locations", "venues", "merge-aliases"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "nothing to merge" in result.output.lower()
+
+
 def test_locations_remove_medium_in_use_is_rejected(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None
 ) -> None:

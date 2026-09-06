@@ -1032,6 +1032,47 @@ def venues_remove(
         store.close()
 
 
+@venues_app.command("merge-aliases")
+def venues_merge_aliases(
+    ctx: typer.Context,
+    apply: Annotated[
+        bool,
+        typer.Option(
+            "--apply",
+            help="Actually perform the merge - reassign every affected entry's venue and "
+            "delete the now-orphaned alias venue rows. Without this, nothing changes; only "
+            "a summary of what would happen is printed (issue #196).",
+        ),
+    ] = False,
+) -> None:
+    """Collapse venue rows that are really the same real-world venue,
+    just logged with a screen/format suffix baked into the name (e.g.
+    "De Munt 4DX" alongside "De Munt") - fixes rows created before
+    `log`/`import`/`add` started resolving these automatically.
+    Doesn't touch the calendar - a merged venue's already-pushed
+    events still show the old LOCATION string until `sync refresh
+    --force` re-pushes them.
+    """
+    cfg = _cfg(ctx)
+    store = _open_store(cfg)
+    try:
+        merges = store.merge_venue_aliases(apply=apply)
+        if not merges:
+            typer.echo("No alias venues found - nothing to merge.")
+            return
+        verb = "Merged" if apply else "Would merge"
+        for merge in merges:
+            entries_word = "entry" if merge.entries_moved == 1 else "entries"
+            typer.echo(
+                f"{verb} '{merge.alias_name}' into '{merge.canonical_name}' "
+                f"({merge.entries_moved} {entries_word})"
+            )
+        if not apply:
+            typer.echo("\nDry run - pass --apply to actually perform this merge.")
+    finally:
+        store.close()
+
+
 # --- import: requirements "Import from CSV/JSON", "Import summary" ---
 
 

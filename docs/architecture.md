@@ -80,14 +80,16 @@ fields](calendar-schema.md)) - not each other's internals.
 
 For anyone (human or agent) picking this project up mid-thread:
 
-- **Venue identity** (issue #196): a venue name that bakes a screen or
-  format into it ("De Munt 4DX") already resolves to the same chain/
-  city/country/coordinates as its plain-name counterpart ("De Munt"),
-  but still becomes its own separate venue row - `movie-planner-web`'s
-  Venues page, and any local `list --chain`/`--city` count, sees them
-  as different places. Diagnosed, not yet fixed - a real data-model
-  change plus a migration over already-logged history, scoped in the
-  issue, waiting on sign-off before implementation starts.
+- **Venue identity** (issue #196): fixed in code - `add_venue`/
+  `get_or_create_venue` now resolve a known screen/format-suffixed
+  alias ("De Munt 4DX") to its canonical venue ("De Munt") before
+  ever creating a row, via `KNOWN_VENUE_LOCATIONS`'s new
+  `canonical_name`. A database with venue rows already split before
+  this landed (Ryan's real one included) still needs the one-time
+  `locations venues merge-aliases` migration run against it (dry-run
+  by default) and a `sync refresh --force` afterward to fix any
+  already-pushed calendar `LOCATION` values - not yet run against the
+  real data as of this note.
 - **`sync` can't tell "the calendar was rebuilt" from "an entry never
   synced"** the cheap way: `sync retry` only ever looks at entries with
   no `caldav_uid` at all, so it can't recover one whose `caldav_uid`
