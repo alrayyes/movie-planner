@@ -57,6 +57,33 @@ def test_load_config_reads_mbox_source(tmp_path: Path) -> None:
     config = load_config(config_path)
 
     assert config.source == MboxSource(path=Path("~/Mail/INBOX").expanduser())
+    assert config.source.extra_paths == ()
+
+
+def test_load_config_reads_mbox_extra_paths(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        """
+[mail]
+source = "mbox"
+
+[mail.mbox]
+path = "~/Mail/INBOX"
+extra_paths = ["~/Mail/Archive", "~/Mail/Sent"]
+
+[[chains]]
+sender_domain = "pathe.nl"
+translate = "pathe-translate"
+"""
+    )
+
+    config = load_config(config_path)
+
+    assert isinstance(config.source, MboxSource)
+    assert config.source.extra_paths == (
+        Path("~/Mail/Archive").expanduser(),
+        Path("~/Mail/Sent").expanduser(),
+    )
 
 
 NAMESPACED_CONFIG = """
@@ -95,6 +122,16 @@ def test_load_config_prefers_the_namespaced_section_when_both_are_present(
     config = load_config(config_path)
 
     assert config.source == MboxSource(path=Path("~/Mail/Other").expanduser())
+
+
+def test_load_config_rejects_a_non_list_extra_paths(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        MBOX_CONFIG.replace("[mail.mbox]", '[mail.mbox]\nextra_paths = "not-a-list"')
+    )
+
+    with pytest.raises(MailConfigError, match="extra_paths"):
+        load_config(config_path)
 
 
 def test_load_config_rejects_an_unknown_source_kind(tmp_path: Path) -> None:

@@ -14,8 +14,9 @@ from movie_planner.mail_import.envelope import MailFetchError, sender_domain
 
 
 class MboxMailClient:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, extra_paths: Sequence[Path] = ()) -> None:
         self._path = path
+        self._extra_paths = tuple(extra_paths)
 
     def fetch(
         self,
@@ -24,14 +25,29 @@ class MboxMailClient:
         since: datetime | None = None,
         until: datetime | None = None,
     ) -> Iterable[str]:
-        if not self._path.is_file():
-            raise MailFetchError(f"mbox file not found: {self._path}")
-
         wanted = {d.lower() for d in sender_domains}
+        seen_message_ids: set[str] = set()
+        for path in (self._path, *self._extra_paths):
+            yield from self._fetch_one(
+                path, wanted=wanted, since=since, until=until, seen_message_ids=seen_message_ids
+            )
+
+    def _fetch_one(
+        self,
+        path: Path,
+        *,
+        wanted: set[str],
+        since: datetime | None,
+        until: datetime | None,
+        seen_message_ids: set[str],
+    ) -> Iterable[str]:
+        if not path.is_file():
+            raise MailFetchError(f"mbox file not found: {path}")
+
         try:
-            box = mailbox.mbox(str(self._path), create=False)
+            box = mailbox.mbox(str(path), create=False)
         except OSError as e:
-            raise MailFetchError(f"could not read mbox file {self._path}: {e}") from e
+            raise MailFetchError(f"could not read mbox file {path}: {e}") from e
 
         try:
             for message in box:
@@ -52,6 +68,16 @@ class MboxMailClient:
                     continue
                 if until is not None and message_date >= until:
                     continue
+
+                # Only a real, present Message-ID is a reliable enough
+                # identity to de-duplicate on (issue #188, for a message
+                # that ends up in more than one configured mbox file) -
+                # a message with none is never skipped for "already seen".
+                message_id = message.get("Message-ID")
+                if message_id is not None:
+                    if message_id in seen_message_ids:
+                        continue
+                    seen_message_ids.add(str(message_id))
 
                 yield message.as_string()
         finally:

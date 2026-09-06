@@ -381,6 +381,40 @@ def test_fetch_envelopes_only_prints_one_json_line_per_message_no_output_file(
     assert all({"from", "subject", "date", "body"} <= e.keys() for e in envelopes)
 
 
+# --- mail.mbox.extra_paths: issue #188 ---
+
+
+def test_fetch_scans_extra_mbox_paths_too(tmp_path: Path) -> None:
+    archive_fixture = Path(__file__).parent / "fixtures" / "sample_archive.mbox"
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f"""\
+[mail]
+source = "mbox"
+
+[mail.mbox]
+path = "{FIXTURE_MBOX}"
+extra_paths = ["{archive_fixture}"]
+
+[[chains]]
+sender_domain = "example-chain.com"
+translate = "irrelevant - not dispatched in this mode"
+"""
+    )
+
+    result = runner.invoke(app, ["fetch", "--config", str(config_path), "--envelopes-only"])
+
+    assert result.exit_code == 0, result.output
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    envelopes = [json.loads(line) for line in lines]
+    subjects = [e["subject"] for e in envelopes]
+    # The archive-only booking is present, and the message shared by
+    # both files (same Message-ID) isn't double-counted.
+    assert "An archived booking confirmation" in subjects
+    assert subjects.count("Your booking confirmation") == 1
+    assert len(subjects) == 3
+
+
 def test_fetch_envelopes_only_with_no_matches_prints_nothing(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(
