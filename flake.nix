@@ -141,17 +141,20 @@
             typer
           ];
 
-          # nixos-unstable's icalendar (7.2.2) and typer (0.25.1) are both
-          # older than this project's own exact pins (icalendar==7.3,
-          # typer==0.27.1) — confirmed live: pythonRuntimeDepsCheckHook
-          # enforces the built wheel's own `==` metadata against what's
-          # actually resolved and fails outright otherwise ("icalendar==7.3
-          # not satisfied by version 7.2.2"). Relaxed rather than overridden
-          # to non-nixpkgs versions (the way uv-build is, above) — same
+          # nixos-unstable's icalendar (7.2.2), typer (0.25.1), and
+          # tomlkit (0.15.0) all lag behind this project's own exact
+          # pins (icalendar==7.3, typer==0.27.1, tomlkit==0.15.1) —
+          # confirmed live: pythonRuntimeDepsCheckHook enforces the
+          # built wheel's own `==` metadata against what's actually
+          # resolved and fails outright otherwise ("icalendar==7.3 not
+          # satisfied by version 7.2.2", "tomlkit==0.15.1 not satisfied
+          # by version 0.15.0"). Relaxed rather than overridden to
+          # non-nixpkgs versions (the way uv-build is, above) — same
           # "use nixpkgs' own versions" tradeoff the `dependencies` list
           # just above already makes.
           pythonRelaxDeps = [
             "icalendar"
+            "tomlkit"
             "typer"
           ];
 
