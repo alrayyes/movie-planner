@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.9.0...movie-planner-v1.9.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* **pathe:** never treat an attachment-disposed part as the body ([#194](https://github.com/alrayyes/movie-planner/issues/194)) ([fcb9002](https://github.com/alrayyes/movie-planner/commit/fcb9002d57506a13b9e9d779a655406a4f997c5e)), closes [#193](https://github.com/alrayyes/movie-planner/issues/193)
+
 ## [1.9.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.8.1...movie-planner-v1.9.0) (2026-09-06)
 
 
