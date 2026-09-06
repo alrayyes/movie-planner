@@ -6,6 +6,7 @@ See design.md's "Email parsing" decision.
 import email
 import email.policy
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time
 
@@ -202,14 +203,34 @@ def _parse_html_derived_shape(body: str) -> PatheBooking | None:
     )
 
 
+@dataclass(frozen=True)
+class _Template:
+    """One named, dated Pathé confirmation template - self-documenting
+    (`name`/`era` say which real emails this is for) and independently
+    testable, rather than an ever-growing `or`-chain where nothing
+    records which era a given regex is even for (movie-planner#200).
+    Tried in the order listed below; the first match wins.
+    """
+
+    name: str
+    era: str
+    parse: Callable[[str], PatheBooking | None]
+
+
+_TEMPLATES: tuple[_Template, ...] = (
+    _Template("plain-text", "original template", _parse_plain_text_shape),
+    _Template("html-derived", "2026, HTML-only (#158)", _parse_html_derived_shape),
+    _Template(
+        "html-legacy-wording", "2026, third template (#171)", _parse_html_legacy_wording_shape
+    ),
+)
+
+
 def parse_pathe_email(raw: str) -> PatheBooking:
     body = _extract_body(raw)
 
-    booking = (
-        _parse_plain_text_shape(body)
-        or _parse_html_derived_shape(body)
-        or _parse_html_legacy_wording_shape(body)
-    )
-    if booking is None:
-        raise PatheEmailParseError("could not parse this as a Pathé booking confirmation email")
-    return booking
+    for template in _TEMPLATES:
+        booking = template.parse(body)
+        if booking is not None:
+            return booking
+    raise PatheEmailParseError("could not parse this as a Pathé booking confirmation email")
