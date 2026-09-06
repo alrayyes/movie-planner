@@ -57,19 +57,44 @@ def callback(
     ctx: typer.Context,
     config: Annotated[
         Path | None,
-        typer.Option(help="Path to config.toml. Defaults to the XDG config location."),
+        typer.Option(
+            help="Path to config.toml. Defaults to the XDG config location "
+            "($XDG_CONFIG_HOME/movie-planner/config.toml, or ~/.config/movie-planner/config.toml "
+            "if that's unset). Point this elsewhere to run against a second account or a "
+            "test database without touching the default file."
+        ),
     ] = None,
     caldav_url: Annotated[
-        str | None, typer.Option(help="Override caldav.url from the config file.")
+        str | None,
+        typer.Option(
+            help="Override caldav.url from the config file for this one invocation - the "
+            "config file stays the persisted default; this is for a throwaway run against a "
+            "different calendar. Also settable as $MOVIE_PLANNER_CALDAV_URL, for scripting "
+            "without a second config file."
+        ),
     ] = None,
     caldav_username: Annotated[
-        str | None, typer.Option(help="Override caldav.username from the config file.")
+        str | None,
+        typer.Option(
+            help="Override caldav.username from the config file for this one invocation. "
+            "Also settable as $MOVIE_PLANNER_CALDAV_USERNAME."
+        ),
     ] = None,
     omdb_api_key: Annotated[
-        str | None, typer.Option(help="Override omdb.api_key from the config file.")
+        str | None,
+        typer.Option(
+            help="Override omdb.api_key from the config file for this one invocation - useful "
+            "for trying a different key (a higher-tier plan, a per-CI key) without editing the "
+            "config file. Also settable as $MOVIE_PLANNER_OMDB_API_KEY."
+        ),
     ] = None,
     db_path: Annotated[
-        Path | None, typer.Option(help="Override storage.db_path from the config file.")
+        Path | None,
+        typer.Option(
+            help="Override storage.db_path from the config file for this one invocation - "
+            "point at a scratch database for testing, or a second one for a different movie "
+            "log, without editing the config file. Also settable as $MOVIE_PLANNER_DB_PATH."
+        ),
     ] = None,
 ) -> None:
     """movie-planner: log watched movies and sync them to a calendar."""
@@ -195,7 +220,15 @@ def _cfg(ctx: typer.Context) -> config_module.Config:
 def init(
     ctx: typer.Context,
     force: Annotated[
-        bool, typer.Option("--force", help="Overwrite an existing config file.")
+        bool,
+        typer.Option(
+            "--force",
+            help="Overwrite the whole file, including any [mail_import] section "
+            "pathe-mail-import already wrote there (issue #157). Without --force, adding "
+            "movie-planner's own [movie_planner] section to a file that already has one is "
+            "refused rather than silently replacing it - --force is the explicit 'yes, "
+            "start over' for that.",
+        ),
     ] = False,
 ) -> None:
     """Write a starter config.toml, ready to edit. Prompts for the
@@ -432,29 +465,92 @@ def _venue_geo(venue: Venue | None) -> tuple[float, float] | None:
 @app.command()
 def log(
     ctx: typer.Context,
-    title: Annotated[str | None, typer.Option(help="Movie title.")] = None,
+    title: Annotated[
+        str | None,
+        typer.Option(help="Movie title. Prompted for if omitted and running in a terminal."),
+    ] = None,
     entry_date: Annotated[
-        str | None, typer.Option("--date", help="Date watched (YYYY-MM-DD).")
+        str | None,
+        typer.Option(
+            "--date",
+            help="Date watched (YYYY-MM-DD). Prompted for if omitted and running in a "
+            "terminal. This alone (no start/end time) makes an all-day calendar event.",
+        ),
     ] = None,
-    start_time: Annotated[str | None, typer.Option(help="Start time (HH:MM).")] = None,
-    end_time: Annotated[str | None, typer.Option(help="End time (HH:MM).")] = None,
-    medium: Annotated[str | None, typer.Option(help="Medium (e.g. cinema, netflix).")] = None,
+    start_time: Annotated[
+        str | None,
+        typer.Option(
+            help="Start time (HH:MM). Optional - omit for an all-day event. Given without "
+            "--end-time, the calendar event gets a start with no end."
+        ),
+    ] = None,
+    end_time: Annotated[
+        str | None,
+        typer.Option(
+            help="End time (HH:MM). Only meaningful together with --start-time - a bare "
+            "--end-time with no start is ignored the same as omitting both."
+        ),
+    ] = None,
+    medium: Annotated[
+        str | None,
+        typer.Option(
+            help="Medium (for example cinema, netflix, blu-ray). Determines whether --venue "
+            "applies: only a medium already marked physical (see "
+            "'locations media add --physical') can have one."
+        ),
+    ] = None,
     venue: Annotated[
-        str | None, typer.Option(help="Venue - only meaningful for a physical medium.")
+        str | None,
+        typer.Option(
+            help="Venue - only meaningful for a physical medium. A name matching the "
+            "hardcoded chain/location table (Pathé's own cinemas, GSC's, a handful of "
+            "independent Amsterdam venues) gets its chain, city, country, and GPS "
+            "coordinates filled in automatically; any other name is stored as-is, no guess."
+        ),
     ] = None,
-    imdb_id: Annotated[str | None, typer.Option(help="IMDb ID for a precise OMDb lookup.")] = None,
+    imdb_id: Annotated[
+        str | None,
+        typer.Option(
+            help="IMDb ID (e.g. tt1160419) for a precise OMDb lookup, instead of matching by "
+            "title - use this when the title alone matched the wrong film or found nothing."
+        ),
+    ] = None,
     letterboxd_url: Annotated[
-        str | None, typer.Option(help="Manually entered Letterboxd URL.")
+        str | None,
+        typer.Option(
+            help="Manually entered Letterboxd URL - movie-planner has no Letterboxd "
+            "integration, so this and --letterboxd-rating are the only way either ever "
+            "lands on the entry."
+        ),
     ] = None,
     letterboxd_rating: Annotated[
-        str | None, typer.Option(help="Manually entered Letterboxd rating.")
+        str | None, typer.Option(help="Manually entered Letterboxd rating (free text).")
     ] = None,
-    notes: Annotated[str | None, typer.Option(help="Personal notes about the viewing.")] = None,
+    notes: Annotated[
+        str | None,
+        typer.Option(
+            help="Personal notes about the viewing (who with, a reaction). Unlike Pathé "
+            "screening details, notes persist across a later 'sync refresh'/'update' that "
+            "changes nothing else about the entry."
+        ),
+    ] = None,
     no_metadata: Annotated[
-        bool, typer.Option("--no-metadata", help="Skip the OMDb lookup.")
+        bool,
+        typer.Option(
+            "--no-metadata",
+            help="Skip the OMDb lookup entirely - no ratings, poster, director, cast, "
+            "genre, or release year. Useful when OMDb's daily request cap is a concern; "
+            "backfill later with 'sync refresh'.",
+        ),
     ] = False,
     force: Annotated[
-        bool, typer.Option("--force", "-f", help="Log even if it looks like a duplicate.")
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Log even if it looks like a duplicate (same normalized title, same day) - "
+            "skips the confirmation prompt that would otherwise ask first.",
+        ),
     ] = False,
 ) -> None:
     """Interactively log a watched movie."""
@@ -545,16 +641,33 @@ def log(
 def list_entries(
     ctx: typer.Context,
     date_from: Annotated[
-        str | None, typer.Option("--from", help="Only entries on or after this date.")
+        str | None,
+        typer.Option("--from", help="Only entries on or after this date (YYYY-MM-DD)."),
     ] = None,
     date_to: Annotated[
-        str | None, typer.Option("--to", help="Only entries on or before this date.")
+        str | None,
+        typer.Option("--to", help="Only entries on or before this date (YYYY-MM-DD)."),
     ] = None,
-    medium: Annotated[str | None, typer.Option(help="Only entries with this medium.")] = None,
+    medium: Annotated[
+        str | None,
+        typer.Option(help="Only entries with this exact medium name (for example cinema)."),
+    ] = None,
     chain: Annotated[
-        str | None, typer.Option(help="Only entries at a venue in this chain.")
+        str | None,
+        typer.Option(
+            help="Only entries at a venue in this chain (for example Pathé, GSC) - only "
+            "matches a venue movie-planner already knows the chain for, from the hardcoded "
+            "chain/location table; a venue it doesn't recognize never matches any --chain "
+            "filter, regardless of the real chain."
+        ),
     ] = None,
-    city: Annotated[str | None, typer.Option(help="Only entries at a venue in this city.")] = None,
+    city: Annotated[
+        str | None,
+        typer.Option(
+            help="Only entries at a venue in this city - same known-venue-table limitation "
+            "as --chain."
+        ),
+    ] = None,
 ) -> None:
     """List logged entries."""
     cfg = _cfg(ctx)
@@ -675,20 +788,56 @@ def show(
 def update(
     ctx: typer.Context,
     entry_id: Annotated[int, typer.Argument(help="ID of the entry to update.")],
-    title: Annotated[str | None, typer.Option(help="New title.")] = None,
-    entry_date: Annotated[str | None, typer.Option("--date", help="New date (YYYY-MM-DD).")] = None,
-    start_time: Annotated[str | None, typer.Option(help="New start time (HH:MM).")] = None,
-    end_time: Annotated[str | None, typer.Option(help="New end time (HH:MM).")] = None,
-    medium: Annotated[str | None, typer.Option(help="New medium.")] = None,
-    venue: Annotated[str | None, typer.Option(help="New venue.")] = None,
-    imdb_id: Annotated[
-        str | None, typer.Option(help="Re-fetch OMDb ratings for this IMDb ID.")
+    title: Annotated[
+        str | None, typer.Option(help="New title. Omit to leave the current title unchanged.")
     ] = None,
-    letterboxd_url: Annotated[str | None, typer.Option(help="New Letterboxd URL.")] = None,
-    letterboxd_rating: Annotated[str | None, typer.Option(help="New Letterboxd rating.")] = None,
-    notes: Annotated[str | None, typer.Option(help="New notes about the viewing.")] = None,
+    entry_date: Annotated[
+        str | None,
+        typer.Option("--date", help="New date (YYYY-MM-DD). Omit to leave the date unchanged."),
+    ] = None,
+    start_time: Annotated[
+        str | None,
+        typer.Option(help="New start time (HH:MM). Omit to leave the start time unchanged."),
+    ] = None,
+    end_time: Annotated[
+        str | None,
+        typer.Option(help="New end time (HH:MM). Omit to leave the end time unchanged."),
+    ] = None,
+    medium: Annotated[
+        str | None, typer.Option(help="New medium. Omit to leave the current medium unchanged.")
+    ] = None,
+    venue: Annotated[
+        str | None,
+        typer.Option(
+            help="New venue - same chain/location auto-fill as 'log' --venue. Omit to leave "
+            "the current venue unchanged."
+        ),
+    ] = None,
+    imdb_id: Annotated[
+        str | None,
+        typer.Option(
+            help="Re-fetch OMDb ratings for this specific IMDb ID, overwriting whatever "
+            "ratings/poster/director/cast/genre/year the entry already has - use this to "
+            "correct a wrong OMDb match, not to add ratings for the first time (that's "
+            "'sync refresh')."
+        ),
+    ] = None,
+    letterboxd_url: Annotated[
+        str | None,
+        typer.Option(help="New Letterboxd URL. Omit to leave the current one unchanged."),
+    ] = None,
+    letterboxd_rating: Annotated[
+        str | None,
+        typer.Option(help="New Letterboxd rating. Omit to leave the current one unchanged."),
+    ] = None,
+    notes: Annotated[
+        str | None, typer.Option(help="New notes. Omit to leave the current notes unchanged.")
+    ] = None,
 ) -> None:
-    """Update an existing logged entry."""
+    """Update an existing logged entry. Every option is optional and
+    independent - give only the fields that are actually changing;
+    anything omitted keeps its current value.
+    """
     cfg = _cfg(ctx)
     store = _open_store(cfg)
     try:
@@ -761,11 +910,20 @@ def delete(
 @media_app.command("add")
 def media_add(
     ctx: typer.Context,
-    name: Annotated[str, typer.Argument()],
+    name: Annotated[str, typer.Argument(help="Medium name (for example cinema, netflix).")],
     physical: Annotated[
-        bool, typer.Option("--physical/--no-physical", help="Is this a physical place?")
+        bool,
+        typer.Option(
+            "--physical/--no-physical",
+            help="Whether this medium is a real, physical place - a cinema, not "
+            "netflix/youtube/etc. Only a physical medium can have a --venue on 'log'/"
+            "'update', since a venue means nothing for a streaming service.",
+        ),
     ] = False,
 ) -> None:
+    """Add a medium (a way of watching something - cinema, netflix,
+    blu-ray) to the known list.
+    """
     cfg = _cfg(ctx)
     store = _open_store(cfg)
     try:
@@ -780,6 +938,7 @@ def media_add(
 
 @media_app.command("list")
 def media_list(ctx: typer.Context) -> None:
+    """List every known medium and whether it's physical."""
     cfg = _cfg(ctx)
     store = _open_store(cfg)
     try:
@@ -791,7 +950,13 @@ def media_list(ctx: typer.Context) -> None:
 
 
 @media_app.command("remove")
-def media_remove(ctx: typer.Context, name: Annotated[str, typer.Argument()]) -> None:
+def media_remove(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument(help="Medium name to remove.")],
+) -> None:
+    """Remove a medium - refused if any logged entry still references
+    it, so a name in use can't silently orphan its entries.
+    """
     cfg = _cfg(ctx)
     store = _open_store(cfg)
     try:
@@ -805,7 +970,21 @@ def media_remove(ctx: typer.Context, name: Annotated[str, typer.Argument()]) -> 
 
 
 @venues_app.command("add")
-def venues_add(ctx: typer.Context, name: Annotated[str, typer.Argument()]) -> None:
+def venues_add(
+    ctx: typer.Context,
+    name: Annotated[
+        str,
+        typer.Argument(
+            help="Venue name. A name matching the hardcoded chain/location table gets its "
+            "chain, city, country, and GPS coordinates filled in automatically; any other "
+            "name is stored as-is, never a guess. Usually unnecessary to run directly - "
+            "'log'/'update' create a venue on first use."
+        ),
+    ],
+) -> None:
+    """Add a venue to the known list directly, without logging an
+    entry at it.
+    """
     cfg = _cfg(ctx)
     store = _open_store(cfg)
     try:
@@ -820,6 +999,7 @@ def venues_add(ctx: typer.Context, name: Annotated[str, typer.Argument()]) -> No
 
 @venues_app.command("list")
 def venues_list(ctx: typer.Context) -> None:
+    """List every known venue name."""
     cfg = _cfg(ctx)
     store = _open_store(cfg)
     try:
@@ -830,7 +1010,13 @@ def venues_list(ctx: typer.Context) -> None:
 
 
 @venues_app.command("remove")
-def venues_remove(ctx: typer.Context, name: Annotated[str, typer.Argument()]) -> None:
+def venues_remove(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument(help="Venue name to remove.")],
+) -> None:
+    """Remove a venue - refused if any logged entry still references
+    it, so a name in use can't silently orphan its entries.
+    """
     cfg = _cfg(ctx)
     store = _open_store(cfg)
     try:
@@ -854,7 +1040,14 @@ def import_command(
         typer.Argument(help="CSV or JSON file to import. Omit to read JSON from stdin."),
     ] = None,
     force: Annotated[
-        bool, typer.Option("--force", help="Persist rows that look like duplicates.")
+        bool,
+        typer.Option(
+            "--force",
+            help="Persist rows that look like duplicates (same normalized title, same day as "
+            "an existing entry) instead of skipping them - a bulk-import equivalent of "
+            "confirming 'yes' to every duplicate prompt 'log' would otherwise show one at a "
+            "time.",
+        ),
     ] = False,
     no_metadata: Annotated[
         bool,
@@ -868,7 +1061,9 @@ def import_command(
 ) -> None:
     """Bulk import viewing entries from a CSV or JSON file, or pipe JSON
     (an array, or a single row object) in on stdin when no path is
-    given.
+    given. A row that already supplies every OMDb-derived field itself
+    (ratings, poster, director, actors, genre, release year) skips the
+    OMDb lookup for that row alone, regardless of --no-metadata.
     """
     cfg = _cfg(ctx)
     if path is None:
@@ -928,14 +1123,29 @@ def from_pathe_email(
             "Omit to read from stdin."
         ),
     ] = None,
-    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip the confirmation prompt.")] = False,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            help="Skip the confirmation prompt - needed for a mail-pipe automation with no "
+            "terminal attached, since the confirmation is always read from the controlling "
+            "terminal (/dev/tty), never from stdin, so piping an email in doesn't skip it "
+            "on its own.",
+        ),
+    ] = False,
     no_metadata: Annotated[
-        bool, typer.Option("--no-metadata", help="Skip the OMDb lookup.")
+        bool,
+        typer.Option(
+            "--no-metadata", help="Skip the OMDb lookup - same use case as 'log'/'import's own."
+        ),
     ] = False,
 ) -> None:
     """Parse a Pathé booking confirmation email and log or update the
     matching entry. Reads from the given file, or from stdin when no path
-    is given - e.g. `cat ticket.eml | movie-planner from-pathe-email`.
+    is given - e.g. `cat ticket.eml | movie-planner from-pathe-email`. A
+    re-sent confirmation for a booking already logged (matched by its
+    booking number) updates that entry instead of creating a second one.
     """
     cfg = _cfg(ctx)
     from_stdin = path is None
@@ -1027,7 +1237,14 @@ def from_pathe_email(
 
 @sync_app.command("retry")
 def sync_retry(ctx: typer.Context) -> None:
-    """Retry pushing any entries that failed to sync to the calendar."""
+    """Retry pushing any entry that's never been synced (its
+    caldav_uid is still unset) - cheap and safe to run any time, since
+    it never calls OMDb and only touches those entries. This is not
+    the same as recovering an entry whose caldav_uid points at an
+    event the calendar no longer has (an external wipe/rebuild) - that
+    recovery happens automatically inside a normal 'sync refresh' or
+    the next 'log'/'update' push for that specific entry, not here.
+    """
     cfg = _cfg(ctx)
     store = _open_store(cfg)
     try:
@@ -1050,19 +1267,33 @@ def sync_retry(ctx: typer.Context) -> None:
 def sync_refresh(
     ctx: typer.Context,
     date_from: Annotated[
-        str | None, typer.Option("--from", help="Only entries on or after this date.")
+        str | None,
+        typer.Option(
+            "--from",
+            help="Only entries on or after this date (YYYY-MM-DD) - combine with --to to "
+            "scope a large refresh to a range small enough to stay under OMDb's daily "
+            "request limit.",
+        ),
     ] = None,
     date_to: Annotated[
-        str | None, typer.Option("--to", help="Only entries on or before this date.")
+        str | None,
+        typer.Option("--to", help="Only entries on or before this date (YYYY-MM-DD)."),
     ] = None,
     entry_date: Annotated[
-        str | None, typer.Option("--date", help="Only entries on this exact date.")
+        str | None,
+        typer.Option(
+            "--date",
+            help="Only entries on this exact date - shorthand for --from/--to on the same "
+            "day. Can't be combined with either.",
+        ),
     ] = None,
     force: Annotated[
         bool,
         typer.Option(
             "--force",
-            help="Re-fetch OMDb ratings even for entries that already have them.",
+            help="Re-fetch OMDb ratings even for entries that already have them - useful "
+            "after a wrong OMDb match, or when a rating's changed since. Without --force, "
+            "only entries still missing at least one OMDb-derived field are fetched.",
         ),
     ] = False,
 ) -> None:
