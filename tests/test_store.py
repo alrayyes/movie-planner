@@ -164,6 +164,92 @@ def test_migration_backfills_location_for_an_existing_known_venue(tmp_path: Path
         s.close()
 
 
+def test_migration_backfills_coordinates_for_a_venue_already_migrated_by_111(
+    tmp_path: Path,
+) -> None:
+    # movie-planner#185: a real, previously-used database already ran
+    # the #111 chain/city/country migration, so those three columns
+    # are non-NULL by the time #170's coordinate backfill runs - it
+    # must not skip a venue just because chain/city/country are
+    # already set, only latitude/longitude need filling here.
+    import sqlite3
+
+    db_path = tmp_path / "movies.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE media (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            is_physical_place INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE venues (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            chain TEXT, city TEXT, country TEXT
+        );
+        CREATE TABLE entries (
+            id INTEGER PRIMARY KEY, title TEXT NOT NULL, date TEXT NOT NULL,
+            start_time TEXT, end_time TEXT,
+            medium_id INTEGER NOT NULL REFERENCES media(id),
+            venue_id INTEGER REFERENCES venues(id)
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO venues (name, chain, city, country) VALUES ('Tuschinski', 'Pathé', "
+        "'Amsterdam', 'Netherlands')"
+    )
+    conn.commit()
+    conn.close()
+
+    s = Store(db_path)
+    try:
+        (venue,) = s.list_venues()
+        assert venue.chain == "Pathé"
+        assert venue.latitude == pytest.approx(52.3665062)
+        assert venue.longitude == pytest.approx(4.8947073)
+    finally:
+        s.close()
+
+
+def test_migration_never_overwrites_an_already_set_coordinate(tmp_path: Path) -> None:
+    import sqlite3
+
+    db_path = tmp_path / "movies.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE media (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            is_physical_place INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE venues (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            chain TEXT, city TEXT, country TEXT, latitude REAL, longitude REAL
+        );
+        CREATE TABLE entries (
+            id INTEGER PRIMARY KEY, title TEXT NOT NULL, date TEXT NOT NULL,
+            start_time TEXT, end_time TEXT,
+            medium_id INTEGER NOT NULL REFERENCES media(id),
+            venue_id INTEGER REFERENCES venues(id)
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO venues (name, chain, city, country, latitude, longitude) "
+        "VALUES ('Tuschinski', 'Pathé', 'Amsterdam', 'Netherlands', 0.0, 0.0)"
+    )
+    conn.commit()
+    conn.close()
+
+    s = Store(db_path)
+    try:
+        (venue,) = s.list_venues()
+        assert venue.latitude == 0.0
+        assert venue.longitude == 0.0
+    finally:
+        s.close()
+
+
 def test_remove_venue_not_in_use(store: Store) -> None:
     store.add_venue("Grand Vista Cinema")
 

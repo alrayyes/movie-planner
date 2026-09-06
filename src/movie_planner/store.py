@@ -234,27 +234,26 @@ class Store:
         self._backfill_known_venue_locations()
 
     def _backfill_known_venue_locations(self) -> None:
-        # Only ever fills a NULL - never overwrites a value already set,
-        # whether that came from an earlier backfill or a manual edit.
-        rows = self._conn.execute(
-            "SELECT id, name FROM venues WHERE chain IS NULL AND city IS NULL AND country IS NULL"
-        )
-        for venue_id, name in rows.fetchall():
-            location = KNOWN_VENUE_LOCATIONS.get(name)
-            if location is not None:
-                latitude, longitude = location.coordinates or (None, None)
-                self._conn.execute(
-                    "UPDATE venues SET chain = ?, city = ?, country = ?, latitude = ?, "
-                    "longitude = ? WHERE id = ?",
-                    (
-                        location.chain,
-                        location.city,
-                        location.country,
-                        latitude,
-                        longitude,
-                        venue_id,
-                    ),
-                )
+        # COALESCE fills only a column that's still NULL, one column at
+        # a time - never overwrites a value already set (an earlier
+        # backfill or a manual edit), and crucially doesn't gate on
+        # every column being NULL together: a database that already
+        # ran an older migration (chain/city/country from #111) still
+        # needs this one to fill in latitude/longitude, which a single
+        # "WHERE chain IS NULL AND city IS NULL AND country IS NULL"
+        # check would skip entirely (movie-planner#185).
+        for name, location in KNOWN_VENUE_LOCATIONS.items():
+            latitude, longitude = location.coordinates or (None, None)
+            self._conn.execute(
+                "UPDATE venues SET "
+                "chain = COALESCE(chain, ?), "
+                "city = COALESCE(city, ?), "
+                "country = COALESCE(country, ?), "
+                "latitude = COALESCE(latitude, ?), "
+                "longitude = COALESCE(longitude, ?) "
+                "WHERE name = ?",
+                (location.chain, location.city, location.country, latitude, longitude, name),
+            )
 
     def close(self) -> None:
         self._conn.close()
