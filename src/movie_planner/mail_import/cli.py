@@ -254,7 +254,7 @@ def _build_client(source: ImapSource | MboxSource) -> MailClient:
         return ImapMailClient(
             host=source.host, port=source.port, username=source.username, password=source.password
         )
-    return MboxMailClient(source.path)
+    return MboxMailClient(source.path, extra_paths=source.extra_paths)
 
 
 def _print_review_table(envelopes: list[MailEnvelope]) -> None:

@@ -32,6 +32,10 @@ class ImapSource:
 @dataclass(frozen=True)
 class MboxSource:
     path: Path
+    # One or more additional mbox files to scan in the same run (issue
+    # #188) - `path` (INBOX, typically) stays the required, standard
+    # one; these are optional extras like an Archive/Sent folder.
+    extra_paths: tuple[Path, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -106,8 +110,12 @@ def _load_source(data: dict[str, object]) -> ImapSource | MboxSource:
         )
     if source_kind == "mbox":
         mbox = _require_table(mail, "mbox")
+        raw_extra_paths = mbox.get("extra_paths", [])
+        if not isinstance(raw_extra_paths, list):
+            raise MailConfigError("config's 'mail.mbox.extra_paths' must be a list")
         return MboxSource(
             path=Path(str(_require(mbox, "path", "mail.mbox.path"))).expanduser(),
+            extra_paths=tuple(Path(str(p)).expanduser() for p in raw_extra_paths),
         )
     raise MailConfigError(f"mail.source must be 'imap' or 'mbox', got '{source_kind}'")
 

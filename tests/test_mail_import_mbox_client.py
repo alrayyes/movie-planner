@@ -7,6 +7,7 @@ from movie_planner.mail_import.envelope import MailFetchError, extract_envelope
 from movie_planner.mail_import.mbox_client import MboxMailClient
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample.mbox"
+ARCHIVE_FIXTURE = Path(__file__).parent / "fixtures" / "sample_archive.mbox"
 
 
 def test_fetch_returns_only_matching_sender_domain_messages() -> None:
@@ -59,6 +60,51 @@ def test_fetch_with_no_range_returns_everything_matching() -> None:
 
 def test_fetch_missing_file_raises() -> None:
     client = MboxMailClient(Path("/nonexistent/path/to.mbox"))
+
+    with pytest.raises(MailFetchError, match="not found"):
+        list(client.fetch(["example-chain.com"]))
+
+
+# --- extra_paths: issue #188 ---
+
+
+def test_fetch_merges_messages_from_extra_paths() -> None:
+    client = MboxMailClient(FIXTURE, extra_paths=[ARCHIVE_FIXTURE])
+
+    raw_messages = list(client.fetch(["example-chain.com"]))
+    subjects = {extract_envelope(raw).subject for raw in raw_messages}
+
+    assert "An archived booking confirmation" in subjects
+    assert "Your booking confirmation" in subjects
+    assert "A second booking confirmation" in subjects
+
+
+def test_fetch_deduplicates_the_same_message_id_across_paths() -> None:
+    # sample_archive.mbox includes a copy of sample.mbox's first message
+    # (same Message-ID) - real Thunderbird archiving shouldn't produce
+    # this, but a stray copy anywhere shouldn't surface as two rows.
+    client = MboxMailClient(FIXTURE, extra_paths=[ARCHIVE_FIXTURE])
+
+    raw_messages = list(client.fetch(["example-chain.com"]))
+    subjects = [extract_envelope(raw).subject for raw in raw_messages]
+
+    assert subjects.count("Your booking confirmation") == 1
+
+
+def test_fetch_with_extra_paths_still_applies_the_since_until_range() -> None:
+    client = MboxMailClient(FIXTURE, extra_paths=[ARCHIVE_FIXTURE])
+    since = datetime(2026, 1, 1, tzinfo=UTC)
+
+    raw_messages = list(client.fetch(["example-chain.com"], since=since))
+    subjects = {extract_envelope(raw).subject for raw in raw_messages}
+
+    # The archive-only booking predates `since` and is excluded, same as
+    # any other out-of-range message.
+    assert "An archived booking confirmation" not in subjects
+
+
+def test_fetch_missing_extra_path_raises() -> None:
+    client = MboxMailClient(FIXTURE, extra_paths=[Path("/nonexistent/archive.mbox")])
 
     with pytest.raises(MailFetchError, match="not found"):
         list(client.fetch(["example-chain.com"]))

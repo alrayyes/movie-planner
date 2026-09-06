@@ -77,6 +77,7 @@ password = "..."
 
 # [mail_import.mail.mbox]
 # path = "~/Mail/INBOX"
+# extra_paths = ["~/Mail/Archive"]
 
 [[mail_import.chains]]
 sender_domain = "service.pathe.nl"
@@ -86,6 +87,13 @@ translate = "pathe-translate"
 An older config file with `[mail]`/`[[chains]]` at the top level (no
 `[mail_import]` wrapper) still loads exactly as before - nothing to
 migrate for an existing setup.
+
+For a mbox source, `path` stays the one required, standard mailbox
+(INBOX, typically) - `extra_paths` is optional, and scans one or more
+additional mbox files (for example, a `Archive` folder a mail client
+moved older messages into) in the same `fetch` run, merging the
+results (issue #188). A message present in more than one configured
+file (matched by its `Message-ID`) is only ever counted once.
 
 Real Pathé booking confirmations come from `service.pathe.nl`, not the
 bare `pathe.nl` domain - other Pathé mail (the newsletter, a club
