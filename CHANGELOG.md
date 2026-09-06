@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.6.0...movie-planner-v1.7.0) (2026-09-06)
+
+
+### Features
+
+* **cli:** prompt interactively for CalDAV/OMDb settings on init ([#180](https://github.com/alrayyes/movie-planner/issues/180)) ([d31553b](https://github.com/alrayyes/movie-planner/commit/d31553b28bb34467dc12ea48f1d795e50be0faa8))
+
 ## [1.6.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.5.5...movie-planner-v1.6.0) (2026-09-06)
 
 
