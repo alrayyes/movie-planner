@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.13.0...movie-planner-v1.13.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* **omdb:** strip the Dutch "(Originele versie)" suffix too ([#224](https://github.com/alrayyes/movie-planner/issues/224)) ([#225](https://github.com/alrayyes/movie-planner/issues/225)) ([f9f1123](https://github.com/alrayyes/movie-planner/commit/f9f1123167b9ac52786c55e8fd245ec02ee84d54))
+
 ## [1.13.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.12.0...movie-planner-v1.13.0) (2026-09-06)
 
 
