@@ -80,6 +80,29 @@ def test_init_non_interactive_mbox_source(tmp_path: Path) -> None:
     assert data["mail"]["mbox"]["path"] == str(mbox_path)
 
 
+def test_init_non_interactive_maildir_source(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    maildir_path = tmp_path / "Archive"
+
+    result = runner.invoke(
+        app,
+        [
+            "init",
+            "--config",
+            str(config_path),
+            "--source",
+            "maildir",
+            "--maildir-path",
+            str(maildir_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    data = tomllib.loads(config_path.read_text())["mail_import"]
+    assert data["mail"]["source"] == "maildir"
+    assert data["mail"]["maildir"]["path"] == str(maildir_path)
+
+
 def test_init_non_interactive_missing_required_value_fails_clearly(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
 

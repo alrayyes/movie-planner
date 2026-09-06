@@ -18,6 +18,7 @@ from movie_planner import config_file
 from movie_planner.mail_import.config import (
     ImapSource,
     MailConfigError,
+    MaildirSource,
     MboxSource,
     default_config_path,
     load_config,
@@ -31,6 +32,7 @@ from movie_planner.mail_import.envelope import (
     extract_envelope,
 )
 from movie_planner.mail_import.imap_client import ImapMailClient
+from movie_planner.mail_import.maildir_client import MaildirMailClient
 from movie_planner.mail_import.mbox_client import MboxMailClient
 
 app = typer.Typer(help="Fetches cinema booking confirmations from a mailbox and emits import.json.")
@@ -142,9 +144,12 @@ def init(
     source: Annotated[
         str | None,
         typer.Option(
-            help='Mail source: "imap" (a real mailbox, fetched live over the network) or '
+            help='Mail source: "imap" (a real mailbox, fetched live over the network), '
             '"mbox" (a local mbox-format file - mutt\'s own storage, or a Thunderbird '
-            "local folder, which is also plain mbox). Prompted for interactively if omitted."
+            'local folder, which is also plain mbox), or "maildir" (a local Maildir '
+            "directory - one file per message under cur/new/tmp, mutt's own default "
+            "local sync format, and not readable by --source mbox even with extra_paths). "
+            "Prompted for interactively if omitted."
         ),
     ] = None,
     imap_host: Annotated[
@@ -173,6 +178,13 @@ def init(
             "A second config edit can add mail.mbox.extra_paths afterward to also scan an "
             "Archive folder or similar (issue #188) - not offered as an init prompt, since "
             "most setups only need the one file."
+        ),
+    ] = None,
+    maildir_path: Annotated[
+        Path | None,
+        typer.Option(
+            help="Path to a Maildir directory (the folder containing cur/new/tmp, not one "
+            "of those subfolders itself). Required for --source maildir."
         ),
     ] = None,
     chain_sender_domain: Annotated[
@@ -224,15 +236,16 @@ def init(
         if source
         else _required(
             None,
-            prompt='Mail source ("imap" or "mbox")',
+            prompt='Mail source ("imap", "mbox" or "maildir")',
             flag="--source",
             interactive=interactive,
             default="imap",
         )
     )
-    if resolved_source not in ("imap", "mbox"):
+    if resolved_source not in ("imap", "mbox", "maildir"):
         typer.secho(
-            f"--source must be 'imap' or 'mbox', got '{resolved_source}'", fg=typer.colors.RED
+            f"--source must be 'imap', 'mbox' or 'maildir', got '{resolved_source}'",
+            fg=typer.colors.RED,
         )
         raise typer.Exit(code=1)
 
@@ -261,7 +274,7 @@ def init(
             if password_command
             else f'password = "{password}"\n'
         )
-    else:
+    elif resolved_source == "mbox":
         path = _required(
             str(mbox_path) if mbox_path else None,
             prompt="Path to the mbox file",
@@ -270,6 +283,17 @@ def init(
         )
         source_block = (
             f'[mail_import.mail]\nsource = "mbox"\n\n[mail_import.mail.mbox]\npath = "{path}"\n'
+        )
+    else:
+        path = _required(
+            str(maildir_path) if maildir_path else None,
+            prompt="Path to the Maildir directory",
+            flag="--maildir-path",
+            interactive=interactive,
+        )
+        source_block = (
+            f'[mail_import.mail]\nsource = "maildir"\n\n'
+            f'[mail_import.mail.maildir]\npath = "{path}"\n'
         )
 
     sender_domain = chain_sender_domain or _required(
@@ -298,11 +322,13 @@ def init(
     typer.echo(f"Wrote a starter config to {config_path}.")
 
 
-def _build_client(source: ImapSource | MboxSource) -> MailClient:
+def _build_client(source: ImapSource | MboxSource | MaildirSource) -> MailClient:
     if isinstance(source, ImapSource):
         return ImapMailClient(
             host=source.host, port=source.port, username=source.username, password=source.password
         )
+    if isinstance(source, MaildirSource):
+        return MaildirMailClient(source.path)
     return MboxMailClient(source.path, extra_paths=source.extra_paths)
 
 

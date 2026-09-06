@@ -6,6 +6,7 @@ from movie_planner.mail_import.config import (
     ChainConfig,
     ImapSource,
     MailConfigError,
+    MaildirSource,
     MboxSource,
     load_config,
 )
@@ -86,6 +87,29 @@ translate = "pathe-translate"
     )
 
 
+def test_load_config_reads_maildir_source(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        """
+[mail]
+source = "maildir"
+
+[mail.maildir]
+path = "~/.local/share/mail/gmail/Archive"
+
+[[chains]]
+sender_domain = "pathe.nl"
+translate = "pathe-translate"
+"""
+    )
+
+    config = load_config(config_path)
+
+    assert config.source == MaildirSource(
+        path=Path("~/.local/share/mail/gmail/Archive").expanduser()
+    )
+
+
 NAMESPACED_CONFIG = """
 [mail_import.mail]
 source = "mbox"
@@ -138,7 +162,7 @@ def test_load_config_rejects_an_unknown_source_kind(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(IMAP_CONFIG.replace('source = "imap"', 'source = "pop3"'))
 
-    with pytest.raises(MailConfigError, match="'imap' or 'mbox'"):
+    with pytest.raises(MailConfigError, match="'imap', 'mbox' or 'maildir'"):
         load_config(config_path)
 
 

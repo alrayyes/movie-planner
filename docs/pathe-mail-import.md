@@ -64,7 +64,7 @@ init` adds its own `[mail_import]` section alongside `movie-planner`'s
 
 ```toml
 [mail_import.mail]
-source = "imap"          # or "mbox"
+source = "imap"          # or "mbox", or "maildir"
 
 [mail_import.mail.imap]
 host = "127.0.0.1"
@@ -78,6 +78,9 @@ password = "..."
 # [mail_import.mail.mbox]
 # path = "~/Mail/INBOX"
 # extra_paths = ["~/Mail/Archive"]
+
+# [mail_import.mail.maildir]
+# path = "~/.local/share/mail/gmail/Archive"
 
 [[mail_import.chains]]
 sender_domain = "service.pathe.nl"
@@ -105,16 +108,16 @@ more than one folder of the same account** (issue #200). `extra_paths`
 above only adds more mbox files to a single `MboxMailClient` run - a
 completely different account (a different mailbox, possibly a different
 provider) needs its own `pathe-mail-import fetch --config <path>`
-invocation against its own config file. Worth knowing too:
-`MboxMailClient` only reads the mbox format - it can't read a Maildir
-mailbox (one message per file, mutt's own default local sync format)
-regardless of how many `extra_paths` are given. Getting at an archive
-that's only ever synced to Maildir today means either a
-`MaildirMailClient` this tool doesn't have yet, or re-syncing that
-account into a mail client that
-does use mbox for local storage (Thunderbird's own default) first - see
-[issue #208](https://github.com/alrayyes/movie-planner/issues/208) for
-the follow-up.
+invocation against its own config file, even if it's a different
+`source` kind (`--source maildir` for a mutt-synced account with no
+mbox copy, say).
+
+For a Maildir source, `path` points at the Maildir directory itself
+(the folder holding `cur`/`new`/`tmp`, not one of those three) - mutt's
+own default local sync format (issue #208), which
+`MboxMailClient`/`extra_paths` can't read regardless of how many mbox
+files are configured, since a Maildir mailbox is one file per message
+rather than a single mbox file.
 
 Run `pathe-mail-import init` to write a starter copy interactively -
 it prompts for anything not given as a flag, or fails clearly (rather

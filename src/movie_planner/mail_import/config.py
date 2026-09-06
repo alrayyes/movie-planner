@@ -39,6 +39,14 @@ class MboxSource:
 
 
 @dataclass(frozen=True)
+class MaildirSource:
+    # One Maildir directory (its own cur/new/tmp subfolders) - unlike
+    # MboxSource there's no extra_paths here yet; add it the same way if
+    # a second Maildir folder ever needs merging into one fetch run.
+    path: Path
+
+
+@dataclass(frozen=True)
 class ChainConfig:
     sender_domain: str
     translate: str
@@ -46,7 +54,7 @@ class ChainConfig:
 
 @dataclass(frozen=True)
 class MailImportConfig:
-    source: ImapSource | MboxSource
+    source: ImapSource | MboxSource | MaildirSource
     chains: tuple[ChainConfig, ...]
 
 
@@ -96,7 +104,7 @@ def _resolve_password(imap: dict[str, object]) -> str:
     )
 
 
-def _load_source(data: dict[str, object]) -> ImapSource | MboxSource:
+def _load_source(data: dict[str, object]) -> ImapSource | MboxSource | MaildirSource:
     mail = _require_table(data, "mail")
     source_kind = str(_require(mail, "source", "mail.source"))
 
@@ -117,7 +125,12 @@ def _load_source(data: dict[str, object]) -> ImapSource | MboxSource:
             path=Path(str(_require(mbox, "path", "mail.mbox.path"))).expanduser(),
             extra_paths=tuple(Path(str(p)).expanduser() for p in raw_extra_paths),
         )
-    raise MailConfigError(f"mail.source must be 'imap' or 'mbox', got '{source_kind}'")
+    if source_kind == "maildir":
+        maildir = _require_table(mail, "maildir")
+        return MaildirSource(
+            path=Path(str(_require(maildir, "path", "mail.maildir.path"))).expanduser()
+        )
+    raise MailConfigError(f"mail.source must be 'imap', 'mbox' or 'maildir', got '{source_kind}'")
 
 
 def _load_chains(data: dict[str, object]) -> tuple[ChainConfig, ...]:
