@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.9.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.8.1...movie-planner-v1.9.0) (2026-09-06)
+
+
+### Features
+
+* **mail-import:** scan an additional mbox folder alongside INBOX ([#189](https://github.com/alrayyes/movie-planner/issues/189)) ([e699766](https://github.com/alrayyes/movie-planner/commit/e6997667aa783a40d92e98f02155f9e52f9cdc2e)), closes [#188](https://github.com/alrayyes/movie-planner/issues/188)
+
+
+### Bug Fixes
+
+* **mail-import:** never treat an attachment-disposed part as the body ([#192](https://github.com/alrayyes/movie-planner/issues/192)) ([5334495](https://github.com/alrayyes/movie-planner/commit/5334495d2482764971f243644b7703b0fb83bf1c)), closes [#191](https://github.com/alrayyes/movie-planner/issues/191)
+
 ## [1.8.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.8.0...movie-planner-v1.8.1) (2026-09-06)
 
 
