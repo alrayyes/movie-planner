@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.11.1...movie-planner-v1.12.0) (2026-09-06)
+
+
+### Features
+
+* **calendar:** expose venue city/country as X-CITY/X-COUNTRY ([#217](https://github.com/alrayyes/movie-planner/issues/217)) ([#222](https://github.com/alrayyes/movie-planner/issues/222)) ([961644a](https://github.com/alrayyes/movie-planner/commit/961644aba0dbdc22588e579b58ede7fe7f582940))
+
 ## [1.11.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.11.0...movie-planner-v1.11.1) (2026-09-06)
 
 
