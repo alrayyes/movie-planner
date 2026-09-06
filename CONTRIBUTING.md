@@ -80,6 +80,22 @@ file. Tests live in `tests/`, driven through `typer.testing.CliRunner` —
 Typer's wrapper over Click's own test runner, invoking the command
 in-process rather than shelling out.
 
+## OMDb usage in issues
+
+OMDb enforces a request cap (1000/day on the free tier this project
+uses), and this codebase already avoids unnecessary calls in more than
+one place - `run_import` skips the OMDb lookup entirely for a row
+that's a detected duplicate, and `OmdbClient` caches a match per
+`(title, year)` for the life of one run so the same title looked up
+twice in a batch only makes one HTTP call. Any issue or PR touching
+`import`, `sync`, or anything else that fetches ratings should state
+that minimization explicitly as a testable acceptance criterion or
+definition-of-done item - "duplicate/already-logged entries never
+trigger a lookup," "a title looked up once in a run is never
+re-fetched" - not leave it as an implicit expectation nobody wrote
+down. Concrete and testable, the same bar `skills/write-issue/`
+already holds every acceptance criterion to.
+
 ## Commit messages
 
 [Conventional Commits](https://www.conventionalcommits.org/):
