@@ -418,6 +418,48 @@ translate = "{sys.executable} -m movie_planner.mail_import.pathe_translate"
     assert "not recognized" not in result.output
 
 
+# --- third real Pathé template: movie-planner#171 ---
+
+
+def test_fetch_recognizes_the_legacy_html_worded_template(tmp_path: Path) -> None:
+    import mailbox
+
+    from fixtures import PATHE_EMAIL_LEGACY_HTML
+
+    box = mailbox.mbox(str(tmp_path / "INBOX"))
+    try:
+        box.add(mailbox.mboxMessage(PATHE_EMAIL_LEGACY_HTML))
+    finally:
+        box.close()
+
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f"""\
+[mail]
+source = "mbox"
+
+[mail.mbox]
+path = "{tmp_path / "INBOX"}"
+
+[[chains]]
+sender_domain = "service.pathe.nl"
+translate = "{sys.executable} -m movie_planner.mail_import.pathe_translate"
+"""
+    )
+    output_path = tmp_path / "import.json"
+
+    result = runner.invoke(
+        app, ["fetch", "--config", str(config_path), "--output", str(output_path)]
+    )
+
+    assert result.exit_code == 0, result.output
+    rows = json.loads(output_path.read_text())
+    assert len(rows) == 1
+    assert rows[0]["title"] == "Insidious: Out of the Further"
+    assert rows[0]["venue"] == "Pathé City"
+    assert "not recognized" not in result.output
+
+
 # --- --since/--until: issue #159 ---
 
 

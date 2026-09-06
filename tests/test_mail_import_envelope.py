@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 
 import pytest
-from fixtures import PATHE_EMAIL_HTML_ONLY, PATHE_HTML_BOOKING_REF
+from fixtures import PATHE_EMAIL_HTML_ONLY, PATHE_EMAIL_LEGACY_HTML, PATHE_HTML_BOOKING_REF
 
 from movie_planner.mail_import.envelope import (
     MailFetchError,
@@ -74,6 +74,20 @@ def test_extract_envelope_html_fallback_collapses_nbsp_and_tags_to_plain_lines()
     envelope = extract_envelope(PATHE_EMAIL_HTML_ONLY)
 
     assert "Expected end time: 16:30" in envelope.body
+
+
+# --- non-informative text/plain alongside a real HTML part: movie-planner#171 ---
+
+
+def test_extract_envelope_falls_back_to_html_when_the_plain_part_has_no_digits() -> None:
+    # A real Pathé confirmation of this template carries a generated,
+    # non-informative text/plain alternative ("view this in an HTML-
+    # capable client") alongside the real content in HTML - it has no
+    # digits at all, unlike every genuine booking confirmation.
+    envelope = extract_envelope(PATHE_EMAIL_LEGACY_HTML)
+
+    assert "Insidious: Out of the Further" in envelope.body
+    assert "Booking number" in envelope.body
 
 
 def test_extract_envelope_with_neither_plain_nor_html_returns_empty_body() -> None:

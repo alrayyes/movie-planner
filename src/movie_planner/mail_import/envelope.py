@@ -116,15 +116,19 @@ def _html_to_text(html: str) -> str:
     return "\n".join(line for line in lines if line)
 
 
+_DIGIT_RE = re.compile(r"\d")
+
+
 def _extract_body(msg: email.message.EmailMessage) -> str:
     if not msg.is_multipart():
         return msg.get_content()  # type: ignore[no-any-return]
-    part = msg.get_body(preferencelist=("plain",))
-    if part is not None:
-        return part.get_content()  # type: ignore[no-any-return]
-    for sub in msg.walk():
-        if sub.get_content_type() == "text/plain":
-            return sub.get_content()  # type: ignore[no-any-return]
+
+    plain_part = msg.get_body(preferencelist=("plain",))
+    if plain_part is None:
+        for sub in msg.walk():
+            if sub.get_content_type() == "text/plain":
+                plain_part = sub
+                break
 
     html_part = msg.get_body(preferencelist=("html",))
     if html_part is None:
@@ -132,6 +136,18 @@ def _extract_body(msg: email.message.EmailMessage) -> str:
             if sub.get_content_type() == "text/html":
                 html_part = sub
                 break
+
+    if plain_part is not None:
+        plain_content: str = plain_part.get_content()
+        # A digit-free text/plain part alongside a real HTML
+        # alternative is a generated "view this in an HTML-capable
+        # client" placeholder, not real content (movie-planner#171) -
+        # every booking confirmation this module handles has at least
+        # one digit (a date, a time, a seat), so a plain part with none
+        # is never the one worth handing a translation script.
+        if html_part is None or _DIGIT_RE.search(plain_content):
+            return plain_content
+
     if html_part is not None:
         return _html_to_text(html_part.get_content())
 

@@ -5,9 +5,11 @@ import pytest
 from fixtures import (
     PATHE_BOOKING_REF,
     PATHE_EMAIL_HTML_ONLY,
+    PATHE_EMAIL_LEGACY_HTML,
     PATHE_EMAIL_MIME,
     PATHE_EMAIL_PLAIN,
     PATHE_HTML_BOOKING_REF,
+    PATHE_LEGACY_HTML_BOOKING_REF,
 )
 
 from movie_planner.mail_import.envelope import extract_envelope
@@ -135,3 +137,25 @@ def test_html_derived_shape_still_raises_when_reservation_number_is_missing() ->
 
     with pytest.raises(PatheEmailParseError):
         parse_pathe_email(without_ref)
+
+
+# --- HTML-derived, old-style-worded shape: movie-planner#171 ---
+#
+# A third real Pathé template - structurally like the old plain-text
+# template (title before date/time, "Booking number"/"N°...") but with
+# no "====" title underline and a source line-wrap landing inside the
+# date/time text.
+
+
+def test_parses_the_legacy_html_derived_shape() -> None:
+    stripped_body = extract_envelope(PATHE_EMAIL_LEGACY_HTML).body
+
+    booking = parse_pathe_email(stripped_body)
+
+    assert booking.title == "Insidious: Out of the Further"
+    assert booking.date == date(2026, 8, 27)
+    assert booking.start_time == time(13, 40)
+    assert booking.end_time == time(15, 46)
+    assert booking.cinema == "Pathé City"
+    assert booking.booking_ref == PATHE_LEGACY_HTML_BOOKING_REF
+    assert booking.screening_details == "Original Version, Auditorium 4 - Row 2 Seat 4"
