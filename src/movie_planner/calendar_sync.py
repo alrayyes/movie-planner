@@ -67,6 +67,7 @@ def build_vevent(
     venue: str | None,
     description: str | None = None,
     extra_properties: dict[str, str] | None = None,
+    geo: tuple[float, float] | None = None,
 ) -> str:
     """Maps a movie-log entry's date/time completeness to a VEVENT:
     date-only -> all-day, start-only -> DTSTART with no DTEND, both -> a
@@ -76,6 +77,8 @@ def build_vevent(
     bare X-NAME form, matching what movie-planner-web already reads, per
     docs/calendar-schema.md. Only set (non-empty) values belong in the
     dict; this adds whatever it's given with no further filtering.
+    `geo` is `(latitude, longitude)` for a venue with known coordinates
+    (issue #170) - omitted entirely, never guessed, when there are none.
     """
     calendar = icalendar.Calendar()
     calendar.add("prodid", "-//movie-planner//EN")
@@ -88,6 +91,8 @@ def build_vevent(
         event.add("location", venue)
     if description:
         event.add("description", description)
+    if geo is not None:
+        event.add("geo", geo)
     for name, value in (extra_properties or {}).items():
         event.add(name, value)
 
@@ -181,6 +186,7 @@ class CalendarSync:
         venue: str | None,
         chain: str | None = None,
         screening_details: str | None = None,
+        geo: tuple[float, float] | None = None,
     ) -> Entry:
         # uuid7, not uuid4: time-ordered, so newly-created entries insert
         # sequentially rather than at a random point - and it's already
@@ -195,6 +201,7 @@ class CalendarSync:
             venue=venue,
             description=build_description(entry, chain=chain, screening_details=screening_details),
             extra_properties=_extra_properties(entry),
+            geo=geo,
         )
         try:
             self._client.create_event(ical_text)
@@ -209,6 +216,7 @@ class CalendarSync:
         venue: str | None,
         chain: str | None = None,
         screening_details: str | None = None,
+        geo: tuple[float, float] | None = None,
     ) -> None:
         if entry.caldav_uid is None:
             raise CalendarSyncError(f"'{entry.title}' has never been synced to the calendar")
@@ -221,6 +229,7 @@ class CalendarSync:
             venue=venue,
             description=build_description(entry, chain=chain, screening_details=screening_details),
             extra_properties=_extra_properties(entry),
+            geo=geo,
         )
         try:
             self._client.update_event(entry.caldav_uid, ical_text)
@@ -231,7 +240,11 @@ class CalendarSync:
             # create a fresh event.
             never_synced = self._store.update_entry(entry.id, caldav_uid=None)
             self.push_new(
-                never_synced, venue=venue, chain=chain, screening_details=screening_details
+                never_synced,
+                venue=venue,
+                chain=chain,
+                screening_details=screening_details,
+                geo=geo,
             )
         except Exception as e:
             raise CalendarSyncError(

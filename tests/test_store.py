@@ -115,6 +115,20 @@ def test_add_venue_not_in_the_known_table_gets_no_location(store: Store) -> None
     assert venue.country is None
 
 
+def test_add_venue_with_known_coordinates_gets_them(store: Store) -> None:
+    venue = store.add_venue("Tuschinski")
+
+    assert venue.latitude == pytest.approx(52.3665062)
+    assert venue.longitude == pytest.approx(4.8947073)
+
+
+def test_add_venue_not_in_the_known_table_gets_no_coordinates(store: Store) -> None:
+    venue = store.add_venue("Grand Vista Cinema")
+
+    assert venue.latitude is None
+    assert venue.longitude is None
+
+
 def test_migration_backfills_location_for_an_existing_known_venue(tmp_path: Path) -> None:
     import sqlite3
 
@@ -144,6 +158,8 @@ def test_migration_backfills_location_for_an_existing_known_venue(tmp_path: Path
         (venue,) = s.list_venues()
         assert venue.chain == "Pathé"
         assert venue.city == "Amsterdam"
+        assert venue.latitude == pytest.approx(52.3665062)
+        assert venue.longitude == pytest.approx(4.8947073)
     finally:
         s.close()
 
