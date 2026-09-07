@@ -1051,6 +1051,83 @@ def test_update_changes_entry_and_propagates_to_calendar(
     store.close()
 
 
+def test_update_refresh_metadata_fetches_ratings_for_that_entry_alone(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    _log(config_path, "Dune", "2026-01-01")
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.imdb_rating is None
+    store.close()
+
+    ratings = MovieRatings(imdb="8.5/10", rotten_tomatoes="91%", metacritic="80")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: ratings)
+        result = runner.invoke(
+            app, ["--config", str(config_path), "update", str(entry.id), "--refresh-metadata"]
+        )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    refreshed = store.get_entry(entry.id)
+    assert refreshed.imdb_rating == "8.5/10"
+    store.close()
+
+
+def test_update_refresh_metadata_overwrites_existing_ratings(
+    config_path: Path, calendar: FakeCalendar
+) -> None:
+    old_ratings = MovieRatings(imdb="1.0/10", rotten_tomatoes="1%", metacritic="1")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: old_ratings)
+        _log(config_path, "Dune", "2026-01-01")
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.imdb_rating == "1.0/10"
+    store.close()
+
+    new_ratings = MovieRatings(imdb="8.5/10", rotten_tomatoes="91%", metacritic="80")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: new_ratings)
+        result = runner.invoke(
+            app, ["--config", str(config_path), "update", str(entry.id), "--refresh-metadata"]
+        )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    refreshed = store.get_entry(entry.id)
+    assert refreshed.imdb_rating == "8.5/10"
+    store.close()
+
+
+def test_update_refresh_metadata_leaves_sibling_entries_on_the_same_date_untouched(
+    config_path: Path, calendar: FakeCalendar
+) -> None:
+    dune_ratings = MovieRatings(imdb="8.5/10", rotten_tomatoes="91%", metacritic="80")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: dune_ratings)
+        _log(config_path, "Dune", "2026-01-01")
+        _log(config_path, "Arrival", "2026-01-01")
+    store = _store(config_path)
+    entries = {e.title: e for e in store.list_entries()}
+    dune = entries["Dune"]
+    arrival = entries["Arrival"]
+    store.close()
+
+    new_ratings = MovieRatings(imdb="9.9/10", rotten_tomatoes="99%", metacritic="99")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: new_ratings)
+        result = runner.invoke(
+            app, ["--config", str(config_path), "update", str(dune.id), "--refresh-metadata"]
+        )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    assert store.get_entry(dune.id).imdb_rating == "9.9/10"
+    assert store.get_entry(arrival.id).imdb_rating == "8.5/10"
+    store.close()
+
+
 def test_delete_removes_entry_and_calendar_event(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None
 ) -> None:
