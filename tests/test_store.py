@@ -14,6 +14,47 @@ def store(tmp_path: Path) -> Iterator[Store]:
     s.close()
 
 
+# --- import failures: issue #254 ---
+
+
+def test_record_import_failure_and_list_it(store: Store) -> None:
+    failure = store.record_import_failure(source="movies.csv", row_number=3, error="bad date")
+
+    assert failure.source == "movies.csv"
+    assert failure.row_number == 3
+    assert failure.error == "bad date"
+
+    (listed,) = store.list_import_failures()
+    assert listed == failure
+
+
+def test_list_import_failures_most_recent_first(store: Store) -> None:
+    first = store.record_import_failure(source="a.csv", row_number=1, error="e1")
+    second = store.record_import_failure(source="b.csv", row_number=2, error="e2")
+
+    listed = store.list_import_failures()
+
+    assert [f.id for f in listed] == [second.id, first.id]
+
+
+def test_list_import_failures_empty_when_none_recorded(store: Store) -> None:
+    assert store.list_import_failures() == []
+
+
+def test_clear_import_failures_removes_everything_and_reports_the_count(store: Store) -> None:
+    store.record_import_failure(source="a.csv", row_number=1, error="e1")
+    store.record_import_failure(source="b.csv", row_number=2, error="e2")
+
+    cleared = store.clear_import_failures()
+
+    assert cleared == 2
+    assert store.list_import_failures() == []
+
+
+def test_clear_import_failures_returns_zero_when_none_recorded(store: Store) -> None:
+    assert store.clear_import_failures() == 0
+
+
 def test_init_creates_all_tables_on_first_run(tmp_path: Path) -> None:
     db_path = tmp_path / "movies.db"
 
@@ -28,7 +69,7 @@ def test_init_creates_all_tables_on_first_run(tmp_path: Path) -> None:
         }
     finally:
         conn.close()
-    assert {"entries", "media", "venues"} <= tables
+    assert {"entries", "media", "venues", "import_failures"} <= tables
 
 
 def test_add_and_list_media(store: Store) -> None:
