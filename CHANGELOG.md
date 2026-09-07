@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.22.0...movie-planner-v1.23.0) (2026-09-07)
+
+
+### Features
+
+* **store:** add a local activity log of the CLI's own actions ([#276](https://github.com/alrayyes/movie-planner/issues/276)) ([#278](https://github.com/alrayyes/movie-planner/issues/278)) ([6137dba](https://github.com/alrayyes/movie-planner/commit/6137dba05a7f0afb32d742826ec26b1e89b2dcbe))
+
 ## [1.22.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.21.0...movie-planner-v1.22.0) (2026-09-07)
 
 
