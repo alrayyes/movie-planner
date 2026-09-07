@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.20.0...movie-planner-v1.21.0) (2026-09-07)
+
+
+### Features
+
+* **calendar:** stamp X-IMPORTER and X-IMPORTER-VERSION for debugging ([#257](https://github.com/alrayyes/movie-planner/issues/257)) ([#272](https://github.com/alrayyes/movie-planner/issues/272)) ([9250fab](https://github.com/alrayyes/movie-planner/commit/9250fabd3177e3c7423ef4fe82d33bff70f77fda))
+
 ## [1.20.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.19.0...movie-planner-v1.20.0) (2026-09-07)
 
 
