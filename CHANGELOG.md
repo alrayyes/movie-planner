@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.18.0...movie-planner-v1.19.0) (2026-09-07)
+
+
+### Features
+
+* **cli:** add update --refresh-metadata for one entry by ID ([#260](https://github.com/alrayyes/movie-planner/issues/260)) ([#268](https://github.com/alrayyes/movie-planner/issues/268)) ([b88d14d](https://github.com/alrayyes/movie-planner/commit/b88d14d544be290968294a2b6a8413ec92a139ca))
+
 ## [1.18.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.17.1...movie-planner-v1.18.0) (2026-09-07)
 
 
