@@ -105,6 +105,12 @@ _MIGRATED_COLUMNS: tuple[tuple[str, str], ...] = (
     # looked up separately by imdb_id once OMDb has matched a title. Same
     # "never on create_entry" convention as the OMDb-derived fields above.
     ("trailer_url", "TEXT"),
+    # The date of the most recent OMDb lookup that found no match for
+    # this entry (issue #255) - distinct from "never looked up", which
+    # is every OMDb-derived field staying None. Cleared (set back to
+    # None) the moment a later lookup does find a match, so this is
+    # always "the last attempt's outcome", never a permanent scar.
+    ("omdb_last_no_match", "TEXT"),
 )
 
 _MIGRATED_VENUE_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -218,6 +224,11 @@ class Entry:
     # omdb.py; this one comes from tmdb.py instead, looked up by imdb_id
     # once OMDb has matched a title.
     trailer_url: str | None = None
+    # The date of the most recent OMDb lookup that found no match for
+    # this entry (issue #255) - see _MIGRATED_COLUMNS above for why this
+    # is distinct from "never looked up" and always reflects only the
+    # latest attempt.
+    omdb_last_no_match: datetime.date | None = None
 
 
 _ENTRY_COLUMNS = (
@@ -260,6 +271,7 @@ _ENTRY_COLUMNS = (
     "production",
     "website",
     "trailer_url",
+    "omdb_last_no_match",
 )
 
 
@@ -310,11 +322,14 @@ def _row_to_entry(row: tuple[Any, ...]) -> Entry:
         production=values["production"],
         website=values["website"],
         trailer_url=values["trailer_url"],
+        omdb_last_no_match=datetime.date.fromisoformat(values["omdb_last_no_match"])
+        if values["omdb_last_no_match"]
+        else None,
     )
 
 
 def _serialize_entry_field(name: str, value: object) -> object:
-    if name == "date" and isinstance(value, datetime.date):
+    if name in ("date", "omdb_last_no_match") and isinstance(value, datetime.date):
         return value.isoformat()
     if name in ("start_time", "end_time"):
         return value.isoformat() if isinstance(value, datetime.time) else None
@@ -670,6 +685,7 @@ class Store:
         production: str | None = _UNSET,
         website: str | None = _UNSET,
         trailer_url: str | None = _UNSET,
+        omdb_last_no_match: datetime.date | None = _UNSET,
     ) -> Entry:
         current = self.get_entry(entry_id)
         changes = {
@@ -711,6 +727,7 @@ class Store:
             "production": production,
             "website": website,
             "trailer_url": trailer_url,
+            "omdb_last_no_match": omdb_last_no_match,
         }
         # changes is a heterogeneous dict by design (the _UNSET-sentinel
         # pattern needs one dict covering every field) - mypy can't verify

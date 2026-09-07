@@ -626,6 +626,35 @@ def test_update_entry_sets_poster_url(store: Store) -> None:
     assert reloaded.poster_url == "https://m.media-amazon.com/images/dune-poster.jpg"
 
 
+def test_new_entry_has_no_omdb_last_no_match(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+
+    assert entry.omdb_last_no_match is None
+
+
+def test_update_entry_sets_omdb_last_no_match(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+
+    updated = store.update_entry(entry.id, omdb_last_no_match=date(2026, 9, 7))
+
+    assert updated.omdb_last_no_match == date(2026, 9, 7)
+    reloaded = store.get_entry(entry.id)
+    assert reloaded.omdb_last_no_match == date(2026, 9, 7)
+
+
+def test_update_entry_clears_omdb_last_no_match(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+    entry = store.update_entry(entry.id, omdb_last_no_match=date(2026, 9, 7))
+
+    updated = store.update_entry(entry.id, omdb_last_no_match=None)
+
+    assert updated.omdb_last_no_match is None
+
+
 def test_new_entry_has_no_trailer_url(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
 
