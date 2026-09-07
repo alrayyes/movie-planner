@@ -80,6 +80,40 @@ file. Tests live in `tests/`, driven through `typer.testing.CliRunner` —
 Typer's wrapper over Click's own test runner, invoking the command
 in-process rather than shelling out.
 
+## Adding a new import format
+
+`movie-planner import` reads whatever `IMPORT_FORMATS` (in
+[`src/movie_planner/importers.py`](src/movie_planner/importers.py))
+has registered, keyed by file suffix - `cli.py` never branches on a
+specific format, only on whether the suffix is in that dict. The same
+shape `pathe-mail-import`'s own ["Adding a second cinema
+chain"](docs/pathe-mail-import.md#adding-a-second-cinema-chain) uses:
+a registry a new adapter plugs into, not a branch to edit.
+
+Adding a format (a Letterboxd export, XLSX, any other bulk source)
+means:
+
+1. Write a `parse(path: Path) -> list[ParsedRow]` function. `parse_csv`
+   and `parse_json` are the reference implementations - both end up
+   calling the shared `_row_from_dict` helper, worth reusing if your
+   format is also naturally row-shaped. A `ParsedRow` is either a
+   populated `ImportRow` (see its fields for what a row can carry) or a
+   populated `error` string - never both; `run_import` reports every failed
+   row back to the caller rather than aborting the whole file on one
+   bad line.
+2. Register it: `IMPORT_FORMATS[".xlsx"] = ImportFormat(name="xlsx",
+parse=parse_xlsx)`. The `name` is what shows up as the entry's
+   provenance later (issue #257) - keep it short and lowercase, same
+   style as `"csv"`/`"json"`.
+3. Nothing else changes. `movie-planner import <file>` picks up the
+   new suffix automatically; the "unsupported file type" error already
+   lists every registered format, not a hardcoded string.
+
+Test the parser the same way `tests/test_import.py` already tests
+`parse_csv`/`parse_json`: valid rows, a row missing a required field,
+a row with a bad value (a date that doesn't parse, for example) - each
+producing the right `ParsedRow`, not an unhandled exception.
+
 ## OMDb usage in issues
 
 OMDb enforces a request cap (1000/day on the free tier this project

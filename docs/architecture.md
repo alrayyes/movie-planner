@@ -38,8 +38,11 @@ flowchart LR
 
 - **movie-planner** (this repo's main CLI) owns the SQLite store - the
   only source of truth, per [`docs/calendar-schema.md`](calendar-schema.md).
-  It reads from a CSV/JSON file or stdin (`import`), a piped or given
-  email (`from-pathe-email`), or interactive prompts (`log`) - and
+  It reads from a bulk-import file or stdin (`import` - CSV and JSON
+  today, and a registry a new format plugs into without touching
+  `cli.py`; see CONTRIBUTING.md's "Adding a new import format"), a
+  piped or given email (`from-pathe-email`), or interactive prompts
+  (`log`) - and
   pushes to the calendar. `log`/`import`/`update`/`sync refresh`/
   `sync retry` never read the calendar back; `sync pull` (issue #235)
   is the one, manually run exception - it reconciles calendar-side
