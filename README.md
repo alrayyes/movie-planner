@@ -107,6 +107,7 @@ Other commands:
 uv run movie-planner list --from 2026-01-01 --to 2026-01-31 --medium cinema
 uv run movie-planner list --chain Pathé
 uv run movie-planner list --city Amsterdam
+uv run movie-planner list --limit 5
 uv run movie-planner show 3
 uv run movie-planner update 3 --title "Dune Part Two"
 uv run movie-planner delete 3
@@ -122,6 +123,12 @@ uv run movie-planner sync refresh --date 2026-01-15
 uv run movie-planner sync refresh --force --date 2026-01-15
 uv run movie-planner sync pull
 ```
+
+`list --limit N` shows only the N most recently dated entries, applied
+after every other filter - combine it with `--chain`/`--city`/
+`--medium`/`--from`/`--to` to get "the last 5 at this chain" rather
+than the whole log. Omit it and `list` shows everything matching the
+other filters, same as always.
 
 `show` prints one entry's full metadata — ratings, links, venue, times,
 and, where OMDb had them, director, cast, genre, and release year — in

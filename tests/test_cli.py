@@ -560,6 +560,57 @@ def test_list_filtered_by_chain(
     assert "Solstice Run" not in result.output
 
 
+def test_list_limit_shows_only_the_most_recent_n(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    _log(config_path, "Dune", "2026-01-01")
+    _log(config_path, "Arrival", "2026-01-02")
+    _log(config_path, "Solstice Run", "2026-01-03")
+
+    result = runner.invoke(app, ["--config", str(config_path), "list", "--limit", "2"])
+
+    assert result.exit_code == 0, result.output
+    assert "Dune" not in result.output
+    assert "Arrival" in result.output
+    assert "Solstice Run" in result.output
+
+
+def test_list_limit_combines_with_an_existing_filter(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    _log(config_path, "Dune", "2026-01-01", venue="Tuschinski")
+    _log(config_path, "Arrival", "2026-01-02", venue="Tuschinski")
+    _log(config_path, "Solstice Run", "2026-01-03", venue="Eye")
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "list", "--chain", "Pathé", "--limit", "1"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Dune" not in result.output
+    assert "Arrival" in result.output
+    assert "Solstice Run" not in result.output
+
+
+def test_list_no_limit_keeps_full_output(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    _log(config_path, "Dune", "2026-01-01")
+    _log(config_path, "Arrival", "2026-01-02")
+
+    result = runner.invoke(app, ["--config", str(config_path), "list"])
+
+    assert result.exit_code == 0, result.output
+    assert "Dune" in result.output
+    assert "Arrival" in result.output
+
+
+def test_list_limit_zero_or_negative_is_rejected(config_path: Path) -> None:
+    result = runner.invoke(app, ["--config", str(config_path), "list", "--limit", "0"])
+
+    assert result.exit_code != 0
+
+
 def test_list_filtered_by_city_with_no_matching_venues_reports_no_entries(
     config_path: Path,
 ) -> None:
