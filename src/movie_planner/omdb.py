@@ -4,6 +4,7 @@ successful lookups are cached so re-editing an entry doesn't re-fetch a
 title already matched.
 """
 
+import datetime
 import re
 from dataclasses import dataclass
 
@@ -232,7 +233,11 @@ def fetch_and_store_ratings(
     """
     ratings = client.lookup(title=entry.title, imdb_id=imdb_id, year=entry.date.year)
     if ratings is None:
-        return entry, False
+        # Recorded (issue #255) so a later "list --omdb-no-match" can
+        # find it - distinct from "never looked up", which leaves this
+        # None forever until a lookup is actually attempted.
+        no_match_entry = store.update_entry(entry.id, omdb_last_no_match=datetime.date.today())
+        return no_match_entry, False
     imdb_url = entry.imdb_url or (
         f"https://www.imdb.com/title/{ratings.imdb_id}/" if ratings.imdb_id else None
     )
@@ -261,5 +266,6 @@ def fetch_and_store_ratings(
         box_office=ratings.box_office,
         production=ratings.production,
         website=ratings.website,
+        omdb_last_no_match=None,
     )
     return updated, True

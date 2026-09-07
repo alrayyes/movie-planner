@@ -741,6 +741,16 @@ def list_entries(
             "everything matching the other filters, same as today.",
         ),
     ] = None,
+    omdb_no_match: Annotated[
+        bool,
+        typer.Option(
+            "--omdb-no-match",
+            help="Only entries whose most recent OMDb lookup found no match - distinct from "
+            "an entry that was simply never looked up. Useful for finding titles OMDb can't "
+            "resolve (a typo, a format suffix, a title it genuinely doesn't have) so you can "
+            "fix them by hand.",
+        ),
+    ] = False,
 ) -> None:
     """List logged entries."""
     cfg = _cfg(ctx)
@@ -774,6 +784,8 @@ def list_entries(
             medium_id=medium_id,
             venue_ids=venue_ids,
         )
+        if omdb_no_match:
+            entries = [e for e in entries if e.omdb_last_no_match is not None]
         if limit is not None:
             entries = entries[-limit:]
         if not entries:

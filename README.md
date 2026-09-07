@@ -108,6 +108,7 @@ uv run movie-planner list --from 2026-01-01 --to 2026-01-31 --medium cinema
 uv run movie-planner list --chain Pathé
 uv run movie-planner list --city Amsterdam
 uv run movie-planner list --limit 5
+uv run movie-planner list --omdb-no-match
 uv run movie-planner show 3
 uv run movie-planner update 3 --title "Dune Part Two"
 uv run movie-planner update 3 --refresh-metadata
@@ -130,6 +131,12 @@ after every other filter - combine it with `--chain`/`--city`/
 `--medium`/`--from`/`--to` to get "the last 5 at this chain" rather
 than the whole log. Omit it and `list` shows everything matching the
 other filters, same as always.
+
+`list --omdb-no-match` shows only entries whose most recent OMDb
+lookup found no match - a title with a typo, a format suffix the
+stripper missed, or one OMDb genuinely doesn't have - distinct from an
+entry that was simply never looked up. Fix the title by hand, then
+`update --refresh-metadata` (below) to try again.
 
 `show` prints one entry's full metadata — ratings, links, venue, times,
 and, where OMDb had them, director, cast, genre, and release year — in

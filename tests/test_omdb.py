@@ -750,6 +750,31 @@ def test_fetch_and_store_ratings_on_no_match(store: Store) -> None:
     assert updated.imdb_rating is None
 
 
+def test_fetch_and_store_ratings_on_no_match_records_todays_date(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Not A Real Movie", date=date(2026, 1, 1), medium_id=medium.id)
+    client = _client(lambda request: httpx.Response(200, json=NO_MATCH_RESPONSE))
+
+    updated, found = fetch_and_store_ratings(store, client, entry)
+
+    assert found is False
+    assert updated.omdb_last_no_match == date.today()
+    reloaded = store.get_entry(entry.id)
+    assert reloaded.omdb_last_no_match == date.today()
+
+
+def test_fetch_and_store_ratings_on_a_match_clears_a_prior_no_match(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.update_entry(entry.id, omdb_last_no_match=date(2026, 1, 1))
+
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+    updated, found = fetch_and_store_ratings(store, client, entry)
+
+    assert found is True
+    assert updated.omdb_last_no_match is None
+
+
 def test_entry_logs_updates_and_syncs_with_no_metadata_at_all(store: Store) -> None:
     """Task 5.4: metadata is entirely optional, at every stage."""
     medium = store.add_medium("cinema", is_physical_place=True)

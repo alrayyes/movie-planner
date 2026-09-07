@@ -611,6 +611,39 @@ def test_list_limit_zero_or_negative_is_rejected(config_path: Path) -> None:
     assert result.exit_code != 0
 
 
+def test_list_omdb_no_match_shows_only_entries_with_no_match(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    _log(config_path, "Not A Real Movie", "2026-01-01")
+
+    result = runner.invoke(app, ["--config", str(config_path), "list", "--omdb-no-match"])
+
+    assert result.exit_code == 0, result.output
+    assert "Not A Real Movie" in result.output
+
+
+def test_list_omdb_no_match_excludes_a_matched_entry(
+    config_path: Path, calendar: FakeCalendar, omdb_match: None
+) -> None:
+    _log(config_path, "Dune", "2026-01-01")
+
+    result = runner.invoke(app, ["--config", str(config_path), "list", "--omdb-no-match"])
+
+    assert result.exit_code == 0, result.output
+    assert "No entries." in result.output
+
+
+def test_list_without_the_flag_shows_everything_regardless_of_match_state(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    _log(config_path, "Not A Real Movie", "2026-01-01")
+
+    result = runner.invoke(app, ["--config", str(config_path), "list"])
+
+    assert result.exit_code == 0, result.output
+    assert "Not A Real Movie" in result.output
+
+
 def test_list_filtered_by_city_with_no_matching_venues_reports_no_entries(
     config_path: Path,
 ) -> None:
