@@ -1007,6 +1007,10 @@ def test_import_unsupported_file_type_fails(config_path: Path, tmp_path: Path) -
 
     assert result.exit_code != 0
     assert "unsupported" in result.output.lower()
+    # Names the formats the registry actually supports (issue #252) -
+    # not a hardcoded ".csv or .json" string that could drift from it.
+    assert ".csv" in result.output
+    assert ".json" in result.output
 
 
 # --- update / delete: task 7.2 ---

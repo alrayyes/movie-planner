@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from movie_planner.importers import (
+    IMPORT_FORMATS,
     ImportRow,
     ParsedRow,
     parse_csv,
@@ -20,6 +21,41 @@ def store(tmp_path: Path) -> Iterator[Store]:
     s = Store(tmp_path / "movies.db")
     yield s
     s.close()
+
+
+# --- IMPORT_FORMATS: issue #252, the registry cli.py dispatches through
+# instead of a hardcoded if/elif on file suffix ---
+
+
+def test_import_formats_registers_csv_and_json() -> None:
+    assert set(IMPORT_FORMATS) == {".csv", ".json"}
+    assert IMPORT_FORMATS[".csv"].name == "csv"
+    assert IMPORT_FORMATS[".json"].name == "json"
+
+
+def test_import_formats_csv_entry_parses_via_parse_csv(tmp_path: Path) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium\nDune,2024-03-15,cinema\n")
+
+    via_registry = IMPORT_FORMATS[".csv"].parse(csv_path)
+    via_direct_call = parse_csv(csv_path)
+
+    assert via_registry == via_direct_call
+
+
+def test_import_formats_json_entry_parses_via_parse_json(tmp_path: Path) -> None:
+    json_path = tmp_path / "movies.json"
+    json_path.write_text('[{"title": "Dune", "date": "2024-03-15", "medium": "cinema"}]')
+
+    via_registry = IMPORT_FORMATS[".json"].parse(json_path)
+    via_direct_call = parse_json(json_path)
+
+    assert via_registry == via_direct_call
+
+
+def test_import_formats_unsupported_suffix_is_absent() -> None:
+    assert ".xlsx" not in IMPORT_FORMATS
+    assert IMPORT_FORMATS.get(".xlsx") is None
 
 
 # --- parse_csv: task 6.1 ---
