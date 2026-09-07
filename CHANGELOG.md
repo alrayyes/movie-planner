@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.19.0...movie-planner-v1.20.0) (2026-09-07)
+
+
+### Features
+
+* **omdb:** track and list entries with no OMDb match ([#255](https://github.com/alrayyes/movie-planner/issues/255)) ([#271](https://github.com/alrayyes/movie-planner/issues/271)) ([c642a61](https://github.com/alrayyes/movie-planner/commit/c642a61c23b46d89e036d7db64a8f9fe6d187ee4))
+
 ## [1.19.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.18.0...movie-planner-v1.19.0) (2026-09-07)
 
 
