@@ -731,6 +731,16 @@ def list_entries(
             "as --chain."
         ),
     ] = None,
+    limit: Annotated[
+        int | None,
+        typer.Option(
+            "--limit",
+            min=1,
+            help="Only the N most recently-dated entries (applied after every other filter, "
+            "same order 'list' already shows - oldest of the N first). Omit to show "
+            "everything matching the other filters, same as today.",
+        ),
+    ] = None,
 ) -> None:
     """List logged entries."""
     cfg = _cfg(ctx)
@@ -764,6 +774,8 @@ def list_entries(
             medium_id=medium_id,
             venue_ids=venue_ids,
         )
+        if limit is not None:
+            entries = entries[-limit:]
         if not entries:
             typer.echo("No entries.")
             return
