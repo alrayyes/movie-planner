@@ -304,6 +304,8 @@ class CalendarSync:
                 chain=chain,
                 screening_details=screening_details,
                 geo=geo,
+                city=city,
+                country=country,
             )
         except Exception as e:
             raise CalendarSyncError(

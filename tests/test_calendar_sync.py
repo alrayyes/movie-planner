@@ -863,6 +863,29 @@ def test_push_update_recreates_the_event_when_the_caldav_uid_is_stale(store: Sto
     assert refreshed.caldav_uid in calendar.events_by_uid
 
 
+def test_push_update_stale_uid_recovery_keeps_city_and_country(store: Store) -> None:
+    # movie-planner#262: the NotFoundError recovery branch forwarded
+    # venue/chain/screening_details/geo to push_new but not city/
+    # country, silently dropping X-CITY/X-COUNTRY on the recreated
+    # event - a real regression in #217's own fix.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None, city="Amsterdam", country="Netherlands")
+    stale_uid = entry.caldav_uid
+    assert stale_uid is not None
+    del calendar.events_by_uid[stale_uid]  # simulates an external wipe
+
+    sync.push_update(entry, venue=None, city="Amsterdam", country="Netherlands")
+
+    refreshed = store.get_entry(entry.id)
+    assert refreshed.caldav_uid is not None
+    ical_text = calendar.events_by_uid[refreshed.caldav_uid].data
+    assert "X-CITY:Amsterdam" in ical_text
+    assert "X-COUNTRY:Netherlands" in ical_text
+
+
 def test_push_update_failure_is_wrapped_and_retryable(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
