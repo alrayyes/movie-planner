@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.17.0...movie-planner-v1.17.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **sync:** stale-UID recovery no longer drops X-CITY/X-COUNTRY ([#262](https://github.com/alrayyes/movie-planner/issues/262)) ([#264](https://github.com/alrayyes/movie-planner/issues/264)) ([0313fc1](https://github.com/alrayyes/movie-planner/commit/0313fc1475ef10dee76d932e20f5a1071413c424))
+
 ## [1.17.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.16.0...movie-planner-v1.17.0) (2026-09-07)
 
 
