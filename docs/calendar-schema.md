@@ -106,6 +106,14 @@ either.
     optional, unlike `omdb.api_key`), no TMDb match, or no official
     YouTube trailer among TMDb's videos, and the entry simply has no
     `X-TRAILER-URL` at all.
+  - **`X-IMPORTER`**/**`X-IMPORTER-VERSION`** — debugging provenance
+    (issue #257): which movie-planner command performed this push
+    (`log`, `import:csv`, `import:json`, `from-pathe-email`,
+    `sync-retry`, `sync-refresh`, `update`) and which version of the
+    tool did it, read from the installed package at push time. Same
+    "omit, never guess" rule as everything else here - a caller that
+    doesn't pass an importer label (a test using `CalendarSync`
+    directly, for example) gets neither property.
 
 A real example — an entry at a known venue, with a genre tag and
 coordinates on record, exactly as `build_vevent` produces it:
