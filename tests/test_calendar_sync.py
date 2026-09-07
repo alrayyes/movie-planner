@@ -1,3 +1,4 @@
+import logging
 import uuid
 from collections.abc import Iterator
 from datetime import date, datetime, time
@@ -663,6 +664,38 @@ def test_push_update_includes_importer_when_given(store: Store) -> None:
     assert entry.caldav_uid is not None
     ical_text = calendar.events_by_uid[entry.caldav_uid].data
     assert "X-IMPORTER:update" in ical_text
+
+
+def test_push_new_logs_the_full_ical_payload_at_debug_level(
+    store: Store, caplog: pytest.LogCaptureFixture
+) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    with caplog.at_level(logging.DEBUG, logger="movie_planner.calendar_sync"):
+        synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    assert any(
+        "BEGIN:VCALENDAR" in r.message and synced.caldav_uid in r.message for r in caplog.records
+    )
+
+
+def test_push_update_logs_the_full_ical_payload_at_debug_level(
+    store: Store, caplog: pytest.LogCaptureFixture
+) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None)
+
+    with caplog.at_level(logging.DEBUG, logger="movie_planner.calendar_sync"):
+        sync.push_update(entry, venue=None)
+
+    assert any("BEGIN:VCALENDAR" in r.message for r in caplog.records)
 
 
 def test_push_new_omits_director_actors_genre_and_year_when_entry_has_none(store: Store) -> None:

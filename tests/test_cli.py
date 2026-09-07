@@ -3078,3 +3078,66 @@ def test_update_stamps_x_importer(
     assert entry.caldav_uid is not None
     ical_text = calendar.events_by_uid[entry.caldav_uid].data
     assert "X-IMPORTER:update" in ical_text
+
+
+# --- --verbose: issue #258 ---
+
+
+def test_help_documents_verbose_once_at_the_top_level() -> None:
+    top_level = runner.invoke(app, ["--help"])
+    subcommand = runner.invoke(app, ["log", "--help"])
+
+    assert "--verbose" in top_level.stdout
+    assert "--verbose" not in subcommand.stdout
+
+
+def _log_args(config_path: Path) -> list[str]:
+    return [
+        "--config",
+        str(config_path),
+        "log",
+        "--title",
+        "Dune",
+        "--date",
+        "2026-01-01",
+        "--medium",
+        "cinema",
+    ]
+
+
+def test_verbose_does_not_change_stdout(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    plain = runner.invoke(app, _log_args(config_path))
+    store = _store(config_path)
+    store.delete_entry(store.list_entries()[0].id)
+    store.close()
+
+    verbose = runner.invoke(app, ["--verbose", *_log_args(config_path)])
+
+    assert plain.exit_code == verbose.exit_code == 0
+    assert plain.stdout == verbose.stdout
+
+
+def test_verbose_prints_the_calendar_payload_and_duplicate_check_to_stderr(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    # OMDb/TMDb debug logging is covered directly against the real HTTP
+    # layer in test_omdb.py/test_tmdb.py - the no_omdb_match fixture here
+    # replaces OmdbClient.lookup wholesale, bypassing that logging, so
+    # this only checks the two paths this fixture setup can actually
+    # exercise: the calendar push and duplicate detection.
+    result = runner.invoke(app, ["--verbose", *_log_args(config_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "BEGIN:VCALENDAR" in result.stderr
+    assert "no duplicate found" in result.stderr
+
+
+def test_without_verbose_nothing_is_printed_to_stderr(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    result = runner.invoke(app, _log_args(config_path))
+
+    assert result.exit_code == 0, result.output
+    assert result.stderr == ""

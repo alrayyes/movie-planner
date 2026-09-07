@@ -1,6 +1,8 @@
+import logging
 from collections.abc import Callable
 
 import httpx
+import pytest
 
 from movie_planner.tmdb import TmdbClient
 
@@ -118,3 +120,21 @@ def test_lookup_trailer_url_no_match_is_cached_too() -> None:
     client.lookup_trailer_url(imdb_id="tt0000000")
 
     assert calls == 1
+
+
+def test_lookup_trailer_url_logs_both_requests_at_debug_level(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "find" in request.url.path:
+            return httpx.Response(200, json=FIND_RESPONSE)
+        return httpx.Response(200, json=VIDEOS_RESPONSE)
+
+    client = _client(handler)
+
+    with caplog.at_level(logging.DEBUG, logger="movie_planner.tmdb"):
+        client.lookup_trailer_url(imdb_id="tt1160419")
+
+    messages = [r.message for r in caplog.records]
+    assert any("tt1160419" in m for m in messages)
+    assert any("438631" in m for m in messages)

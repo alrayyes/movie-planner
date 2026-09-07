@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Callable, Iterator
 from datetime import date
 from pathlib import Path
@@ -104,6 +105,28 @@ def test_lookup_no_match_returns_none() -> None:
     ratings = client.lookup(title="Not A Real Movie Title Xyz")
 
     assert ratings is None
+
+
+def test_lookup_logs_the_request_and_result_at_debug_level(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    with caplog.at_level(logging.DEBUG, logger="movie_planner.omdb"):
+        client.lookup(title="Dune")
+
+    messages = [r.message for r in caplog.records]
+    assert any("Dune" in m for m in messages)
+    assert not any("test-key" in m for m in messages)  # the API key is a secret, never logged
+
+
+def test_lookup_no_match_logs_it_at_debug_level(caplog: pytest.LogCaptureFixture) -> None:
+    client = _client(lambda request: httpx.Response(200, json=NO_MATCH_RESPONSE))
+
+    with caplog.at_level(logging.DEBUG, logger="movie_planner.omdb"):
+        client.lookup(title="Not A Real Movie Title Xyz")
+
+    assert any("no match" in r.message.lower() for r in caplog.records)
 
 
 def test_lookup_missing_rating_source_is_none() -> None:

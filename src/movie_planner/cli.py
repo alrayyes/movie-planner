@@ -6,6 +6,7 @@ import dataclasses
 import email
 import email.policy
 import email.utils
+import logging
 import re
 import sys
 from dataclasses import dataclass
@@ -62,6 +63,7 @@ class _ConfigOverrides:
     omdb_api_key: str | None = None
     tmdb_api_key: str | None = None
     db_path: Path | None = None
+    verbose: bool = False
 
 
 # Click derives each env var from its option name under this prefix, e.g.
@@ -119,6 +121,16 @@ def callback(
             "log, without editing the config file. Also settable as $MOVIE_PLANNER_DB_PATH."
         ),
     ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            help="Print diagnostic detail (OMDb/TMDb requests, the exact calendar payload "
+            "pushed, why a duplicate was or wasn't detected) to stderr, for every command. "
+            "Normal output is unchanged - this only adds detail, on top of it. Also settable "
+            "as $MOVIE_PLANNER_VERBOSE.",
+        ),
+    ] = False,
 ) -> None:
     """movie-planner: log watched movies and sync them to a calendar."""
     # Stores the raw overrides rather than loading the config here: loading
@@ -131,7 +143,29 @@ def callback(
         omdb_api_key=omdb_api_key,
         tmdb_api_key=tmdb_api_key,
         db_path=db_path,
+        verbose=verbose,
     )
+    _configure_logging(verbose)
+
+
+def _configure_logging(verbose: bool) -> None:
+    """Every movie_planner.* module logs its diagnostic detail at DEBUG -
+    OMDb/TMDb requests, the exact calendar payload, duplicate-detection
+    decisions. Nothing prints unless --verbose asks for it, and even then
+    it goes to stderr, never stdout, so normal command output is
+    unaffected either way (issue #258).
+    """
+    logger = logging.getLogger("movie_planner")
+    if verbose:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        logger.handlers = [handler]
+        logger.setLevel(logging.DEBUG)
+        logger.propagate = False
+    else:
+        logger.handlers = []
+        logger.setLevel(logging.WARNING)
+        logger.propagate = True
 
 
 _STARTER_CONFIG = """\
