@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.23.0...movie-planner-v1.23.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **sync:** make push_new crash-safe against calendar-create/local-save interruption ([#246](https://github.com/alrayyes/movie-planner/issues/246)) ([#280](https://github.com/alrayyes/movie-planner/issues/280)) ([1ab7fe5](https://github.com/alrayyes/movie-planner/commit/1ab7fe54995670bf8d9fbcce099de005d53a6469))
+
 ## [1.23.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.22.0...movie-planner-v1.23.0) (2026-09-07)
 
 
