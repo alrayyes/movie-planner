@@ -109,6 +109,21 @@ For anyone (human or agent) picking this project up mid-thread:
   issue #166) does. Current read: this is `retry`'s documented
   contract working as intended, not a bug - reopen the question if
   that stops feeling right in practice.
+- **`push_new` records `caldav_uid` locally before creating the
+  calendar event, not after** (issue #246) - a killed process or
+  dropped connection between the two used to leave the local entry
+  with no `caldav_uid` at all while a real, orphaned event sat on the
+  calendar with no local row pointing at it; the next retry couldn't
+  tell it had already been created and made a genuine duplicate.
+  Reordering the write means the local record and the calendar event
+  (whether or not it exists yet) always agree on the UID, so any later
+  push for that entry recovers through the same not-found path
+  described in the preceding bullet rather than creating a second
+  event. This narrows `sync retry`'s already-narrow scope further: a
+  `push_new` failure now leaves a `caldav_uid` too, even a normal
+  caught one, not just a crash, so `sync retry` only still helps an
+  entry that's never even attempted a push at all - `sync refresh` is
+  the correct retry for anything that has.
 - **"`list` also shows cached shows"** (issue #168) - reported live;
   Ryan later clarified "shows" probably means cached showings, that
   is, viewings/entries, not TV series - but two things are still

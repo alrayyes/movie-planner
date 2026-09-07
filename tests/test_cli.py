@@ -436,7 +436,11 @@ def test_log_sync_failure_still_persists_the_entry(config_path: Path, no_omdb_ma
     assert "calendar" in result.output.lower()
     store = _store(config_path)
     (entry,) = store.list_entries()
-    assert entry.caldav_uid is None
+    # The failed push still records the UID it attempted (issue #246) -
+    # a caught create failure can't be told apart from "it actually
+    # reached the server", so this entry self-heals via push_update on
+    # a later retry instead of push_new blindly creating a second event.
+    assert entry.caldav_uid is not None
     store.close()
 
 
@@ -1919,23 +1923,15 @@ def test_from_pathe_email_description_includes_screening_details(
 
 
 def test_sync_retry_pushes_unsynced_entries(config_path: Path, no_omdb_match: None) -> None:
-    runner.invoke(
-        app,
-        [
-            "--config",
-            str(config_path),
-            "log",
-            "--title",
-            "Dune",
-            "--date",
-            "2026-01-01",
-            "--medium",
-            "cinema",
-        ],
-    )
+    # Created directly via the store, not `log` - a failed push now
+    # records a UID too (issue #246), so it's no longer `log` failing
+    # against an unreachable calendar that produces a genuinely
+    # never-attempted entry the way it used to. This is what `sync
+    # retry` still targets: an entry nothing has ever tried to push.
     store = _store(config_path)
-    (entry,) = store.list_entries()
-    assert entry.caldav_uid is None  # no calendar reachable during log
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    assert entry.caldav_uid is None
     store.close()
 
     fake = FakeCalendar()
@@ -2177,7 +2173,11 @@ def test_refresh_creates_event_for_a_never_synced_entry(
     )
     store = _store(config_path)
     (entry,) = store.list_entries()
-    assert entry.caldav_uid is None
+    # A failed push during `log` now records a UID too (issue #246) -
+    # what this test actually needs is "no real calendar event exists
+    # yet", not literally caldav_uid is None, and `sync refresh` self-heals
+    # either way since it goes through push_update for every entry.
+    assert entry.caldav_uid is not None
     store.close()
 
     fake = FakeCalendar()
