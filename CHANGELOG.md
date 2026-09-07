@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.21.0...movie-planner-v1.22.0) (2026-09-07)
+
+
+### Features
+
+* **cli:** add a global --verbose flag for debugging ([#275](https://github.com/alrayyes/movie-planner/issues/275)) ([47231ea](https://github.com/alrayyes/movie-planner/commit/47231ea4d63f0850284d4c11a1b02b5b6a8c0904))
+
 ## [1.21.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.20.0...movie-planner-v1.21.0) (2026-09-07)
 
 
