@@ -831,7 +831,7 @@ wheels = [
 
 [[package]]
 name = "movie-planner"
-version = "1.16.0"
+version = "1.17.0"
 source = { editable = "." }
 dependencies = [
     { name = "caldav" },
@@ -862,7 +862,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "caldav", specifier = "==3.3.0" },
+    { name = "caldav", specifier = "==3.3" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "icalendar", specifier = "==7.3" },
     { name = "questionary", specifier = "==2.1.1" },
