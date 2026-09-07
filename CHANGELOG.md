@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.17.1...movie-planner-v1.18.0) (2026-09-07)
+
+
+### Features
+
+* **cli:** add list --limit for the N most recent entries ([#259](https://github.com/alrayyes/movie-planner/issues/259)) ([#267](https://github.com/alrayyes/movie-planner/issues/267)) ([4c55830](https://github.com/alrayyes/movie-planner/commit/4c558303550337b8a5d7231e861ef478fb50a2fa))
+
 ## [1.17.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.17.0...movie-planner-v1.17.1) (2026-09-07)
 
 
