@@ -29,7 +29,7 @@ from movie_planner.calendar_pull import (
 from movie_planner.calendar_sync import CalendarClient, CalendarSync
 from movie_planner.display import detect_terminal_image_protocol, format_entry, render_poster
 from movie_planner.duplicates import find_duplicate
-from movie_planner.importers import parse_csv, parse_json, parse_json_text, run_import
+from movie_planner.importers import IMPORT_FORMATS, parse_json_text, run_import
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
 from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
 from movie_planner.store import Entry, Medium, Store, StoreError, Venue
@@ -1170,15 +1170,16 @@ def import_command(
     cfg = _cfg(ctx)
     if path is None:
         rows = parse_json_text(sys.stdin.read())
-    elif path.suffix == ".csv":
-        rows = parse_csv(path)
-    elif path.suffix == ".json":
-        rows = parse_json(path)
     else:
-        typer.secho(
-            f"Unsupported file type '{path.suffix}' (expected .csv or .json).", fg=typer.colors.RED
-        )
-        raise typer.Exit(code=1)
+        fmt = IMPORT_FORMATS.get(path.suffix)
+        if fmt is None:
+            supported = ", ".join(sorted(IMPORT_FORMATS))
+            typer.secho(
+                f"Unsupported file type '{path.suffix}' (expected {supported}).",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(code=1)
+        rows = fmt.parse(path)
 
     store = _open_store(cfg)
     try:
