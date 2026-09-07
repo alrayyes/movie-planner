@@ -110,6 +110,7 @@ uv run movie-planner list --city Amsterdam
 uv run movie-planner list --limit 5
 uv run movie-planner show 3
 uv run movie-planner update 3 --title "Dune Part Two"
+uv run movie-planner update 3 --refresh-metadata
 uv run movie-planner delete 3
 uv run movie-planner locations media add cinema --physical
 uv run movie-planner locations venues add "Grand Vista Cinema"
@@ -178,7 +179,9 @@ the whole log; `--date` can't be
 combined with either. Pass `--force` to re-fetch ratings for entries
 that already have them too — useful after a wrong OMDb match, or when a
 rating's changed since — instead of the default of only fetching for
-entries still missing one.
+entries still missing one. `update --refresh-metadata` does the same
+thing for one specific entry, by ID - no need to work out its date or
+risk force-refreshing a sibling entry that happens to share it.
 
 Sync is otherwise push-only — movie-planner never reads the calendar
 back on its own. `sync pull` is the one exception: it fetches every

@@ -908,6 +908,17 @@ def update(
     notes: Annotated[
         str | None, typer.Option(help="New notes. Omit to leave the current notes unchanged.")
     ] = None,
+    refresh_metadata: Annotated[
+        bool,
+        typer.Option(
+            "--refresh-metadata",
+            help="Re-fetch OMDb data for this entry alone, overwriting existing ratings/"
+            "poster/director/cast/genre/year/etc. - the single-entry equivalent of 'sync "
+            "refresh --force', without needing to know this entry's date or affect any other "
+            "entry that happens to share it. Ignored if --imdb-id is also given, since that "
+            "already re-fetches too.",
+        ),
+    ] = False,
 ) -> None:
     """Update an existing logged entry. Every option is optional and
     independent - give only the fields that are actually changing;
@@ -948,6 +959,8 @@ def update(
 
         if imdb_id is not None:
             updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=imdb_id)
+        elif refresh_metadata:
+            updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=None)
 
         _push_update_or_warn(cfg, store, updated)
         typer.echo(f"Updated entry {entry_id}.")
