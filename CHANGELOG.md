@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.17.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.16.0...movie-planner-v1.17.0) (2026-09-07)
+
+
+### Features
+
+* **import:** a real extension point for bulk-import formats ([#261](https://github.com/alrayyes/movie-planner/issues/261)) ([78b41ba](https://github.com/alrayyes/movie-planner/commit/78b41bae768d11340824ded8d8720ffa76948c9a))
+* **import:** record and list import failures ([#254](https://github.com/alrayyes/movie-planner/issues/254)) ([#263](https://github.com/alrayyes/movie-planner/issues/263)) ([770e62a](https://github.com/alrayyes/movie-planner/commit/770e62a7ef797734f8c0e29160a65b29f525fd8b))
+
+
+### Bug Fixes
+
+* **deps:** bump the python-dependencies group with 5 updates ([#250](https://github.com/alrayyes/movie-planner/issues/250)) ([0b1e10e](https://github.com/alrayyes/movie-planner/commit/0b1e10e7551e64e2c37c0e508b80a088506c732a))
+
 ## [1.16.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.15.0...movie-planner-v1.16.0) (2026-09-06)
 
 
