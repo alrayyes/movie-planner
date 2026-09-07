@@ -54,6 +54,14 @@ CREATE TABLE IF NOT EXISTS entries (
     release_year INTEGER,
     source TEXT
 );
+
+CREATE TABLE IF NOT EXISTS import_failures (
+    id INTEGER PRIMARY KEY,
+    source TEXT NOT NULL,
+    row_number INTEGER NOT NULL,
+    error TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 """
 
 # Columns added to `entries` after its initial release, ALTERed in for a
@@ -146,6 +154,20 @@ class VenueMerge:
     # apply=True would create it, but a dry run never does.
     canonical_venue_id: int | None
     entries_moved: int
+
+
+@dataclass(frozen=True)
+class ImportFailure:
+    """One row `run_import` (issue #254) couldn't parse - persisted so
+    `movie-planner import-failures list` can show it after the run that
+    produced it has scrolled away, not just at the moment it happened.
+    """
+
+    id: int
+    source: str
+    row_number: int
+    error: str
+    created_at: datetime.datetime
 
 
 @dataclass(frozen=True)
@@ -722,3 +744,42 @@ class Store:
         self._conn.commit()
         if cur.rowcount == 0:
             raise StoreError(f"no entry with id {entry_id}")
+
+    def record_import_failure(self, *, source: str, row_number: int, error: str) -> ImportFailure:
+        created_at = datetime.datetime.now(datetime.UTC).isoformat()
+        cur = self._conn.execute(
+            "INSERT INTO import_failures (source, row_number, error, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (source, row_number, error, created_at),
+        )
+        self._conn.commit()
+        # Invariant: sqlite always sets lastrowid on a successful INSERT.
+        assert cur.lastrowid is not None  # nosec B101
+        return ImportFailure(
+            id=cur.lastrowid,
+            source=source,
+            row_number=row_number,
+            error=error,
+            created_at=datetime.datetime.fromisoformat(created_at),
+        )
+
+    def list_import_failures(self) -> list[ImportFailure]:
+        rows = self._conn.execute(
+            "SELECT id, source, row_number, error, created_at FROM import_failures "
+            "ORDER BY created_at DESC"
+        )
+        return [
+            ImportFailure(
+                id=r[0],
+                source=r[1],
+                row_number=r[2],
+                error=r[3],
+                created_at=datetime.datetime.fromisoformat(r[4]),
+            )
+            for r in rows
+        ]
+
+    def clear_import_failures(self) -> int:
+        cur = self._conn.execute("DELETE FROM import_failures")
+        self._conn.commit()
+        return cur.rowcount

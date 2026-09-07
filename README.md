@@ -113,6 +113,8 @@ uv run movie-planner delete 3
 uv run movie-planner locations media add cinema --physical
 uv run movie-planner locations venues add "Grand Vista Cinema"
 uv run movie-planner import movies.csv --force
+uv run movie-planner import-failures list
+uv run movie-planner import-failures clear
 uv run movie-planner sync retry
 uv run movie-planner sync refresh
 uv run movie-planner sync refresh --from 2026-01-01 --to 2026-01-31
@@ -149,7 +151,11 @@ row already supplies every OMDb-derived field itself (ratings, poster,
 director, actors, genre, release year), in which case that row's OMDb
 lookup is skipped entirely, same as an already-enriched entry is on
 `sync refresh`. Useful for re-importing an export from somewhere that
-already ran its own OMDb lookup. `sync retry`
+already ran its own OMDb lookup. A row that fails to parse (a bad date,
+a missing required field) is recorded rather than only echoed at the
+time - `import-failures list` shows every past failure, most recent
+first, and `import-failures clear` empties the list once you've dealt
+with them. `sync retry`
 re-pushes any entry that failed to sync when it was logged or imported —
 cheap, and safe to run any time, since it never calls OMDb and only
 touches entries that were never synced. `sync refresh` is the heavier

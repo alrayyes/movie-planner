@@ -1365,6 +1365,60 @@ def test_import_reports_skipped_duplicates_in_summary(
     store.close()
 
 
+def test_import_records_a_failure_for_a_bad_row(
+    config_path: Path, calendar: FakeCalendar, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium\nSolstice Run,not-a-date,cinema\n")
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "1 failed" in result.output
+    store = _store(config_path)
+    (failure,) = store.list_import_failures()
+    assert failure.source == str(csv_path)
+    assert failure.row_number == 2
+    store.close()
+
+
+def test_import_failures_list_shows_a_recorded_failure(
+    config_path: Path, calendar: FakeCalendar, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium\nSolstice Run,not-a-date,cinema\n")
+    runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    result = runner.invoke(app, ["--config", str(config_path), "import-failures", "list"])
+
+    assert result.exit_code == 0, result.output
+    assert str(csv_path) in result.output
+    assert "row 2" in result.output
+
+
+def test_import_failures_list_empty_says_so(config_path: Path) -> None:
+    result = runner.invoke(app, ["--config", str(config_path), "import-failures", "list"])
+
+    assert result.exit_code == 0, result.output
+    assert "no import failures" in result.output.lower()
+
+
+def test_import_failures_clear_removes_them(
+    config_path: Path, calendar: FakeCalendar, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium\nSolstice Run,not-a-date,cinema\n")
+    runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    result = runner.invoke(app, ["--config", str(config_path), "import-failures", "clear"])
+
+    assert result.exit_code == 0, result.output
+    assert "1" in result.output
+    store = _store(config_path)
+    assert store.list_import_failures() == []
+    store.close()
+
+
 def test_import_force_persists_duplicates(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
 ) -> None:

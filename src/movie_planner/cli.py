@@ -40,10 +40,12 @@ locations_app = typer.Typer(help="Manage the medium and venue lists.")
 media_app = typer.Typer(help="Manage the medium list.")
 venues_app = typer.Typer(help="Manage the venue list.")
 sync_app = typer.Typer(help="Manage calendar sync.")
+import_failures_app = typer.Typer(help="Inspect and clear past import failures.")
 locations_app.add_typer(media_app, name="media")
 locations_app.add_typer(venues_app, name="venues")
 app.add_typer(locations_app, name="locations")
 app.add_typer(sync_app, name="sync")
+app.add_typer(import_failures_app, name="import-failures")
 
 
 @dataclass(frozen=True)
@@ -1168,6 +1170,7 @@ def import_command(
     OMDb lookup for that row alone, regardless of --no-metadata.
     """
     cfg = _cfg(ctx)
+    source_label = str(path) if path is not None else "stdin"
     if path is None:
         rows = parse_json_text(sys.stdin.read())
     else:
@@ -1191,6 +1194,14 @@ def import_command(
                 imported.entry,
                 fetch_metadata=not no_metadata and needs_omdb_fetch(imported.entry),
             )
+        # Persisted (issue #254) so `import-failures list` can show them
+        # after this run's own output has scrolled away - run_import
+        # itself stays pure/ephemeral, this is the one place that writes.
+        for row in rows:
+            if row.error is not None:
+                store.record_import_failure(
+                    source=source_label, row_number=row.row_number, error=row.error
+                )
 
         typer.echo(
             f"{summary.imported} imported, {summary.skipped_duplicates} skipped, "
@@ -1200,6 +1211,44 @@ def import_command(
             typer.echo(f"  skipped: {detail}")
         for detail in summary.failed_details:
             typer.echo(f"  failed: {detail}")
+    finally:
+        store.close()
+
+
+@import_failures_app.command("list")
+def import_failures_list(ctx: typer.Context) -> None:
+    """Show every past import failure, most recent first - what
+    `movie-planner import` echoed at the time, still visible after that
+    run's own output has scrolled away.
+    """
+    cfg = _cfg(ctx)
+    store = _open_store(cfg)
+    try:
+        failures = store.list_import_failures()
+        if not failures:
+            typer.echo("No import failures recorded.")
+            return
+        for failure in failures:
+            when = failure.created_at.isoformat(timespec="seconds")
+            typer.echo(
+                f"[{failure.id}] {when} {failure.source} row {failure.row_number}: {failure.error}"
+            )
+    finally:
+        store.close()
+
+
+@import_failures_app.command("clear")
+def import_failures_clear(ctx: typer.Context) -> None:
+    """Delete every recorded import failure - once you've handled them
+    (fixed the source file, re-imported the rows by hand), there's no
+    reason for the list to keep growing.
+    """
+    cfg = _cfg(ctx)
+    store = _open_store(cfg)
+    try:
+        cleared = store.clear_import_failures()
+        failures_word = "failure" if cleared == 1 else "failures"
+        typer.echo(f"Cleared {cleared} import {failures_word}.")
     finally:
         store.close()
 
