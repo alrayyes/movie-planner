@@ -373,6 +373,7 @@ def _push_new_or_warn(
     store: Store,
     entry: Entry,
     *,
+    importer: str,
     screening_details: str | None = None,
 ) -> Entry:
     venue = _venue_for_entry(store, entry)
@@ -386,6 +387,7 @@ def _push_new_or_warn(
             geo=_venue_geo(venue),
             city=venue.city if venue else None,
             country=venue.country if venue else None,
+            importer=importer,
         )
     except Exception as e:  # noqa: BLE001 - any connect/push failure is a warning
         typer.secho(
@@ -400,6 +402,7 @@ def _push_update_or_warn(
     store: Store,
     entry: Entry,
     *,
+    importer: str,
     screening_details: str | None = None,
 ) -> None:
     if entry.caldav_uid is None:
@@ -415,6 +418,7 @@ def _push_update_or_warn(
             geo=_venue_geo(venue),
             city=venue.city if venue else None,
             country=venue.country if venue else None,
+            importer=importer,
         )
     except Exception as e:  # noqa: BLE001
         typer.secho(
@@ -429,6 +433,7 @@ def _finalize_entry(
     entry: Entry,
     *,
     fetch_metadata: bool,
+    importer: str,
     imdb_id: str | None = None,
     screening_details: str | None = None,
 ) -> Entry:
@@ -436,13 +441,18 @@ def _finalize_entry(
     entry has never been synced, update otherwise. The one orchestration
     sequence shared by every command that ends with "an entry now
     exists/changed locally, make the calendar agree" - see design.md's
-    "One shared orchestration helper" decision.
+    "One shared orchestration helper" decision. `importer` (issue #257)
+    names the calling command for the pushed event's X-IMPORTER/
+    X-IMPORTER-VERSION properties - required, not optional, so a new
+    call site can't forget to set it.
     """
     if fetch_metadata:
         entry = _fetch_metadata_or_warn(cfg, store, entry, imdb_id=imdb_id)
     if entry.caldav_uid is None:
-        return _push_new_or_warn(cfg, store, entry, screening_details=screening_details)
-    _push_update_or_warn(cfg, store, entry, screening_details=screening_details)
+        return _push_new_or_warn(
+            cfg, store, entry, importer=importer, screening_details=screening_details
+        )
+    _push_update_or_warn(cfg, store, entry, importer=importer, screening_details=screening_details)
     return entry
 
 
@@ -690,7 +700,9 @@ def log(
         if notes:
             entry = store.update_entry(entry.id, notes=notes)
 
-        entry = _finalize_entry(cfg, store, entry, fetch_metadata=not no_metadata, imdb_id=imdb_id)
+        entry = _finalize_entry(
+            cfg, store, entry, fetch_metadata=not no_metadata, importer="log", imdb_id=imdb_id
+        )
 
         typer.echo(f"Logged '{title}' as entry {entry.id}.")
     finally:
@@ -974,7 +986,7 @@ def update(
         elif refresh_metadata:
             updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=None)
 
-        _push_update_or_warn(cfg, store, updated)
+        _push_update_or_warn(cfg, store, updated, importer="update")
         typer.echo(f"Updated entry {entry_id}.")
     finally:
         store.close()
@@ -1210,6 +1222,7 @@ def import_command(
     source_label = str(path) if path is not None else "stdin"
     if path is None:
         rows = parse_json_text(sys.stdin.read())
+        importer = "import:json"  # stdin is always JSON, per parse_json_text above
     else:
         fmt = IMPORT_FORMATS.get(path.suffix)
         if fmt is None:
@@ -1220,6 +1233,7 @@ def import_command(
             )
             raise typer.Exit(code=1)
         rows = fmt.parse(path)
+        importer = f"import:{fmt.name}"
 
     store = _open_store(cfg)
     try:
@@ -1230,6 +1244,7 @@ def import_command(
                 store,
                 imported.entry,
                 fetch_metadata=not no_metadata and needs_omdb_fetch(imported.entry),
+                importer=importer,
             )
         # Persisted (issue #254) so `import-failures list` can show them
         # after this run's own output has scrolled away - run_import
@@ -1431,6 +1446,7 @@ def from_pathe_email(
             store,
             entry,
             fetch_metadata=not no_metadata,
+            importer="from-pathe-email",
             screening_details=booking.screening_details,
         )
 
@@ -1461,7 +1477,7 @@ def sync_retry(ctx: typer.Context) -> None:
             typer.echo("Nothing to retry.")
             return
         for entry in unsynced:
-            _finalize_entry(cfg, store, entry, fetch_metadata=False)
+            _finalize_entry(cfg, store, entry, fetch_metadata=False, importer="sync-retry")
         retried = sum(1 for e in unsynced if store.get_entry(e.id).caldav_uid is not None)
         typer.echo(f"Retried {len(unsynced)} entries, {retried} synced successfully.")
     finally:
@@ -1542,7 +1558,9 @@ def sync_refresh(
         fetched = 0
         for entry in entries:
             fetch_metadata = force or needs_omdb_fetch(entry)
-            refreshed = _finalize_entry(cfg, store, entry, fetch_metadata=fetch_metadata)
+            refreshed = _finalize_entry(
+                cfg, store, entry, fetch_metadata=fetch_metadata, importer="sync-refresh"
+            )
             if fetch_metadata and refreshed.imdb_rating is not None:
                 fetched += 1
 

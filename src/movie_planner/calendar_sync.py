@@ -6,6 +6,7 @@ decisions. Nothing here ever reads the calendar back into the store.
 import uuid
 from collections.abc import Sequence
 from datetime import date, datetime, time
+from importlib.metadata import version
 from typing import Protocol, cast
 
 import icalendar
@@ -182,7 +183,11 @@ class CalendarClient:
 
 
 def _extra_properties(
-    entry: Entry, *, city: str | None = None, country: str | None = None
+    entry: Entry,
+    *,
+    city: str | None = None,
+    country: str | None = None,
+    importer: str | None = None,
 ) -> dict[str, str]:
     values: dict[str, str | None] = {
         "X-POSTER-URL": entry.poster_url,
@@ -225,6 +230,14 @@ def _extra_properties(
         # Same "omit, never guess" rule: no tmdb.api_key configured, or no
         # official YouTube trailer found, and this is simply absent.
         "X-TRAILER-URL": entry.trailer_url,
+        # Debugging provenance (issue #257) - which movie-planner command
+        # performed this push, and which version of the tool did it.
+        # Same "omit, never guess" rule: a caller that doesn't pass
+        # importer (a test using CalendarSync directly, say) gets
+        # neither property, rather than a guessed "unknown" importer
+        # with a real version attached to it.
+        "X-IMPORTER": importer,
+        "X-IMPORTER-VERSION": version("movie-planner") if importer else None,
     }
     return {name: value for name, value in values.items() if value}
 
@@ -244,6 +257,7 @@ class CalendarSync:
         geo: tuple[float, float] | None = None,
         city: str | None = None,
         country: str | None = None,
+        importer: str | None = None,
     ) -> Entry:
         # uuid7, not uuid4: time-ordered, so newly-created entries insert
         # sequentially rather than at a random point - and it's already
@@ -257,7 +271,9 @@ class CalendarSync:
             end_time=entry.end_time,
             venue=venue,
             description=build_description(entry, chain=chain, screening_details=screening_details),
-            extra_properties=_extra_properties(entry, city=city, country=country),
+            extra_properties=_extra_properties(
+                entry, city=city, country=country, importer=importer
+            ),
             geo=geo,
         )
         try:
@@ -276,6 +292,7 @@ class CalendarSync:
         geo: tuple[float, float] | None = None,
         city: str | None = None,
         country: str | None = None,
+        importer: str | None = None,
     ) -> None:
         if entry.caldav_uid is None:
             raise CalendarSyncError(f"'{entry.title}' has never been synced to the calendar")
@@ -287,7 +304,9 @@ class CalendarSync:
             end_time=entry.end_time,
             venue=venue,
             description=build_description(entry, chain=chain, screening_details=screening_details),
-            extra_properties=_extra_properties(entry, city=city, country=country),
+            extra_properties=_extra_properties(
+                entry, city=city, country=country, importer=importer
+            ),
             geo=geo,
         )
         try:
@@ -306,6 +325,7 @@ class CalendarSync:
                 geo=geo,
                 city=city,
                 country=country,
+                importer=importer,
             )
         except Exception as e:
             raise CalendarSyncError(

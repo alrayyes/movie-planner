@@ -2997,3 +2997,84 @@ def test_list_and_show_do_not_touch_the_calendar(
     result = runner.invoke(app, ["--config", str(config_path), "list"])
 
     assert result.exit_code == 0, result.output
+
+
+# --- X-IMPORTER/X-IMPORTER-VERSION: issue #257 ---
+
+
+def test_log_stamps_x_importer_and_version(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    from importlib.metadata import version
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "X-IMPORTER:log" in ical_text
+    assert f"X-IMPORTER-VERSION:{version('movie-planner')}" in ical_text
+    store.close()
+
+
+def test_import_csv_stamps_x_importer_with_the_format(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium\nDune,2026-01-01,cinema\n")
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "X-IMPORTER:import:csv" in ical_text
+    store.close()
+
+
+def test_update_stamps_x_importer(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    store.close()
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "update", str(entry.id), "--title", "Dune Part Two"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "X-IMPORTER:update" in ical_text

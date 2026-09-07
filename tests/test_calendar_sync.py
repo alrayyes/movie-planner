@@ -621,6 +621,50 @@ def test_push_new_omits_x_trailer_url_when_entry_has_none(store: Store) -> None:
     assert "X-TRAILER-URL" not in ical_text
 
 
+# --- X-IMPORTER/X-IMPORTER-VERSION: issue #257 ---
+
+
+def test_push_new_includes_importer_and_version_when_given(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None, importer="log")
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-IMPORTER:log" in ical_text
+    assert "X-IMPORTER-VERSION:" in ical_text
+
+
+def test_push_new_omits_importer_properties_when_not_given(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-IMPORTER" not in ical_text
+
+
+def test_push_update_includes_importer_when_given(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None)
+
+    sync.push_update(entry, venue=None, importer="update")
+
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "X-IMPORTER:update" in ical_text
+
+
 def test_push_new_omits_director_actors_genre_and_year_when_entry_has_none(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
@@ -884,6 +928,28 @@ def test_push_update_stale_uid_recovery_keeps_city_and_country(store: Store) -> 
     ical_text = calendar.events_by_uid[refreshed.caldav_uid].data
     assert "X-CITY:Amsterdam" in ical_text
     assert "X-COUNTRY:Netherlands" in ical_text
+
+
+def test_push_update_stale_uid_recovery_keeps_importer(store: Store) -> None:
+    # Same class of bug as #262, same call site (the NotFoundError
+    # recovery branch's push_new call) - added importer/importer_version
+    # here alongside city/country, so this guards against a repeat of
+    # that exact mistake for the new parameter.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None, importer="log")
+    stale_uid = entry.caldav_uid
+    assert stale_uid is not None
+    del calendar.events_by_uid[stale_uid]  # simulates an external wipe
+
+    sync.push_update(entry, venue=None, importer="log")
+
+    refreshed = store.get_entry(entry.id)
+    assert refreshed.caldav_uid is not None
+    ical_text = calendar.events_by_uid[refreshed.caldav_uid].data
+    assert "X-IMPORTER:log" in ical_text
 
 
 def test_push_update_failure_is_wrapped_and_retryable(store: Store) -> None:
