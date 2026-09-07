@@ -33,7 +33,7 @@ from movie_planner.duplicates import find_duplicate
 from movie_planner.importers import IMPORT_FORMATS, parse_json_text, run_import
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
 from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
-from movie_planner.store import Entry, Medium, Store, StoreError, Venue
+from movie_planner.store import ActivityLogEntry, Entry, Medium, Store, StoreError, Venue
 from movie_planner.tmdb import TmdbClient
 
 app = typer.Typer(help="movie-planner: log watched movies and sync them to a calendar.")
@@ -1335,6 +1335,44 @@ def import_failures_clear(ctx: typer.Context) -> None:
         cleared = store.clear_import_failures()
         failures_word = "failure" if cleared == 1 else "failures"
         typer.echo(f"Cleared {cleared} import {failures_word}.")
+    finally:
+        store.close()
+
+
+# --- activity: issue #276 ---
+
+
+def _format_activity(activity: ActivityLogEntry) -> str:
+    when = activity.created_at.isoformat(timespec="seconds")
+    header = (
+        f"[{activity.id}] {when} {activity.action} #{activity.entry_id} '{activity.entry_title}'"
+    )
+    if not activity.changes:
+        return header
+    diff = ", ".join(
+        f"{field}: {before!r} -> {after!r}" for field, (before, after) in activity.changes.items()
+    )
+    return f"{header}: {diff}"
+
+
+@app.command()
+def activity(ctx: typer.Context) -> None:
+    """Show the CLI's own local activity log - every create/update/delete
+    it's made, most recent first, with which fields changed and their
+    before/after values for an update (issue #276). Local to this app
+    only, mirroring movie-planner-web's own log rather than sharing one
+    with it - a separate, bigger cross-repo design question that's been
+    deliberately punted on.
+    """
+    cfg = _cfg(ctx)
+    store = _open_store(cfg)
+    try:
+        activities = store.list_activity()
+        if not activities:
+            typer.echo("No activity recorded.")
+            return
+        for entry in activities:
+            typer.echo(_format_activity(entry))
     finally:
         store.close()
 

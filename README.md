@@ -118,6 +118,7 @@ uv run movie-planner locations venues add "Grand Vista Cinema"
 uv run movie-planner import movies.csv --force
 uv run movie-planner import-failures list
 uv run movie-planner import-failures clear
+uv run movie-planner activity
 uv run movie-planner sync retry
 uv run movie-planner sync refresh
 uv run movie-planner sync refresh --from 2026-01-01 --to 2026-01-31
@@ -202,6 +203,16 @@ to create, edit, or delete an entry directly on the calendar. See
 [`docs/calendar-schema.md`](docs/calendar-schema.md) for exactly which
 fields it compares (only OMDb's/booking's own structured `X-*`
 properties — never the free-text description).
+
+`activity` shows a local log of every create/update/delete this tool
+has made to your entries, most recent first - for an update, which
+fields actually changed and their before/after values, not the whole
+entry. It's populated automatically by `log`, `update`, `delete`,
+`import`, `from-pathe-email`, and `sync refresh`/`sync pull`, since
+they all go through the same three store operations underneath. Local
+to this tool only - it's not a shared trail with
+[movie-planner-web](https://github.com/alrayyes/movie-planner-web),
+which keeps its own equivalent log of the actions it makes.
 
 A large historical import (years of entries at once) can exceed OMDb's
 daily request limit before it finishes. Pass `--no-metadata` to `import`
