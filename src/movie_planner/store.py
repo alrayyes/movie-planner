@@ -4,6 +4,7 @@ synced mirror, never read back from.
 """
 
 import datetime
+import json
 import sqlite3
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -60,6 +61,15 @@ CREATE TABLE IF NOT EXISTS import_failures (
     source TEXT NOT NULL,
     row_number INTEGER NOT NULL,
     error TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS activity_log (
+    id INTEGER PRIMARY KEY,
+    action TEXT NOT NULL,
+    entry_id INTEGER NOT NULL,
+    entry_title TEXT NOT NULL,
+    changes TEXT,
     created_at TEXT NOT NULL
 );
 """
@@ -173,6 +183,28 @@ class ImportFailure:
     source: str
     row_number: int
     error: str
+    created_at: datetime.datetime
+
+
+@dataclass(frozen=True)
+class ActivityLogEntry:
+    """One create/update/delete `create_entry`/`update_entry`/`delete_entry`
+    made (issue #276) - the CLI's own local activity log, mirroring
+    movie-planner-web#349's, but not a shared trail between the two apps.
+    `entry_title` is a snapshot taken at the time of the action (the
+    post-update title for an update, since that's what a person would
+    recognize the entry by afterwards) rather than a live join to
+    `entries`, so a `delete` still has something to display once the row
+    it refers to is gone. `changes` is only set for `action == "update"` -
+    field name to a (before, after) pair, and only for fields whose value
+    actually changed, not every field `update_entry` was called with.
+    """
+
+    id: int
+    action: str
+    entry_id: int
+    entry_title: str
+    changes: dict[str, tuple[object, object]] | None
     created_at: datetime.datetime
 
 
@@ -598,9 +630,12 @@ class Store:
                 seat,
             ),
         )
-        self._conn.commit()
         # Invariant: sqlite always sets lastrowid on a successful INSERT.
         assert cur.lastrowid is not None  # nosec B101
+        self._record_activity(
+            action="create", entry_id=cur.lastrowid, entry_title=title, changes=None
+        )
+        self._conn.commit()
         return self.get_entry(cur.lastrowid)
 
     def get_entry(self, entry_id: int) -> Entry:
@@ -745,6 +780,27 @@ class Store:
             f"UPDATE entries SET {set_clause} WHERE id=?",  # nosec B608
             (*values, entry_id),
         )
+        # Only fields whose serialized value actually differs - a caller
+        # passing the same value it already had (update_entry(id,
+        # title="Dune") on an entry already titled "Dune") isn't a real
+        # change, and shouldn't read as one in the activity log.
+        field_diff = {
+            field: (
+                _serialize_entry_field(field, getattr(current, field)),
+                _serialize_entry_field(field, getattr(updated, field)),
+            )
+            for field, passed in changes.items()
+            if passed is not _UNSET
+            and _serialize_entry_field(field, getattr(current, field))
+            != _serialize_entry_field(field, getattr(updated, field))
+        }
+        if field_diff:
+            self._record_activity(
+                action="update",
+                entry_id=entry_id,
+                entry_title=updated.title,
+                changes=field_diff,
+            )
         self._conn.commit()
         return self.get_entry(entry_id)
 
@@ -757,10 +813,53 @@ class Store:
         return _row_to_entry(row) if row else None
 
     def delete_entry(self, entry_id: int) -> None:
-        cur = self._conn.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
+        # Fetched first so there's still a title to record once the row is
+        # gone (issue #276) - also gives the "no entry with id" error for
+        # a nonexistent id, same message as before, just raised before
+        # the now-unnecessary DELETE rather than after it.
+        entry = self.get_entry(entry_id)
+        self._conn.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
+        self._record_activity(
+            action="delete", entry_id=entry_id, entry_title=entry.title, changes=None
+        )
         self._conn.commit()
-        if cur.rowcount == 0:
-            raise StoreError(f"no entry with id {entry_id}")
+
+    def _record_activity(
+        self,
+        *,
+        action: str,
+        entry_id: int,
+        entry_title: str,
+        changes: dict[str, tuple[object, object]] | None,
+    ) -> None:
+        self._conn.execute(
+            "INSERT INTO activity_log (action, entry_id, entry_title, changes, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                action,
+                entry_id,
+                entry_title,
+                json.dumps(changes) if changes is not None else None,
+                datetime.datetime.now(datetime.UTC).isoformat(),
+            ),
+        )
+
+    def list_activity(self) -> list[ActivityLogEntry]:
+        rows = self._conn.execute(
+            "SELECT id, action, entry_id, entry_title, changes, created_at FROM activity_log "
+            "ORDER BY created_at DESC, id DESC"
+        )
+        return [
+            ActivityLogEntry(
+                id=r[0],
+                action=r[1],
+                entry_id=r[2],
+                entry_title=r[3],
+                changes={k: tuple(v) for k, v in json.loads(r[4]).items()} if r[4] else None,
+                created_at=datetime.datetime.fromisoformat(r[5]),
+            )
+            for r in rows
+        ]
 
     def record_import_failure(self, *, source: str, row_number: int, error: str) -> ImportFailure:
         created_at = datetime.datetime.now(datetime.UTC).isoformat()

@@ -3141,3 +3141,61 @@ def test_without_verbose_nothing_is_printed_to_stderr(
 
     assert result.exit_code == 0, result.output
     assert result.stderr == ""
+
+
+# --- activity: issue #276 ---
+
+
+def test_activity_shows_a_logged_entry(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    runner.invoke(app, _log_args(config_path))
+
+    result = runner.invoke(app, ["--config", str(config_path), "activity"])
+
+    assert result.exit_code == 0, result.output
+    assert "create" in result.output
+    assert "Dune" in result.output
+
+
+def test_activity_shows_field_changes_on_an_update(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    runner.invoke(app, _log_args(config_path))
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    store.close()
+
+    runner.invoke(
+        app, ["--config", str(config_path), "update", str(entry.id), "--title", "Dune Part Two"]
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "activity"])
+
+    assert result.exit_code == 0, result.output
+    assert "update" in result.output
+    assert "Dune" in result.output
+    assert "Dune Part Two" in result.output
+
+
+def test_activity_shows_a_delete(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    runner.invoke(app, _log_args(config_path))
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    store.close()
+
+    runner.invoke(app, ["--config", str(config_path), "delete", str(entry.id)])
+
+    result = runner.invoke(app, ["--config", str(config_path), "activity"])
+
+    assert result.exit_code == 0, result.output
+    assert "delete" in result.output
+
+
+def test_activity_empty_says_so(config_path: Path) -> None:
+    result = runner.invoke(app, ["--config", str(config_path), "activity"])
+
+    assert result.exit_code == 0, result.output
+    assert "no activity" in result.output.lower()

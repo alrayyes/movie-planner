@@ -69,7 +69,69 @@ def test_init_creates_all_tables_on_first_run(tmp_path: Path) -> None:
         }
     finally:
         conn.close()
-    assert {"entries", "media", "venues", "import_failures"} <= tables
+    assert {"entries", "media", "venues", "import_failures", "activity_log"} <= tables
+
+
+# --- activity log: issue #276 ---
+
+
+def _medium(store: Store) -> int:
+    return store.add_medium("cinema", is_physical_place=True).id
+
+
+def test_create_entry_records_a_create_activity(store: Store) -> None:
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=_medium(store))
+
+    (activity,) = store.list_activity()
+    assert activity.action == "create"
+    assert activity.entry_id == entry.id
+    assert activity.entry_title == "Dune"
+    assert activity.changes is None
+
+
+def test_update_entry_records_only_the_fields_that_actually_changed(store: Store) -> None:
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=_medium(store))
+
+    store.update_entry(entry.id, title="Dune Part Two", notes="great")
+
+    activities = store.list_activity()
+    update = next(a for a in activities if a.action == "update")
+    assert update.entry_id == entry.id
+    assert update.entry_title == "Dune Part Two"
+    assert update.changes == {
+        "title": ("Dune", "Dune Part Two"),
+        "notes": (None, "great"),
+    }
+
+
+def test_update_entry_passing_the_same_value_records_no_activity(store: Store) -> None:
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=_medium(store))
+
+    store.update_entry(entry.id, title="Dune")
+
+    activities = [a for a in store.list_activity() if a.action == "update"]
+    assert activities == []
+
+
+def test_delete_entry_records_a_delete_activity_with_the_titles(store: Store) -> None:
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=_medium(store))
+
+    store.delete_entry(entry.id)
+
+    (activity,) = [a for a in store.list_activity() if a.action == "delete"]
+    assert activity.entry_id == entry.id
+    assert activity.entry_title == "Dune"
+    assert activity.changes is None
+
+
+def test_list_activity_most_recent_first(store: Store) -> None:
+    medium_id = _medium(store)
+    first = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium_id)
+    second = store.create_entry(title="Arrival", date=date(2026, 1, 2), medium_id=medium_id)
+
+    activities = store.list_activity()
+
+    assert [a.entry_id for a in activities] == [second.id, first.id]
 
 
 def test_add_and_list_media(store: Store) -> None:
