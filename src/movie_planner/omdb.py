@@ -5,12 +5,15 @@ title already matched.
 """
 
 import datetime
+import logging
 import re
 from dataclasses import dataclass
 
 import httpx
 
 from movie_planner.store import Entry, Store
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -177,15 +180,24 @@ class OmdbClient:
         if year is not None:
             params["y"] = str(year)
 
+        # apikey deliberately left out of the log line - it's a secret,
+        # never something --verbose should print.
+        logger.debug("OMDb request: %s", {k: v for k, v in params.items() if k != "apikey"})
         response = self._http.get("/", params=params)
         response.raise_for_status()
         data = response.json()
 
         if data.get("Response") == "False":
+            logger.debug("OMDb response: no match for %s", cache_key_base)
             self._cache[cache_key] = None
             return None
 
         if title_search and data.get("Type") not in (None, "movie"):
+            logger.debug(
+                "OMDb response: %s matched a non-movie Type=%s, treated as no match",
+                cache_key_base,
+                data.get("Type"),
+            )
             self._cache[cache_key] = None
             return None
 
@@ -215,6 +227,7 @@ class OmdbClient:
             production=_na_or(data.get("Production")),
             website=_na_or(data.get("Website")),
         )
+        logger.debug("OMDb response: %s matched imdb_id=%s", cache_key_base, ratings.imdb_id)
         self._cache[cache_key] = ratings
         return ratings
 

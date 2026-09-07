@@ -291,6 +291,25 @@ win over the config file. The password stays config-file-only (via
 `password` or `password_command`) rather than risk landing in shell history
 or a process list.
 
+### Diagnosing a problem with `--verbose`
+
+`--verbose` (or `$MOVIE_PLANNER_VERBOSE`) works on every command and prints
+diagnostic detail to stderr as it runs: the exact OMDb/TMDb request made,
+the full calendar payload a push sends, and why a duplicate was or wasn't
+detected. Normal output is unchanged either way — this only adds detail
+alongside it, so it's safe to leave on while tracking down a problem:
+
+```console
+$ movie-planner --verbose log --title "Dune" --date 2026-01-01 --medium cinema
+no duplicate found for 'Dune' on 2026-01-01
+OMDb request: {'t': 'Dune', 'type': 'movie'}
+OMDb response: Dune matched imdb_id=tt1160419
+Calendar push (create, uid=...):
+BEGIN:VCALENDAR
+...
+Logged 'Dune' and synced it to the calendar.
+```
+
 ## Import examples
 
 [`examples/`](examples/) has three fictional viewings in CSV and JSON

@@ -6,6 +6,7 @@ design.md's "Duplicate matching" decision for the same-day-over-window and
 threshold rationale.
 """
 
+import logging
 import re
 import string
 from datetime import date, datetime, time, timedelta
@@ -13,6 +14,8 @@ from datetime import date, datetime, time, timedelta
 from rapidfuzz import fuzz
 
 from movie_planner.store import Entry
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_THRESHOLD = 90.0
 
@@ -78,8 +81,18 @@ def find_duplicate(
         if entry.date != entry_date:
             continue
         score = fuzz.token_sort_ratio(normalized_candidate, normalize_title(entry.title))
+        logger.debug(
+            "duplicate check: %r vs %r -> score=%.1f (threshold=%.1f)",
+            title,
+            entry.title,
+            score,
+            threshold,
+        )
         if score >= threshold:
+            logger.debug("duplicate match: title score %.1f >= %.1f", score, threshold)
             return entry
         if _times_overlap(start_time, end_time, entry.start_time, entry.end_time):
+            logger.debug("duplicate match: overlapping screening time with %r", entry.title)
             return entry
+    logger.debug("no duplicate found for %r on %s", title, entry_date)
     return None

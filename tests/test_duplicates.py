@@ -1,3 +1,4 @@
+import logging
 from datetime import date, time
 
 import pytest
@@ -183,3 +184,23 @@ def test_times_just_outside_the_buffer_are_not_flagged() -> None:
     )
 
     assert match is None
+
+
+def test_duplicate_match_logs_the_score_at_debug_level(caplog: pytest.LogCaptureFixture) -> None:
+    existing = [_entry(1, "Glass Horizon", date(2024, 3, 15))]
+
+    with caplog.at_level(logging.DEBUG, logger="movie_planner.duplicates"):
+        match = find_duplicate("Glass Horizon", date(2024, 3, 15), existing)
+
+    assert match is existing[0]
+    assert any("Glass Horizon" in r.message and "score" in r.message for r in caplog.records)
+
+
+def test_duplicate_miss_logs_no_match_found(caplog: pytest.LogCaptureFixture) -> None:
+    existing = [_entry(1, "Glass Horizon", date(2024, 3, 15))]
+
+    with caplog.at_level(logging.DEBUG, logger="movie_planner.duplicates"):
+        match = find_duplicate("Nightfall Junction", date(2024, 3, 15), existing)
+
+    assert match is None
+    assert any("no duplicate" in r.message.lower() for r in caplog.records)

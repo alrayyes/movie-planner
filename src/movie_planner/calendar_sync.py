@@ -3,6 +3,7 @@ authoritative - see design.md's "Source of truth" and "Sync failure"
 decisions. Nothing here ever reads the calendar back into the store.
 """
 
+import logging
 import uuid
 from collections.abc import Sequence
 from datetime import date, datetime, time
@@ -14,6 +15,8 @@ from caldav.davclient import DAVClient
 from caldav.lib.error import NotFoundError
 
 from movie_planner.store import Entry, Store
+
+logger = logging.getLogger(__name__)
 
 
 class CalendarSyncError(Exception):
@@ -276,6 +279,7 @@ class CalendarSync:
             ),
             geo=geo,
         )
+        logger.debug("Calendar push (create, uid=%s):\n%s", uid, ical_text)
         try:
             self._client.create_event(ical_text)
         except Exception as e:
@@ -309,6 +313,7 @@ class CalendarSync:
             ),
             geo=geo,
         )
+        logger.debug("Calendar push (update, uid=%s):\n%s", entry.caldav_uid, ical_text)
         try:
             self._client.update_event(entry.caldav_uid, ical_text)
         except NotFoundError:
