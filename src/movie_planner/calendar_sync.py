@@ -280,11 +280,32 @@ class CalendarSync:
             geo=geo,
         )
         logger.debug("Calendar push (create, uid=%s):\n%s", uid, ical_text)
+        # The local store records this UID *before* the CalDAV create,
+        # not after (issue #246). An interruption between the two - a
+        # killed process, a dropped connection after the server actually
+        # created the event - used to leave caldav_uid unset locally
+        # while a real, orphaned event sat on the calendar; the next
+        # retry had no way to tell it had already been created and made
+        # a second, genuinely duplicate one. With the write done first,
+        # the local record and the (possibly not-yet-existing) calendar
+        # event always agree on the UID, so any later push for this
+        # entry - push_update, from a normal retry or `sync refresh` -
+        # either finds the real event and updates it, or gets
+        # NotFoundError and recovers through the same path #166 already
+        # added, in both cases without ever creating a second event.
+        #
+        # A caught create_event failure deliberately does NOT roll this
+        # back to None: there's no reliable way here to tell "definitely
+        # never reached the server" apart from "reached it, and only the
+        # response was lost" - rolling back would reopen this exact bug
+        # for the second case. Leaving it recorded is safe either way,
+        # for the same reason above.
+        updated = self._store.update_entry(entry.id, caldav_uid=uid)
         try:
             self._client.create_event(ical_text)
         except Exception as e:
             raise CalendarSyncError(f"could not sync '{entry.title}' to the calendar: {e}") from e
-        return self._store.update_entry(entry.id, caldav_uid=uid)
+        return updated
 
     def push_update(
         self,

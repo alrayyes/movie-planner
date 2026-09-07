@@ -6,7 +6,7 @@ from pathlib import Path
 
 import icalendar
 import pytest
-from fakes import FakeCalendar
+from fakes import FakeCalendar, FakeEvent
 
 from movie_planner.calendar_sync import (
     CalendarClient,
@@ -475,6 +475,119 @@ def test_push_new_generates_a_uuid7(store: Store) -> None:
 
     assert synced.caldav_uid is not None
     assert uuid.UUID(synced.caldav_uid).version == 7
+
+
+# --- crash safety: issue #246 ---
+
+
+def test_push_new_records_the_uid_locally_before_creating_the_event(store: Store) -> None:
+    # The core of the fix: an interruption between the CalDAV create and
+    # the local save can no longer produce a "caldav_uid is still None
+    # but a real event already exists" state, because the local write
+    # now happens first - by the time create_event runs, the store
+    # already agrees on the UID that's about to be created.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    seen_uid_at_create_time: list[str | None] = []
+    original_add_event = calendar.add_event
+
+    def spying_add_event(ical: str) -> FakeEvent:
+        seen_uid_at_create_time.append(store.get_entry(entry.id).caldav_uid)
+        return original_add_event(ical)
+
+    calendar.add_event = spying_add_event  # type: ignore[method-assign]
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert seen_uid_at_create_time == [synced.caldav_uid]
+
+
+def test_push_new_interrupted_before_the_event_landed_self_heals_without_duplicating(
+    store: Store,
+) -> None:
+    # Simulates a crash between the local write and the CalDAV create
+    # actually reaching the server - the entry claims a UID that
+    # doesn't exist on the calendar yet. The next push for this entry
+    # (any push_update, e.g. from `sync refresh`) must recover through
+    # the same NotFoundError path #166 already added, not fail forever
+    # and not create a second event alongside a first one that was
+    # never actually made.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    interrupted = store.update_entry(entry.id, caldav_uid="never-actually-created")
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    sync.push_update(interrupted, venue=None)  # does not raise
+
+    refreshed = store.get_entry(entry.id)
+    assert refreshed.caldav_uid is not None
+    assert refreshed.caldav_uid != "never-actually-created"
+    assert list(calendar.events_by_uid) == [refreshed.caldav_uid]
+
+
+def test_push_new_interrupted_after_the_event_landed_does_not_duplicate(store: Store) -> None:
+    # The other half of the same crash window: the CalDAV create
+    # actually succeeded server-side before the interruption, so a
+    # real event already exists under the UID the store also already
+    # recorded (since that write happens first). The next push for
+    # this entry must find and use that existing event, not create a
+    # second one under a fresh UID.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    # Simulates the crash landing after create_event succeeded but
+    # before the caller got to do anything else with the result -
+    # both the store and the calendar already agree on this UID.
+    ical_text = build_vevent(
+        uid="already-created",
+        title="Dune",
+        entry_date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue=None,
+    )
+    calendar.add_event(ical=ical_text)
+    interrupted = store.update_entry(entry.id, caldav_uid="already-created")
+
+    sync.push_update(interrupted, venue=None)  # finds and updates the existing event
+
+    refreshed = store.get_entry(entry.id)
+    assert refreshed.caldav_uid == "already-created"
+    assert list(calendar.events_by_uid) == ["already-created"]
+
+
+def test_push_new_on_a_create_failure_leaves_the_uid_recorded_rather_than_rolling_back(
+    store: Store,
+) -> None:
+    # A caught create_event failure can't be reliably told apart from
+    # "the server actually created it and the failure happened on the
+    # way back" (a dropped connection reading the response, say) - so
+    # rolling the local UID back to None here would reopen exactly the
+    # bug this issue is about for that case. Leaving it recorded is
+    # safe either way: the next push for this entry self-heals through
+    # the same NotFoundError path, whether or not the event actually
+    # exists yet.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar(fail_next=True)
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    with pytest.raises(CalendarSyncError):
+        sync.push_new(entry, venue=None)
+
+    failed = store.get_entry(entry.id)
+    assert failed.caldav_uid is not None
+    calendar.fail_next = False
+
+    sync.push_update(failed, venue=None)  # self-heals, does not raise
+
+    refreshed = store.get_entry(entry.id)
+    assert refreshed.caldav_uid is not None
+    assert list(calendar.events_by_uid) == [refreshed.caldav_uid]
 
 
 def test_push_new_includes_ratings_in_the_description(store: Store) -> None:
@@ -1023,8 +1136,14 @@ def test_push_new_failure_leaves_the_local_entry_persisted_and_is_retryable(
     with pytest.raises(CalendarSyncError):
         sync.push_new(entry, venue=None)
 
-    # The entry survived the failed push, unsynced, and can be retried.
-    assert store.get_entry(entry.id).caldav_uid is None
+    # The entry survived the failed push and can be retried - via
+    # push_update, not push_new again (issue #246): a second push_new
+    # can't tell whether the first one actually reached the server
+    # despite the local error, so retrying has to go through the same
+    # find-or-recreate path push_update already has.
+    failed = store.get_entry(entry.id)
     calendar.fail_next = False
-    synced = sync.push_new(entry, venue=None)
-    assert synced.caldav_uid is not None
+    sync.push_update(failed, venue=None)
+
+    refreshed = store.get_entry(entry.id)
+    assert refreshed.caldav_uid is not None

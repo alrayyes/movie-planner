@@ -1533,13 +1533,16 @@ def from_pathe_email(
 
 @sync_app.command("retry")
 def sync_retry(ctx: typer.Context) -> None:
-    """Retry pushing any entry that's never been synced (its
+    """Retry pushing any entry that's never even attempted a sync (its
     caldav_uid is still unset) - cheap and safe to run any time, since
-    it never calls OMDb and only touches those entries. This is not
-    the same as recovering an entry whose caldav_uid points at an
-    event the calendar no longer has (an external wipe/rebuild) - that
-    recovery happens automatically inside a normal 'sync refresh' or
-    the next 'log'/'update' push for that specific entry, not here.
+    it never calls OMDb and only touches those entries. This is
+    narrower than "any entry with a failed sync": since issue #246, a
+    push that failed - for any reason, not just a crash - still
+    records the UID it attempted, so it's no longer picked up here.
+    Run 'sync refresh' instead to retry it - it pushes every entry
+    regardless of caldav_uid, and recovers a stale or
+    never-actually-created UID the same way it already recovers one
+    left by an external wipe/rebuild.
     """
     cfg = _cfg(ctx)
     store = _open_store(cfg)
