@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.24.0...movie-planner-v1.24.1) (2026-09-08)
+
+
+### Documentation
+
+* **contributing:** scope real-setup verification to a small sample first ([#288](https://github.com/alrayyes/movie-planner/issues/288)) ([1b9a17b](https://github.com/alrayyes/movie-planner/commit/1b9a17b4152ff458a1d1df9a8f856e585da7bfdb))
+
 ## [1.24.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.23.1...movie-planner-v1.24.0) (2026-09-08)
 
 
