@@ -34,7 +34,7 @@ from movie_planner.importers import IMPORT_FORMATS, parse_json_text, run_import
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
 from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
 from movie_planner.store import ActivityLogEntry, Entry, Medium, Store, StoreError, Venue
-from movie_planner.tmdb import TmdbClient
+from movie_planner.tmdb import TmdbClient, TmdbMovieDetails
 
 app = typer.Typer(help="movie-planner: log watched movies and sync them to a calendar.")
 locations_app = typer.Typer(help="Manage the medium and venue lists.")
@@ -522,14 +522,15 @@ def _fetch_metadata_or_warn(
     if not matched:
         typer.echo(f"No OMDb match found for '{entry.title}'.")
         return updated
-    return _fetch_trailer_or_warn(cfg, store, updated)
+    return _fetch_tmdb_details_or_warn(cfg, store, updated)
 
 
-def _fetch_trailer_or_warn(cfg: config_module.Config, store: Store, entry: Entry) -> Entry:
-    """TMDb trailer lookup (issue #236) - piggybacks on the imdb_id an
-    OMDb match already produced, so it's only ever attempted right after
-    a successful OMDb fetch, never on its own. A config with no
-    tmdb.api_key set is the common case, not an error - simply skipped.
+def _fetch_tmdb_details_or_warn(cfg: config_module.Config, store: Store, entry: Entry) -> Entry:
+    """TMDb lookup (issue #236, extended by #311) - piggybacks on the
+    imdb_id an OMDb match already produced, so it's only ever attempted
+    right after a successful OMDb fetch, never on its own. A config with
+    no tmdb.api_key set is the common case, not an error - simply
+    skipped.
     """
     if not cfg.tmdb_api_key or not entry.imdb_url:
         return entry
@@ -538,13 +539,37 @@ def _fetch_trailer_or_warn(cfg: config_module.Config, store: Store, entry: Entry
         return entry
     try:
         client = TmdbClient(cfg.tmdb_api_key)
-        trailer_url = client.lookup_trailer_url(imdb_id=match.group())
-    except Exception as e:  # noqa: BLE001 - trailer lookup is optional, never fatal
-        typer.secho(f"Warning: could not fetch a trailer: {e}", fg=typer.colors.YELLOW)
+        details = client.lookup_movie_details(imdb_id=match.group())
+    except Exception as e:  # noqa: BLE001 - TMDb lookup is optional, never fatal
+        typer.secho(f"Warning: could not fetch TMDb details: {e}", fg=typer.colors.YELLOW)
         return entry
-    if trailer_url is None:
+    if details is None:
         return entry
-    return store.update_entry(entry.id, trailer_url=trailer_url)
+    return _apply_tmdb_details(store, entry, details)
+
+
+def _apply_tmdb_details(store: Store, entry: Entry, details: TmdbMovieDetails) -> Entry:
+    # Every field here falls back to the entry's current value when TMDb
+    # doesn't have one, rather than a blind overwrite - a re-fetch that
+    # gets a thinner TMDb response than last time (a missing sub-
+    # resource, a transient gap in TMDb's own data) must never reset an
+    # already-known field back to unknown. `actors`/`website` are also
+    # OMDb-derived columns, so their fallback is what OMDb already set;
+    # every other field has no OMDb equivalent, so the fallback is
+    # simply "leave it as it was".
+    return store.update_entry(
+        entry.id,
+        trailer_url=details.trailer_url if details.trailer_url is not None else entry.trailer_url,
+        actors=details.actors if details.actors is not None else entry.actors,
+        website=details.homepage if details.homepage is not None else entry.website,
+        collection=details.collection if details.collection is not None else entry.collection,
+        certification=details.certification
+        if details.certification is not None
+        else entry.certification,
+        keywords=details.keywords if details.keywords is not None else entry.keywords,
+        budget=details.budget if details.budget is not None else entry.budget,
+        popularity=details.popularity if details.popularity is not None else entry.popularity,
+    )
 
 
 def _venue_location(venue: Venue | None) -> str | None:

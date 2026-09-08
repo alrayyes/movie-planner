@@ -9,9 +9,10 @@ A command-line tool that logs the movies you've watched — title, date,
 start/end time, where you watched it — and syncs each viewing to a Baikal
 (CalDAV) calendar. It replaces a hand-maintained org-mode log with a guided
 prompt, enriches entries with IMDb/Rotten Tomatoes/Metacritic ratings via
-OMDb, an optional TMDb-sourced trailer link, and a manually entered
-Letterboxd link, and catches accidental duplicate log entries with fuzzy
-title matching.
+OMDb and, optionally, TMDb's own cast list, trailer link, collection,
+content certification, homepage, keywords and budget/popularity, plus a
+manually entered Letterboxd link, and catches accidental duplicate log
+entries with fuzzy title matching.
 
 Prefer a browser to a terminal? [movie-planner-web](https://github.com/alrayyes/movie-planner-web)
 is a static web client for the same CalDAV calendar and OMDb setup — no
@@ -47,8 +48,11 @@ movie-planner-web, OMDb, the calendar, and the optional
 - **An [OMDb API key](https://www.omdbapi.com/apikey.aspx)**, for the
   IMDb/Rotten Tomatoes/Metacritic ratings fetched on each logged entry.
 - **Optional: a [TMDb API key](https://www.themoviedb.org/settings/api)**,
-  for looking up each entry's official YouTube trailer alongside the OMDb
-  fetch. Skipped entirely, no error, without one configured.
+  looked up alongside the OMDb fetch for a fuller cast list than OMDb's
+  own (which only ever returns a handful of top-billed names), the
+  official YouTube trailer, collection/franchise, content certification,
+  homepage, keywords, budget, and popularity. Skipped entirely, no
+  error, without one configured.
 
 ## Installation
 

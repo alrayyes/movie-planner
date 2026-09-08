@@ -13,7 +13,7 @@ from movie_planner.calendar_sync import CalendarClient, build_vevent
 from movie_planner.cli import app
 from movie_planner.omdb import MovieRatings, OmdbClient
 from movie_planner.store import Store
-from movie_planner.tmdb import TmdbClient
+from movie_planner.tmdb import TmdbClient, TmdbMovieDetails
 
 runner = CliRunner()
 
@@ -2661,11 +2661,11 @@ def test_log_fetches_trailer_when_tmdb_configured(
 ) -> None:
     seen_imdb_ids: list[str] = []
 
-    def lookup(self: TmdbClient, *, imdb_id: str) -> str | None:
+    def lookup(self: TmdbClient, *, imdb_id: str) -> TmdbMovieDetails | None:
         seen_imdb_ids.append(imdb_id)
-        return "https://www.youtube.com/watch?v=8g18jFHCLXk"
+        return TmdbMovieDetails(trailer_url="https://www.youtube.com/watch?v=8g18jFHCLXk")
 
-    monkeypatch.setattr("movie_planner.cli.TmdbClient.lookup_trailer_url", lookup)
+    monkeypatch.setattr("movie_planner.cli.TmdbClient.lookup_movie_details", lookup)
 
     result = runner.invoke(
         app,
@@ -2692,6 +2692,103 @@ def test_log_fetches_trailer_when_tmdb_configured(
     assert entry.caldav_uid is not None
     ical_text = calendar.events_by_uid[entry.caldav_uid].data
     assert "X-TRAILER-URL:https://www.youtube.com/watch?v=8g18jFHCLXk" in ical_text
+    store.close()
+
+
+def test_log_fetches_full_tmdb_details_when_configured(
+    config_path_with_tmdb: Path,
+    calendar: FakeCalendar,
+    omdb_match_with_imdb_id: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    details = TmdbMovieDetails(
+        trailer_url="https://www.youtube.com/watch?v=8g18jFHCLXk",
+        actors="Timothée Chalamet, Rebecca Ferguson, Zendaya, Josh Brolin, Javier Bardem",
+        collection="Dune Collection",
+        certification="PG-13",
+        homepage="https://www.dunemovie.com",
+        keywords="desert, prophecy, sandworm",
+        budget=165_000_000,
+        popularity=245.318,
+    )
+    monkeypatch.setattr(
+        "movie_planner.cli.TmdbClient.lookup_movie_details", lambda self, **kw: details
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path_with_tmdb),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path_with_tmdb)
+    (entry,) = store.list_entries()
+    # TMDb's fuller cast/homepage override OMDb's shorter values.
+    assert entry.actors == (
+        "Timothée Chalamet, Rebecca Ferguson, Zendaya, Josh Brolin, Javier Bardem"
+    )
+    assert entry.website == "https://www.dunemovie.com"
+    assert entry.collection == "Dune Collection"
+    assert entry.certification == "PG-13"
+    assert entry.keywords == "desert, prophecy, sandworm"
+    assert entry.budget == 165_000_000
+    assert entry.popularity == 245.318
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "X-COLLECTION:Dune Collection" in ical_text
+    assert "X-CERTIFICATION:PG-13" in ical_text
+    assert "X-KEYWORDS:desert, prophecy, sandworm" in ical_text
+    assert "X-BUDGET:165000000" in ical_text
+    assert "X-POPULARITY:245.318" in ical_text
+    store.close()
+
+
+def test_log_keeps_omdbs_actors_when_tmdb_has_no_cast(
+    config_path_with_tmdb: Path,
+    calendar: FakeCalendar,
+    omdb_match_with_imdb_id: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # TMDb resolving the title but returning no cast (a thin TMDb entry)
+    # must never blank out OMDb's own, shorter actors list.
+    details = TmdbMovieDetails(actors=None)
+    monkeypatch.setattr(
+        "movie_planner.cli.TmdbClient.lookup_movie_details", lambda self, **kw: details
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path_with_tmdb),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path_with_tmdb)
+    (entry,) = store.list_entries()
+    assert entry.actors == "Timothée Chalamet, Rebecca Ferguson, Zendaya"
     store.close()
 
 
@@ -2739,7 +2836,9 @@ def test_tmdb_api_key_flag_overrides_config_file(
         original_init(self, api_key, http_client)
 
     monkeypatch.setattr(TmdbClient, "__init__", capturing_init)
-    monkeypatch.setattr("movie_planner.cli.TmdbClient.lookup_trailer_url", lambda self, **kw: None)
+    monkeypatch.setattr(
+        "movie_planner.cli.TmdbClient.lookup_movie_details", lambda self, **kw: None
+    )
     ratings = MovieRatings(imdb=None, rotten_tomatoes=None, metacritic=None, imdb_id="tt1160419")
     monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: ratings)
 

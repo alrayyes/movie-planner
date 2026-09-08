@@ -242,6 +242,17 @@ def _extra_properties(
         # Same "omit, never guess" rule: no tmdb.api_key configured, or no
         # official YouTube trailer found, and this is simply absent.
         "X-TRAILER-URL": entry.trailer_url,
+        # TMDb-derived fields with no OMDb equivalent (issue #311) -
+        # X-ACTORS/X-WEBSITE above are also TMDb-sourced when TMDb has a
+        # richer value, but reuse those existing properties rather than
+        # adding parallel ones. X-CERTIFICATION, not X-RATED - a
+        # different rating system (TMDb's release_dates) from OMDb's own
+        # Rated, which stays untouched.
+        "X-COLLECTION": entry.collection,
+        "X-CERTIFICATION": entry.certification,
+        "X-KEYWORDS": entry.keywords,
+        "X-BUDGET": str(entry.budget) if entry.budget is not None else None,
+        "X-POPULARITY": str(entry.popularity) if entry.popularity is not None else None,
         # Debugging provenance (issue #257) - which movie-planner command
         # performed this push, and which version of the tool did it.
         # Same "omit, never guess" rule: a caller that doesn't pass

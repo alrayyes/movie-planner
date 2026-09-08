@@ -23,7 +23,8 @@ flowchart LR
         Pull["sync pull\n(manual, approval-gated;\neverything else stays\npush-only)"]
     end
 
-    Store -- "ratings, poster,\ndirector, cast, genre" --> OMDb["OMDb API"]
+    Store -- "ratings, poster,\ndirector, genre" --> OMDb["OMDb API"]
+    Store -- "cast, trailer, collection,\ncertification, keywords,\nbudget, popularity\n(optional)" --> TMDb["TMDb API"]
     Sync -- "LOCATION, GEO,\nX-* properties" --> CalDAV[("Baikal / CalDAV calendar")]
     CalDAV -- "new/changed/removed\ncandidates" --> Pull
     Pull -. "only on approval" .-> Store
@@ -64,10 +65,15 @@ flowchart LR
   pointing both `init` commands at the same path doesn't clobber the
   other tool's settings. An older config file with no namespaced
   wrapper, for either tool, still loads exactly as before.
-- **OMDb** enriches entries with ratings, poster, director, cast,
-  genre, and release year - fetched by `movie-planner` itself
-  (`log`, `import`, `sync refresh`, `from-pathe-email`), never by the
-  mail-import tool.
+- **OMDb** enriches entries with ratings, poster, director, genre, and
+  release year - fetched by `movie-planner` itself (`log`, `import`,
+  `sync refresh`, `from-pathe-email`), never by the mail-import tool.
+- **TMDb** (optional, unlike OMDb) enriches the same entry further once
+  OMDb has matched it - full cast (overriding OMDb's own, which only
+  ever returns a handful of top-billed names), trailer, collection,
+  content certification, homepage, keywords, budget, and popularity
+  (issue #311). Piggybacks on the `imdbID` an OMDb match already
+  returned; never looked up on its own.
 - **The CalDAV calendar** (Baikal or otherwise) is a synced mirror,
   written to by every `movie-planner` command except `sync pull`,
   which is the only one that also reads it back (approval-gated, see

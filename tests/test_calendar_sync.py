@@ -735,6 +735,65 @@ def test_push_new_omits_x_trailer_url_when_entry_has_none(store: Store) -> None:
     assert "X-TRAILER-URL" not in ical_text
 
 
+# --- X-COLLECTION/X-CERTIFICATION/X-KEYWORDS/X-BUDGET/X-POPULARITY: issue #311 ---
+
+
+def test_push_new_includes_tmdbs_own_fields_as_x_properties(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.update_entry(
+        entry.id,
+        collection="Dune Collection",
+        certification="PG-13",
+        keywords="desert, prophecy, sandworm",
+        budget=165_000_000,
+        popularity=245.318,
+    )
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-COLLECTION:Dune Collection" in ical_text
+    assert "X-CERTIFICATION:PG-13" in ical_text
+    assert "X-KEYWORDS:desert, prophecy, sandworm" in ical_text
+    assert "X-BUDGET:165000000" in ical_text
+    assert "X-POPULARITY:245.318" in ical_text
+
+
+def test_push_new_omits_tmdbs_own_fields_when_entry_has_none(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    for prop in ("X-COLLECTION", "X-CERTIFICATION", "X-KEYWORDS", "X-BUDGET", "X-POPULARITY"):
+        assert prop not in ical_text
+
+
+def test_push_new_includes_a_genuine_zero_popularity(store: Store) -> None:
+    # Unlike a missing/None popularity (omitted, above), a real 0.0 is
+    # meaningful TMDb data - it must still show up as X-POPULARITY:0.0,
+    # not be filtered out the way an empty/falsy value normally would be.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.update_entry(entry.id, popularity=0.0)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-POPULARITY:0.0" in ical_text
+
+
 # --- X-IMPORTER/X-IMPORTER-VERSION: issue #257 ---
 
 

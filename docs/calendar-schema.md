@@ -76,8 +76,13 @@ either.
   - **`X-POSTER-URL`** — the poster image URL.
   - **`X-DIRECTOR`** — OMDb's `Director`, verbatim (can itself be a
     comma-separated list for a co-directed film).
-  - **`X-ACTORS`** — OMDb's `Actors`, a comma-separated string,
-    verbatim - not split into a list.
+  - **`X-ACTORS`** — a comma-separated string, verbatim, not split into
+    a list. OMDb's own `Actors` by default, but overridden with TMDb's
+    full cast (issue #311) whenever TMDb resolves a match for the
+    entry - OMDb's own field only ever returns a handful of top-billed
+    names, with no full-cast endpoint at any tier, so TMDb's fuller
+    list wins when it's available. A TMDb match with no cast data
+    leaves OMDb's own value standing rather than blanking it.
   - **`X-GENRE`** — OMDb's `Genre`, also comma-separated, verbatim.
   - **`X-YEAR`** — the release year, as a plain integer string (for
     example `2021`) - not the watched date, which is `DTSTART`/`DTEND`
@@ -117,7 +122,10 @@ either.
     country/language of origin, a different thing from the _venue's_
     `X-CITY`/`X-COUNTRY` above, and reusing that name would collide.
     `Plot`, `Awards`, and `Released` are longer-form text and go into
-    `DESCRIPTION` instead - see below.
+    `DESCRIPTION` instead - see below. `X-WEBSITE` is overridden with
+    TMDb's own `homepage` (issue #311) whenever TMDb has one - OMDb's
+    own `Website` field is routinely `N/A`, same override rule as
+    `X-ACTORS` above.
   - **`X-TRAILER-URL`** — a YouTube link to the movie's official trailer
     (issue #236), from TMDb rather than OMDb - looked up by the `imdbID`
     an OMDb match already returned, so it only ever runs right after a
@@ -126,6 +134,24 @@ either.
     optional, unlike `omdb.api_key`), no TMDb match, or no official
     YouTube trailer among TMDb's videos, and the entry simply has no
     `X-TRAILER-URL` at all.
+  - **`X-COLLECTION`**, **`X-CERTIFICATION`**, **`X-KEYWORDS`**,
+    **`X-BUDGET`**, **`X-POPULARITY`** — the rest of TMDb's own response
+    fields with no OMDb equivalent (issue #311), fetched in the same
+    call as `X-TRAILER-URL` above, same "piggybacks on a successful OMDb
+    match, never on its own" rule. `X-CERTIFICATION` is TMDb's own
+    content rating, always the US (MPAA) certification when TMDb has
+    one - deliberately distinct from `X-RATED` (OMDb's field, a
+    different rating system) and never falls back to another country's
+    rating, which would use an incompatible scale. `X-BUDGET` is a
+    plain integer string (production budget, in US dollars) - TMDb's
+    own box-office revenue figure is deliberately never captured here,
+    since revenue keeps changing after release and budget doesn't.
+    `X-POPULARITY` is TMDb's own popularity score, a plain decimal
+    string - a genuine `0` is kept, not treated as unset, unlike
+    `X-BUDGET`, where TMDb itself uses `0` as "nothing entered." A
+    refresh that gets a thinner TMDb response than a previous one (a
+    missing sub-resource, a transient gap in TMDb's own data) never
+    resets an already-known value on any of these back to unset.
   - **`X-IMPORTER`**/**`X-IMPORTER-VERSION`** — debugging provenance
     (issue #257): which movie-planner command performed this push
     (`log`, `import:csv`, `import:json`, `from-pathe-email`,
@@ -151,12 +177,23 @@ UID:0199c1f2-3a4b-7def-8a9b-0123456789ab
 GEO:52.3633802;4.8838439
 LOCATION:City\, Kleine-Gartmanplantsoen 15-19\, 1017 RP Amsterdam\, Nether
  lands
+X-BUDGET:10000000
+X-CERTIFICATION:PG-13
+X-COLLECTION:Insidious Collection
 X-GENRE:Horror
+X-KEYWORDS:haunted house, medium, supernatural
+X-POPULARITY:45.231
 X-POSTAL-CODE:1017 RP
 X-STREET-ADDRESS:Kleine-Gartmanplantsoen 15-19
 END:VEVENT
 END:VCALENDAR
 ```
+
+Note the commas in `X-KEYWORDS` aren't backslash-escaped the way the ones
+in `LOCATION` are - `LOCATION` is one of iCalendar's own known TEXT-typed
+properties, so the `icalendar` library escapes it automatically; a custom
+`X-*` property is opaque to it and gets added as a plain string, no
+escaping applied.
 
 Line-folded per RFC 5545 (75-octet limit, continuation lines start with a
 single space) - a real `LOCATION` this long always wraps like this; a
