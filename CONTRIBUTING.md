@@ -142,6 +142,17 @@ throughout: no `tmdb.api_key` configured, no match, or no official
 YouTube trailer are all the same "no trailer" outcome, never an error
 that blocks the rest of the command.
 
+## Verifying a change against the real setup
+
+Before running a full `sync refresh` (or any other command that touches
+every entry) against the real database to confirm a change works, scope
+it to the 5 most recently logged entries first - `movie-planner list
+--limit 5` to find them, then `--from`/`--to`/`--date` to scope the
+verification run to just those. Cheap, fast, and it catches a broken
+change before it burns OMDb quota or pushes hundreds of malformed
+calendar updates. Only run the full, unscoped command once the small
+sample confirms the change does what it's supposed to.
+
 ## Commit messages
 
 [Conventional Commits](https://www.conventionalcommits.org/):
