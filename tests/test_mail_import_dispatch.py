@@ -48,6 +48,22 @@ sys.stdin.read()
 print("not json")
 """
 
+_NON_DICT_JSON_SCRIPT = """\
+import sys
+
+sys.stdin.read()
+print("[1, 2, 3]")
+"""
+
+_NONZERO_EXIT_WITH_VALID_ROW_SCRIPT = """\
+import json
+import sys
+
+sys.stdin.read()
+print(json.dumps({"title": "Good Boy", "date": "2026-07-04", "medium": "cinema"}))
+sys.exit(1)
+"""
+
 
 def test_dispatch_recognized_email_returns_a_stamped_row(tmp_path: Path) -> None:
     translate = _write_script(tmp_path, _ECHO_ROW_SCRIPT)
@@ -58,6 +74,7 @@ def test_dispatch_recognized_email_returns_a_stamped_row(tmp_path: Path) -> None
     assert result.row is not None
     assert result.row["title"] == "Good Boy"
     assert result.row["source"] == "example-chain.com"
+    assert result.envelope == _ENVELOPE
 
 
 def test_dispatch_script_receives_the_envelope_as_json_on_stdin(tmp_path: Path) -> None:
@@ -93,6 +110,34 @@ def test_dispatch_script_exits_nonzero_is_unrecognized(tmp_path: Path) -> None:
 
 def test_dispatch_script_prints_invalid_json_is_unrecognized(tmp_path: Path) -> None:
     translate = _write_script(tmp_path, _INVALID_JSON_SCRIPT)
+    chains = (ChainConfig(sender_domain="example-chain.com", translate=translate),)
+
+    result = dispatch(_ENVELOPE, chains)
+
+    assert result.row is None
+    assert result.envelope == _ENVELOPE
+
+
+def test_dispatch_script_prints_valid_json_that_is_not_a_dict_is_unrecognized(
+    tmp_path: Path,
+) -> None:
+    # A translation script's contract is "print a JSON object" - valid
+    # JSON that parses to something else (a list, here) is exactly as
+    # unrecognized as invalid JSON, not a crash.
+    translate = _write_script(tmp_path, _NON_DICT_JSON_SCRIPT)
+    chains = (ChainConfig(sender_domain="example-chain.com", translate=translate),)
+
+    result = dispatch(_ENVELOPE, chains)
+
+    assert result.row is None
+    assert result.envelope == _ENVELOPE
+
+
+def test_dispatch_nonzero_exit_is_unrecognized_even_with_valid_output(tmp_path: Path) -> None:
+    # A script's own reported failure (nonzero exit) always wins over
+    # whatever it printed - it can't un-fail itself by also printing a
+    # well-formed row on the way out.
+    translate = _write_script(tmp_path, _NONZERO_EXIT_WITH_VALID_ROW_SCRIPT)
     chains = (ChainConfig(sender_domain="example-chain.com", translate=translate),)
 
     result = dispatch(_ENVELOPE, chains)

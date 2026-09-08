@@ -34,6 +34,10 @@ def dispatch(envelope: MailEnvelope, chains: tuple[ChainConfig, ...]) -> Dispatc
         return DispatchResult(envelope=envelope, row=None)
 
     try:
+        # check=False is subprocess.run's own default, and `if check:`
+        # treats None the same as False - mutating this to None, or
+        # dropping the kwarg entirely, is provably equivalent, not a
+        # gap (issue #289).
         result = subprocess.run(  # nosec B603
             shlex.split(chain.translate),
             input=json.dumps(envelope_to_json(envelope)),
