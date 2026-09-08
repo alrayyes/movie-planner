@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.24.1...movie-planner-v1.24.2) (2026-09-08)
+
+
+### Documentation
+
+* **testing:** correct the mutmut non-blocking rationale, track [#303](https://github.com/alrayyes/movie-planner/issues/303) ([#307](https://github.com/alrayyes/movie-planner/issues/307)) ([c06b3c9](https://github.com/alrayyes/movie-planner/commit/c06b3c900af5ee6645fd485dca051db4bdd412f6))
+
 ## [1.24.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.24.0...movie-planner-v1.24.1) (2026-09-08)
 
 
