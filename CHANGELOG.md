@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.24.2...movie-planner-v1.24.3) (2026-09-08)
+
+
+### Bug Fixes
+
+* **mail-import:** close envelope.py and dispatch.py mutmut gaps ([#309](https://github.com/alrayyes/movie-planner/issues/309)) ([ddca0ef](https://github.com/alrayyes/movie-planner/commit/ddca0efdd44ef2a38998d98df242785585b19ff1))
+
 ## [1.24.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.24.1...movie-planner-v1.24.2) (2026-09-08)
 
 
