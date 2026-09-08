@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.25.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.25.2...movie-planner-v1.25.3) (2026-09-08)
+
+
+### Bug Fixes
+
+* **mail-import:** close config.py mutmut gaps ([#322](https://github.com/alrayyes/movie-planner/issues/322)) ([425d080](https://github.com/alrayyes/movie-planner/commit/425d080ee50e91d70fd46d53410b447b327c42d7))
+* **mail-import:** close maildir_client.py mutmut gaps ([#320](https://github.com/alrayyes/movie-planner/issues/320)) ([4488e29](https://github.com/alrayyes/movie-planner/commit/4488e29285a092cbd260ed38e3fa88f3cacdbb9b))
+
 ## [1.25.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.25.1...movie-planner-v1.25.2) (2026-09-08)
 
 
