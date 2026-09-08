@@ -61,17 +61,25 @@ by holding `LOCATION` to the stricter pairing.
 **A new `Store.refresh_venue_locations()` method + `movie-planner
 locations venues refresh` command backfills existing venue
 rows from the current `KNOWN_VENUE_LOCATIONS` table.** For every venue
-row whose name matches a table entry, updates
+row whose name matches a table entry, sets
 chain/city/country/latitude/longitude/street_address/postal_code to the
-table's current values. Dry-run by default, `--apply` to write -
-mirrors `merge-aliases`'s existing UX exactly, since it's the same kind
-of "the hardcoded table now knows more than an existing row does"
-problem, just for "already correctly named" rows rather than aliases.
-Considered folding this into `merge-aliases` itself, rejected: that
-command's contract is specifically about alias collapsing (moving
-entries between rows); this is about refreshing a row's own columns in
-place - different operation, same UX shape, worth keeping separate so
-each command's name says what it actually does.
+table's current values, unconditionally - a full resync, not a
+fill-only-if-missing merge. This is safe because these six fields have
+exactly one writer: `add_venue` copying them from this same table at
+creation time. Nothing else ever sets them (there's no `--chain`/
+`--city`/etc. flag on `venues add`), so a row's value can only ever be
+"what the table said when the row was created" - there's no legitimate
+case of a row holding a value that deliberately diverges from the
+table, only a stale one. A venue row whose name isn't in the table at
+all is left completely untouched either way. Dry-run by default,
+`--apply` to write - mirrors `merge-aliases`'s existing UX exactly,
+since it's the same kind of "the hardcoded table now knows more than an
+existing row does" problem, just for "already correctly named" rows
+rather than aliases. Considered folding this into `merge-aliases`
+itself, rejected: that command's contract is specifically about alias
+collapsing (moving entries between rows); this is about refreshing a
+row's own columns in place - different operation, same UX shape, worth
+keeping separate so each command's name says what it actually does.
 
 **Street address/postal code sourced the same way as every other
 verified field in the table** - each venue's chain/city/country/

@@ -9,9 +9,11 @@ city, and country filled in automatically; a venue that doesn't match
 gets none of that, never a guess. The system SHALL also let the user
 refresh an already-existing venue row's chain, city, country,
 coordinates, street address, and postal code from the current state of
-that hardcoded table, dry-run by default, only ever filling in a field
-the table verifies that the row doesn't already carry - never
-overwriting a value the row already has with a different one.
+that hardcoded table, dry-run by default, `--apply` to write - a full
+resync of those fields to the table's current values for a matching
+venue, since the only way they're ever set is by that same table in the
+first place. A venue row whose name isn't in the table at all is left
+untouched.
 
 #### Scenario: Adding a new venue
 - **WHEN** the user adds venue "Starlight Cinema" via the locations command
@@ -39,7 +41,6 @@ overwriting a value the row already has with a different one.
 - **THEN** no venue row is modified, and the command reports which rows
   would change and how
 
-#### Scenario: Refresh never overwrites an already-set field with nothing
-- **WHEN** a venue row already has a value for a field the table doesn't
-  have for that venue
-- **THEN** refreshing that row leaves the existing value untouched
+#### Scenario: Refresh leaves an unmatched venue untouched
+- **WHEN** a venue row's name has no entry in the hardcoded table at all
+- **THEN** refreshing leaves that row completely unchanged

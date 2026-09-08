@@ -37,11 +37,14 @@
       (mirroring `merge_venue_aliases`'s dry-run/apply shape)
 - [ ] 3.2 Write a failing test: `apply=True` writes the table's current
       chain/city/country/coordinates/street_address/postal_code onto a
-      matching existing row, only for fields the row doesn't already
-      have a different value for, then implement it
-- [ ] 3.3 Write a failing test: a venue row already carrying a field
-      value the table doesn't have for that venue is left untouched by
-      refresh, then confirm it passes
+      matching existing row unconditionally (a full resync, not a
+      fill-only-if-missing merge - per design.md's decision, there's no
+      legitimate way for a row to hold a value that genuinely diverges
+      from the table on purpose, since these fields are only ever set
+      by copying from it), then implement it
+- [ ] 3.3 Write a failing test: a venue row whose name has no entry in
+      the table at all is left completely untouched by refresh, then
+      confirm it passes
 - [ ] 3.4 Add the `movie-planner locations venues refresh` CLI command
       (dry-run output by default, `--apply` to write) with its own CLI
       test covering both modes
@@ -70,6 +73,6 @@
       `uv run ruff check .`/`ruff format --check .`, `uv run mypy .`,
       `uv run bandit -r src/movie_planner`
 - [ ] 6.2 Mutation spot-check on the LOCATION-composition pairing rule
-      (task 2.2) and the refresh command's never-overwrite rule (task
-      3.3), confirming a deliberately introduced bug in each is caught
-      by the test suite
+      (task 2.2) and the refresh command's "leave a non-matching venue
+      untouched" rule (task 3.3), confirming a deliberately introduced
+      bug in each is caught by the test suite
