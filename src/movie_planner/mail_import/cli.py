@@ -62,6 +62,13 @@ def _parse_time_bound(value: str, *, flag: str) -> datetime:
     try:
         parsed = datetime.fromisoformat(value)
     except ValueError as e:
+        # `fg=` on a `typer.secho` call is a mutmut survivor that's
+        # provably equivalent, not a gap (issue #289) - CliRunner
+        # captures a non-tty stream, and Click strips ANSI styling on a
+        # non-tty output automatically (verified directly), so no test
+        # using CliRunner - the only way this CLI is tested - can ever
+        # observe a difference. Same reasoning applies everywhere else
+        # in this module `secho`'s own `fg=` is mutated.
         typer.secho(
             f"Could not parse {flag} value '{value}' - use '<N> <unit> ago' "
             "(seconds/minutes/hours/days/weeks) or an ISO 8601 date/datetime.",
@@ -111,6 +118,12 @@ def _resolve_password(
             fg=typer.colors.RED,
         )
         raise typer.Exit(code=1)
+    # `default=False` matches click.confirm's own default (verified
+    # against its signature), so dropping this kwarg entirely is a
+    # provably equivalent mutmut survivor, not a gap (issue #289) - a
+    # genuinely different default (None, which requires an explicit
+    # answer instead of accepting an empty one, or True) is still a
+    # real gap, covered by a test asserting what an empty answer does.
     use_command = typer.confirm(
         "Use a password command (e.g. a password manager CLI) instead of typing the password?",
         default=False,
@@ -338,6 +351,14 @@ def _print_review_table(envelopes: list[MailEnvelope]) -> None:
     widths = [max(len(row[i]) for row in [headers, *rows]) for i in range(3)]
 
     def _line(row: tuple[str, str, str]) -> str:
+        # `strict=True` guards against `row` and `widths` ever having
+        # different lengths - but `row` is always one of the fixed
+        # 3-tuples above (headers, a "-"*w separator, or one of `rows`,
+        # itself always a 3-tuple) and `widths` is always exactly
+        # `range(3)`-derived, so they can never actually differ in
+        # length here. Mutating `strict` is a provably equivalent
+        # mutmut survivor, not a gap (issue #289) - verified directly,
+        # not just assumed.
         return "  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True))
 
     typer.echo(_line(headers))

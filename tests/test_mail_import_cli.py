@@ -171,12 +171,56 @@ def test_init_interactive_prompts_for_missing_values(
     )
 
     assert result.exit_code == 0, result.output
+    # The actual prompt text shown for a field with no default (host) and
+    # one with a default (port) - not just that *a* value was accepted.
+    assert "IMAP host" in result.output
+    assert "IMAP port" in result.output
     data = tomllib.loads(config_path.read_text())["mail_import"]
     assert data["mail"]["source"] == "imap"
     assert data["mail"]["imap"]["host"] == "127.0.0.1"
     assert data["mail"]["imap"]["port"] == 993
     assert data["mail"]["imap"]["password"] == "hunter2"
     assert data["chains"][0]["sender_domain"] == "service.pathe.nl"
+
+
+def test_init_interactive_empty_confirm_answer_defaults_to_no_and_uses_getpass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An empty answer (just pressing enter) at "use a password command?"
+    # has to accept the default (False) rather than re-prompting or
+    # defaulting to yes - this is the one thing distinguishing
+    # default=False from default=None/True on that confirm() call, and
+    # from omitting the answer entirely (which the "n" case above
+    # can't tell apart from a real "no").
+    config_path = tmp_path / "config.toml"
+    monkeypatch.setattr("movie_planner.mail_import.cli._is_interactive", lambda: True)
+    captured_prompt: dict[str, str] = {}
+
+    def fake_getpass(prompt: str) -> str:
+        captured_prompt["prompt"] = prompt
+        return "hunter2"
+
+    monkeypatch.setattr("movie_planner.mail_import.cli.getpass.getpass", fake_getpass)
+
+    result = runner.invoke(
+        app,
+        ["init", "--config", str(config_path)],
+        input="imap\n127.0.0.1\n\nme@example.com\n\n\n\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    # The full prompt line, suffix included - a plain substring check
+    # would still match even if the text itself were wrapped in extra
+    # characters (mutmut's own "XX...XX" mutation technique), since the
+    # original text stays a substring of the wrapped version.
+    assert (
+        "Use a password command (e.g. a password manager CLI) instead of typing "
+        "the password? [y/N]: "
+    ) in result.output
+    assert captured_prompt["prompt"] == "IMAP password (not echoed): "
+    data = tomllib.loads(config_path.read_text())["mail_import"]
+    assert data["mail"]["imap"]["password"] == "hunter2"
+    assert "password_command" not in data["mail"]["imap"]
 
 
 def test_init_interactive_password_command_path(
@@ -192,9 +236,39 @@ def test_init_interactive_password_command_path(
     )
 
     assert result.exit_code == 0, result.output
+    # The full prompt line, suffix included - same reasoning as the
+    # confirm() prompt check above.
+    assert "Password command: pass show imap" in result.output
     data = tomllib.loads(config_path.read_text())["mail_import"]
     assert data["mail"]["imap"]["password_command"] == "pass show imap"
     assert "password" not in data["mail"]["imap"]
+
+
+def test_init_non_interactive_imap_without_password_fails_with_exact_message(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+
+    result = runner.invoke(
+        app,
+        [
+            "init",
+            "--config",
+            str(config_path),
+            "--source",
+            "imap",
+            "--imap-host",
+            "127.0.0.1",
+            "--imap-username",
+            "me@example.com",
+        ],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert (
+        "No --imap-password-command given and not running interactively; pass it "
+        "explicitly (the literal password is never accepted as a flag)."
+    ) in result.output
 
 
 def test_init_adds_its_section_to_an_existing_shared_config_without_force(
@@ -636,8 +710,80 @@ def test_fetch_since_unparseable_fails_clearly(tmp_path: Path) -> None:
 
     result = runner.invoke(app, ["fetch", "--config", str(config_path), "--since", "nonsense"])
 
-    assert result.exit_code != 0
-    assert "--since" in result.output
+    assert result.exit_code == 1
+    assert (
+        "Could not parse --since value 'nonsense' - use '<N> <unit> ago' "
+        "(seconds/minutes/hours/days/weeks) or an ISO 8601 date/datetime."
+    ) in result.output
+
+
+# --- _is_interactive: both stdin and stdout must be a tty ---
+
+
+def test_is_interactive_requires_both_stdin_and_stdout_tty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from movie_planner.mail_import.cli import _is_interactive
+
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
+
+    assert _is_interactive() is False
+
+
+# --- _build_client: each source kind's fields all reach the client ---
+
+
+def test_build_client_imap_source_passes_through_every_field() -> None:
+    from movie_planner.mail_import.cli import _build_client
+    from movie_planner.mail_import.config import ImapSource
+    from movie_planner.mail_import.imap_client import ImapMailClient
+
+    source = ImapSource(host="127.0.0.1", port=1143, username="me", password="secret")
+
+    client = _build_client(source)
+
+    assert isinstance(client, ImapMailClient)
+    assert client._host == "127.0.0.1"  # noqa: SLF001 - verifying _build_client's own wiring
+    assert client._port == 1143  # noqa: SLF001
+    assert client._username == "me"  # noqa: SLF001
+    assert client._password == "secret"  # noqa: SLF001
+
+
+def test_build_client_maildir_source_passes_through_the_path(tmp_path: Path) -> None:
+    from movie_planner.mail_import.cli import _build_client
+    from movie_planner.mail_import.config import MaildirSource
+    from movie_planner.mail_import.maildir_client import MaildirMailClient
+
+    source = MaildirSource(path=tmp_path / "Archive")
+
+    client = _build_client(source)
+
+    assert isinstance(client, MaildirMailClient)
+    assert client._path == tmp_path / "Archive"  # noqa: SLF001
+
+
+# --- _print_review_table: exact header/alignment/separator, not just presence ---
+
+
+def test_print_review_table_prints_the_exact_expected_layout(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from movie_planner.mail_import.cli import _print_review_table
+    from movie_planner.mail_import.envelope import MailEnvelope
+
+    envelopes = [
+        MailEnvelope(from_address="a", subject="b", date=datetime(2026, 1, 1, tzinfo=UTC), body="")
+    ]
+
+    _print_review_table(envelopes)
+
+    lines = capsys.readouterr().out.splitlines()
+    assert lines == [
+        "From  Subject  Date      ",
+        "----  -------  ----------",
+        "a     b        2026-01-01",
+    ]
 
 
 def test_fetch_with_no_since_until_still_works(tmp_path: Path) -> None:
