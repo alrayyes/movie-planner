@@ -90,6 +90,51 @@ def test_parse_event_strips_location_suffix_matching_x_city_and_x_country() -> N
     assert parsed.venue_name == "Tuschinski"
 
 
+def test_parse_event_strips_location_suffix_with_street_address_and_postal_code() -> None:
+    # issue #283 extended LOCATION to "name, street, postal city, country"
+    # when both a street address and postal code are known - the plain
+    # ", city, country" suffix above never matches that shape (the postal
+    # code sits between the comma and the city), so this needs its own
+    # strip, not just a fallback to the short one.
+    ical = build_vevent(
+        uid="uid-4b",
+        title="Dune",
+        entry_date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue="De Munt, Vijzelstraat 15, 1017 HD Amsterdam, Netherlands",
+        extra_properties={
+            "X-CITY": "Amsterdam",
+            "X-COUNTRY": "Netherlands",
+            "X-STREET-ADDRESS": "Vijzelstraat 15",
+            "X-POSTAL-CODE": "1017 HD",
+        },
+    )
+
+    parsed = parse_event(ical)
+
+    assert parsed.venue_name == "De Munt"
+
+
+def test_parse_event_falls_back_to_the_short_suffix_with_no_street_address() -> None:
+    # X-STREET-ADDRESS/X-POSTAL-CODE absent (a venue with only city/
+    # country known, issue #217) - still strips the plain ", city,
+    # country" suffix, same as before #283 ever existed.
+    ical = build_vevent(
+        uid="uid-4c",
+        title="Dune",
+        entry_date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue="Tuschinski, Amsterdam, Netherlands",
+        extra_properties={"X-CITY": "Amsterdam", "X-COUNTRY": "Netherlands"},
+    )
+
+    parsed = parse_event(ical)
+
+    assert parsed.venue_name == "Tuschinski"
+
+
 def test_parse_event_uses_location_verbatim_when_it_does_not_match_x_city_country() -> None:
     ical = build_vevent(
         uid="uid-5",

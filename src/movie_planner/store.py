@@ -10,7 +10,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS
+from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
 
 _UNSET: Any = object()
 
@@ -407,6 +407,48 @@ def _serialize_entry_field(name: str, value: object) -> object:
     return value
 
 
+def _baked_address_location(venue_name: str) -> VenueLocation | None:
+    """A venue row's name matching some known venue's full LOCATION
+    string, rather than just its own name - the shape a calendar_pull.py
+    bug (fixed alongside this, movie-planner-web#400) produced: `sync
+    pull` misreading its own richer "name, street, postal city, country"
+    LOCATION (issue #283) and using the whole thing as the venue name
+    instead of stripping back to just the venue. Returns the
+    VenueLocation to reconcile against, or None when venue_name doesn't
+    match any known venue's LOCATION shape - the same two shapes
+    cli.py's `_venue_location` can produce, tried in the same order
+    (fuller shape first, since it's the more specific match).
+    """
+    seen: set[str] = set()
+    for location in KNOWN_VENUE_LOCATIONS.values():
+        if location.canonical_name in seen:
+            continue
+        seen.add(location.canonical_name)
+        if location.street_address and location.postal_code:
+            full = (
+                f"{location.canonical_name}, {location.street_address}, "
+                f"{location.postal_code} {location.city}, {location.country}"
+            )
+            if venue_name == full:
+                return location
+        short = f"{location.canonical_name}, {location.city}, {location.country}"
+        if venue_name == short:
+            return location
+    return None
+
+
+def _reconcilable_location(venue_name: str) -> VenueLocation | None:
+    """A venue row that predates proper canonicalization, either
+    shape: a known alias (issue #196), or a known venue's LOCATION
+    string baked into the name by the calendar_pull.py bug above. None
+    when venue_name is already canonical or matches neither shape.
+    """
+    location = KNOWN_VENUE_LOCATIONS.get(venue_name)
+    if location is not None and location.canonical_name != venue_name:
+        return location
+    return _baked_address_location(venue_name)
+
+
 class Store:
     def __init__(self, db_path: Path) -> None:
         db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -590,22 +632,25 @@ class Store:
         self._conn.commit()
 
     def merge_venue_aliases(self, *, apply: bool = False) -> list[VenueMerge]:
-        """Finds every venue row already in the database whose name is
-        a known alias (a screen/format-suffixed name like "De Munt
-        4DX") of another venue's canonical name - data that predates
-        add_venue/get_or_create_venue's own alias resolution above
-        (issue #196). `apply=False` (the default) only reports what
-        would merge; `apply=True` actually reassigns the alias's
-        entries to the canonical venue (creating it first if it
-        doesn't exist yet) and removes the now-orphaned alias row, all
-        in one transaction - either every merge in this call succeeds,
-        or none of them are applied.
+        """Finds every venue row already in the database that predates
+        proper canonicalization, either of two ways: a known alias (a
+        screen/format-suffixed name like "De Munt 4DX", issue #196), or
+        a known venue's own LOCATION string baked whole into the venue
+        name (movie-planner-web#400) by a now-fixed calendar_pull.py bug
+        - `sync pull` misreading its own richer LOCATION shape (issue
+        #283) and using the whole thing as the venue name instead of
+        stripping back to just the venue. `apply=False` (the default)
+        only reports what would merge; `apply=True` actually reassigns
+        the alias's entries to the canonical venue (creating it first if
+        it doesn't exist yet) and removes the now-orphaned alias row,
+        all in one transaction - either every merge in this call
+        succeeds, or none of them are applied.
         """
         merges = []
         for venue in sorted(self.list_venues(), key=lambda v: v.name):
-            location = KNOWN_VENUE_LOCATIONS.get(venue.name)
-            if location is None or location.canonical_name == venue.name:
-                continue  # not a known alias - already canonical, or unknown entirely
+            location = _reconcilable_location(venue.name)
+            if location is None:
+                continue  # not a known alias, and not a baked-address name either
 
             (entries_moved,) = self._conn.execute(
                 "SELECT COUNT(*) FROM entries WHERE venue_id = ?", (venue.id,)
@@ -620,14 +665,14 @@ class Store:
                     # Not self.add_venue() - that commits immediately,
                     # which would break this method's own all-or-
                     # nothing guarantee for a later alias in the same
-                    # call. location's chain/city/country/coordinates
-                    # already apply to the canonical name too - _add()
-                    # gives every alias in a group the same
-                    # VenueLocation object.
+                    # call. location's chain/city/country/coordinates/
+                    # street address/postal code already apply to the
+                    # canonical name too - _add() gives every alias in a
+                    # group the same VenueLocation object.
                     latitude, longitude = location.coordinates or (None, None)
                     cur = self._conn.execute(
-                        "INSERT INTO venues (name, chain, city, country, latitude, longitude) "
-                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO venues (name, chain, city, country, latitude, longitude, "
+                        "street_address, postal_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         (
                             location.canonical_name,
                             location.chain,
@@ -635,6 +680,8 @@ class Store:
                             location.country,
                             latitude,
                             longitude,
+                            location.street_address,
+                            location.postal_code,
                         ),
                     )
                     assert cur.lastrowid is not None  # nosec B101

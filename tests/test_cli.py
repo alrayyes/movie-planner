@@ -1489,6 +1489,31 @@ def test_venues_merge_aliases_apply_actually_merges(config_path: Path) -> None:
         store.close()
 
 
+def test_venues_merge_aliases_apply_also_merges_a_baked_address_name(config_path: Path) -> None:
+    # movie-planner-web#400: a now-fixed calendar_pull.py bug let `sync
+    # pull` create a venue row named after the whole LOCATION string
+    # instead of just the venue - exercised end to end through the CLI,
+    # not just Store.merge_venue_aliases directly.
+    store = _store(config_path)
+    store._conn.execute(
+        "INSERT INTO venues (name) VALUES "
+        "('De Munt, Vijzelstraat 15, 1017 HD Amsterdam, Netherlands')"
+    )
+    store._conn.commit()
+    store.close()
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "locations", "venues", "merge-aliases", "--apply"]
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    try:
+        assert [v.name for v in store.list_venues()] == ["De Munt"]
+    finally:
+        store.close()
+
+
 def test_venues_merge_aliases_with_nothing_to_merge_says_so(config_path: Path) -> None:
     result = runner.invoke(
         app, ["--config", str(config_path), "locations", "venues", "merge-aliases"]
