@@ -65,9 +65,12 @@ bun run lint:mechanics     # ltex-cli-plus
 ```
 
 `mypy` runs in `strict` mode across both `src/` and `tests/`.
-`mutmut` is non-blocking everywhere it runs (`pre-push`, CI): a surviving
-mutant is a missing test case worth picking up, not a merge blocker for a
-suite that wasn't built mutation-clean from day one. It skips
+`mutmut` is still non-blocking everywhere it runs (`pre-push`, CI) — the
+dotfiles-wide rule now says a surviving mutant should always block a
+merge, but this repo has 891 pre-existing survivors out of 4477 mutants
+(checked 2026-09-08) and flipping the switch today would fail every PR
+over debt nobody touched. Tracked in #303: a surviving mutant in a PR's
+own diff is meant to block, the existing backlog isn't. It skips
 `test_e2e.py` — rerunning a real Baikal container per mutant would make a
 25-second check take hours.
 
