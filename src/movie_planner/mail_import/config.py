@@ -134,6 +134,12 @@ def _load_source(data: dict[str, object]) -> ImapSource | MboxSource | MaildirSo
 
 
 def _load_chains(data: dict[str, object]) -> tuple[ChainConfig, ...]:
+    # The "[]" default is a mutmut survivor that's provably equivalent
+    # to any other falsy, non-list default (None, or omitting the
+    # default entirely, which is None too) - not a gap (issue #289).
+    # It's only used when "chains" is absent, and every one of those
+    # values fails `isinstance(..., list)`, converging on the exact
+    # same "needs at least one" error regardless of which one it is.
     raw_chains = data.get("chains", [])
     if not isinstance(raw_chains, list) or not raw_chains:
         raise MailConfigError("config needs at least one [[chains]] entry")
