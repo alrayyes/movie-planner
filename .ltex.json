@@ -80,6 +80,7 @@
       "VEVENT",
       "uv-managed",
       "mbox-format",
+      "dotfiles-wide",
       "unscoped"
     ]
   },

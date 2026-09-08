@@ -82,3 +82,6 @@ unparsed
 unscoped
 Maildir
 lookups?
+PR
+PRs?
+PR's
