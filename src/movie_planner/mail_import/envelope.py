@@ -121,6 +121,16 @@ _URL_RE = re.compile(r"https?://\S+")
 
 
 def _extract_body(msg: email.message.EmailMessage) -> str:
+    # A handful of mutmut survivors here are left un-killed on purpose
+    # (issue #289): mutating get_body()'s preferencelist string
+    # ("plain"/"html" -> some other value) forces get_body() to return
+    # None, but the walk() fallback immediately below independently
+    # re-finds the same part via its own content-type check - no
+    # realistic message shape found where the two disagree, so this
+    # reads as an equivalent mutant. Same reasoning for _URL_RE.sub's
+    # replacement string ("" vs "XXXX") - _DIGIT_RE only checks for
+    # *any* digit surviving, and a fully-replaced URL match leaves none
+    # either way, so no digit-presence test can tell the two apart.
     if not msg.is_multipart():
         return msg.get_content()  # type: ignore[no-any-return]
 

@@ -61,6 +61,15 @@ def test_sender_domain_with_no_address_is_none() -> None:
     assert sender_domain("not an email address") is None
 
 
+def test_sender_domain_with_an_extra_at_sign_takes_the_last_split() -> None:
+    # A quoted local-part can itself legally contain "@" (RFC 5322), so
+    # the parsed address can have more than one - rsplit(..., 1) takes
+    # everything after the *last* one, not split() (which would take
+    # the first) and not a wider maxsplit (which would take a middle
+    # segment instead of the real domain).
+    assert sender_domain('"a@b"@example.com') == "example.com"
+
+
 # --- HTML-only fallback: movie-planner#158 ---
 
 
@@ -147,3 +156,49 @@ def test_extract_envelope_with_neither_plain_nor_html_returns_empty_body() -> No
     envelope = extract_envelope(msg.as_string())
 
     assert envelope.body == ""
+
+
+def test_extract_envelope_ignores_an_html_attachment_with_no_real_html_body() -> None:
+    # get_body() correctly refuses to treat an attachment as the html
+    # body, leaving _extract_body's own walk() fallback to run - which
+    # has to make the same "not an attachment" check itself, not just
+    # match on content type (issue tracked under the mutation-testing
+    # coverage gaps milestone: a flipped/weakened disposition check
+    # here would silently start treating the attachment as real body
+    # content).
+    msg = EmailMessage()
+    msg["From"] = "Cinema Chain <noreply@example-chain.com>"
+    msg["Subject"] = "Your booking confirmation"
+    msg["Date"] = "Sat, 04 Jul 2026 19:00:00 +0200"
+    msg.set_content("Good Boy plain body, no digits here")
+    msg.add_attachment(
+        b"<p>this is an attachment, not the real body</p>",
+        maintype="text",
+        subtype="html",
+        filename="e-ticket.html",
+    )
+
+    envelope = extract_envelope(msg.as_string())
+
+    assert "Good Boy plain body" in envelope.body
+    assert "this is an attachment" not in envelope.body
+
+
+def test_extract_envelope_prefers_plain_with_a_digit_even_when_html_exists() -> None:
+    # Both a real plain and a real html alternative exist, with
+    # deliberately *different* text, and the plain one has a digit -
+    # that's the "keep the plain part" branch of an OR, not an AND:
+    # this only distinguishes the two once the alternatives' content
+    # actually differs (matching text either way would pass regardless
+    # of which branch is taken).
+    msg = EmailMessage()
+    msg["From"] = "Cinema Chain <noreply@example-chain.com>"
+    msg["Subject"] = "Your booking confirmation"
+    msg["Date"] = "Sat, 04 Jul 2026 19:00:00 +0200"
+    msg.set_content("Good Boy, booking AB1CD23")
+    msg.add_alternative("<p>Please view this email in an HTML-capable client</p>", subtype="html")
+
+    envelope = extract_envelope(msg.as_string())
+
+    assert "Good Boy, booking AB1CD23" in envelope.body
+    assert "HTML-capable client" not in envelope.body
