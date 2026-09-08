@@ -53,7 +53,12 @@ CREATE TABLE IF NOT EXISTS entries (
     actors TEXT,
     genre TEXT,
     release_year INTEGER,
-    source TEXT
+    source TEXT,
+    collection TEXT,
+    certification TEXT,
+    keywords TEXT,
+    budget INTEGER,
+    popularity REAL
 );
 
 CREATE TABLE IF NOT EXISTS import_failures (
@@ -121,6 +126,17 @@ _MIGRATED_COLUMNS: tuple[tuple[str, str], ...] = (
     # None) the moment a later lookup does find a match, so this is
     # always "the last attempt's outcome", never a permanent scar.
     ("omdb_last_no_match", "TEXT"),
+    # TMDb-derived fields (issue #311) - looked up in the same call as
+    # trailer_url above, once OMDb has matched a title. `actors` and
+    # `website` are existing OMDb-derived columns TMDb overrides in
+    # place when it has richer data (a fuller cast, a real homepage
+    # instead of OMDb's usual N/A) - these four are the ones with no
+    # OMDb equivalent to override.
+    ("collection", "TEXT"),
+    ("certification", "TEXT"),
+    ("keywords", "TEXT"),
+    ("budget", "INTEGER"),
+    ("popularity", "REAL"),
 )
 
 _MIGRATED_VENUE_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -267,6 +283,13 @@ class Entry:
     # is distinct from "never looked up" and always reflects only the
     # latest attempt.
     omdb_last_no_match: datetime.date | None = None
+    # TMDb-derived fields (issue #311) - see _MIGRATED_COLUMNS above for
+    # why `actors`/`website` aren't duplicated here too.
+    collection: str | None = None
+    certification: str | None = None
+    keywords: str | None = None
+    budget: int | None = None
+    popularity: float | None = None
 
 
 _ENTRY_COLUMNS = (
@@ -310,6 +333,11 @@ _ENTRY_COLUMNS = (
     "website",
     "trailer_url",
     "omdb_last_no_match",
+    "collection",
+    "certification",
+    "keywords",
+    "budget",
+    "popularity",
 )
 
 
@@ -363,6 +391,11 @@ def _row_to_entry(row: tuple[Any, ...]) -> Entry:
         omdb_last_no_match=datetime.date.fromisoformat(values["omdb_last_no_match"])
         if values["omdb_last_no_match"]
         else None,
+        collection=values["collection"],
+        certification=values["certification"],
+        keywords=values["keywords"],
+        budget=values["budget"],
+        popularity=values["popularity"],
     )
 
 
@@ -745,6 +778,11 @@ class Store:
         website: str | None = _UNSET,
         trailer_url: str | None = _UNSET,
         omdb_last_no_match: datetime.date | None = _UNSET,
+        collection: str | None = _UNSET,
+        certification: str | None = _UNSET,
+        keywords: str | None = _UNSET,
+        budget: int | None = _UNSET,
+        popularity: float | None = _UNSET,
     ) -> Entry:
         current = self.get_entry(entry_id)
         changes = {
@@ -787,6 +825,11 @@ class Store:
             "website": website,
             "trailer_url": trailer_url,
             "omdb_last_no_match": omdb_last_no_match,
+            "collection": collection,
+            "certification": certification,
+            "keywords": keywords,
+            "budget": budget,
+            "popularity": popularity,
         }
         # changes is a heterogeneous dict by design (the _UNSET-sentinel
         # pattern needs one dict covering every field) - mypy can't verify
