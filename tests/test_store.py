@@ -1153,6 +1153,79 @@ def test_a_venue_not_in_the_known_table_is_never_touched(store: Store) -> None:
     assert [v.name for v in store.list_venues()] == ["Grand Vista Cinema"]
 
 
+# --- merge_venue_aliases also catches a baked-address name: movie-planner-web#400 ---
+#
+# A now-fixed calendar_pull.py bug (issue #283's own LOCATION shape not
+# being stripped correctly by _resolve_venue_name) let `sync pull`
+# create venue rows named after the *whole* LOCATION string instead of
+# just the venue - these tests seed that exact shape directly via SQL,
+# the same "legacy data" pattern as the alias tests above.
+
+
+def test_dry_run_finds_a_venue_named_after_its_own_full_location_string(store: Store) -> None:
+    baked_id = _seed_legacy_venue(store, "De Munt, Vijzelstraat 15, 1017 HD Amsterdam, Netherlands")
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(
+        title="Dune", date=date(2024, 3, 15), medium_id=medium.id, venue_id=baked_id
+    )
+
+    (merge,) = store.merge_venue_aliases(apply=False)
+
+    assert merge.alias_name == "De Munt, Vijzelstraat 15, 1017 HD Amsterdam, Netherlands"
+    assert merge.canonical_name == "De Munt"
+    assert merge.entries_moved == 1
+    assert store.get_entry(entry.id).venue_id == baked_id  # unchanged - dry run
+
+
+def test_apply_merges_a_baked_address_name_and_preserves_the_streets_data(store: Store) -> None:
+    baked_id = _seed_legacy_venue(store, "De Munt, Vijzelstraat 15, 1017 HD Amsterdam, Netherlands")
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(
+        title="Dune", date=date(2024, 3, 15), medium_id=medium.id, venue_id=baked_id
+    )
+
+    store.merge_venue_aliases(apply=True)
+
+    (canonical,) = store.list_venues()
+    assert canonical.name == "De Munt"
+    assert canonical.street_address == "Vijzelstraat 15"
+    assert canonical.postal_code == "1017 HD"
+    assert store.get_entry(entry.id).venue_id == canonical.id
+
+
+def test_a_venue_named_after_the_short_location_shape_is_also_caught(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The plain "name, city, country" shape (no street/postal known) -
+    # every real venue in the table has both by now, so this simulates
+    # one that doesn't, the same way test_add_venue_with_known_street_
+    # address_gets_it above injects a test-only table entry.
+    from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
+
+    monkeypatch.setitem(
+        KNOWN_VENUE_LOCATIONS,
+        "Grand Vista Cinema",
+        VenueLocation(
+            chain=None,
+            city="Springfield",
+            country="USA",
+            canonical_name="Grand Vista Cinema",
+        ),
+    )
+    baked_id = _seed_legacy_venue(store, "Grand Vista Cinema, Springfield, USA")
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(
+        title="Dune", date=date(2024, 3, 15), medium_id=medium.id, venue_id=baked_id
+    )
+
+    (merge,) = store.merge_venue_aliases(apply=False)
+
+    assert merge.alias_name == "Grand Vista Cinema, Springfield, USA"
+    assert merge.canonical_name == "Grand Vista Cinema"
+    assert merge.entries_moved == 1
+    assert store.get_entry(entry.id).venue_id == baked_id  # unchanged - dry run
+
+
 def test_close_does_not_raise(store: Store) -> None:
     store.close()
 

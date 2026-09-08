@@ -306,7 +306,10 @@ counterpart ("De Munt") via `KNOWN_VENUE_LOCATIONS`'s `canonical_name`
   orphaned alias rows) - and, separately, a `sync refresh --force` over
   the affected date range afterward, since the migration only touches
   the local store and never rewrites an already-pushed calendar event's
-  `LOCATION` on its own.
+  `LOCATION` on its own. The same command also catches and fixes a
+  known venue's own `LOCATION` string baked whole into the venue name
+  (movie-planner-web#400) - the shape a now-fixed `sync pull` bug could
+  produce; see the `sync pull` section below for the mechanism.
 
 Screening details aren't stored anywhere on the entry itself — only
 `from-pathe-email` ever supplies them for a push. `sync refresh`,
@@ -355,3 +358,15 @@ A structured property missing entirely from an event (row/seat
 especially - see movie-planner-web#294) is shown as the field going to
 "unknown," not phrased as a confirmed deletion, since a missing
 property doesn't by itself mean someone removed it on purpose.
+
+`LOCATION` resolution strips a trailing address suffix only when it
+exactly matches the event's own `X-CITY`/`X-COUNTRY` (and, when
+present, `X-STREET-ADDRESS`/`X-POSTAL-CODE`) - issue #283's fuller
+shape is tried first, since it's the more specific match, falling back
+to the plain "name, city, country" shape. A bug here (movie-planner-
+web#400) tried only the plain shape, so it never matched the fuller
+one - the postal code sits between the comma and the city - and
+`sync pull` ended up treating the venue's _entire_ `LOCATION` string as
+its name. `locations venues merge-aliases` (Venue identity, earlier in
+this file) catches and fixes any venue row this already created, the
+same way it already fixed a pre-#196 aliased name.

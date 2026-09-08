@@ -1229,12 +1229,14 @@ def venues_merge_aliases(
     ] = False,
 ) -> None:
     """Collapse venue rows that are really the same real-world venue,
-    just logged with a screen/format suffix baked into the name (e.g.
+    caught two ways: a screen/format suffix baked into the name (e.g.
     "De Munt 4DX" alongside "De Munt") - fixes rows created before
-    `log`/`import`/`add` started resolving these automatically.
-    Doesn't touch the calendar - a merged venue's already-pushed
-    events still show the old LOCATION string until `sync refresh
-    --force` re-pushes them.
+    `log`/`import`/`add` started resolving these automatically - and a
+    known venue's own LOCATION string baked whole into the venue name
+    (movie-planner-web#400), which `sync pull` could produce before a
+    calendar_pull.py bug was fixed alongside this. Doesn't touch the
+    calendar - a merged venue's already-pushed events still show the
+    old LOCATION string until `sync refresh --force` re-pushes them.
     """
     cfg = _cfg(ctx)
     store = _open_store(cfg)
