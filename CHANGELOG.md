@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.25.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.24.3...movie-planner-v1.25.0) (2026-09-08)
+
+
+### Features
+
+* **tmdb:** enrich entries with full cast and other TMDb metadata ([#312](https://github.com/alrayyes/movie-planner/issues/312)) ([c040956](https://github.com/alrayyes/movie-planner/commit/c0409568cb9d18cc58a8782df703a6d28cf99193)), closes [#311](https://github.com/alrayyes/movie-planner/issues/311)
+
+
+### Bug Fixes
+
+* **sync-pull:** correctly parse venue name from a full-address LOCATION ([#315](https://github.com/alrayyes/movie-planner/issues/315)) ([189bb46](https://github.com/alrayyes/movie-planner/commit/189bb468867eddfa25f6492c14bef48856818030)), closes [#314](https://github.com/alrayyes/movie-planner/issues/314)
+
 ## [1.24.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.24.2...movie-planner-v1.24.3) (2026-09-08)
 
 
