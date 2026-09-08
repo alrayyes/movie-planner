@@ -42,15 +42,66 @@ def test_extract_envelope_reads_from_subject_date_and_body() -> None:
 
 
 def test_extract_envelope_rejects_content_with_no_headers() -> None:
-    with pytest.raises(MailFetchError, match="no RFC822 headers"):
+    with pytest.raises(MailFetchError) as exc_info:
         extract_envelope("just some plain text\n\nwith a blank line\n")
+
+    # Exact message, not just a substring - a mutated message that still
+    # happens to contain "no RFC822 headers" as a substring (e.g. with
+    # junk appended either side) would otherwise still pass.
+    assert str(exc_info.value) == "not a recognizable email (no RFC822 headers found)"
+
+
+def test_extract_envelope_finds_a_header_before_the_first_blank_line_even_with_junk_ahead() -> None:
+    # A real header line earlier than the split point still counts, even
+    # with an unrecognized header (Return-Path, here) ahead of it in the
+    # same header block - this only distinguishes from a bug that
+    # truncates the header block at the first whitespace of any kind,
+    # rather than the first blank *line*.
+    raw = "Return-Path: <bounce@example.com>\nFrom: a@b.com\nSubject: hi\nDate: Mon, 1 Jan 2026 12:00:00 +0000\n\nbody\n"
+
+    extract_envelope(raw)  # does not raise
+
+
+def test_extract_envelope_does_not_treat_body_text_as_a_header() -> None:
+    # A forwarded message's own quoted "From:"/"Subject:" lines living in
+    # the *body* must never count as this email's own headers - only
+    # text before the first blank line does.
+    raw = "Weird-Header: x\n\nForwarded message:\nFrom: someone@example.com\nSubject: fwd\n"
+
+    with pytest.raises(MailFetchError, match="no RFC822 headers"):
+        extract_envelope(raw)
 
 
 def test_extract_envelope_rejects_a_missing_date_header() -> None:
     raw = "From: a@example.com\nSubject: hi\n\nbody\n"
 
-    with pytest.raises(MailFetchError, match="no Date header"):
+    with pytest.raises(MailFetchError) as exc_info:
         extract_envelope(raw)
+
+    assert str(exc_info.value) == "email has no Date header"
+
+
+def test_extract_envelope_rejects_an_unparseable_date_header() -> None:
+    raw = "From: a@example.com\nSubject: hi\nDate: not a real date\n\nbody\n"
+
+    with pytest.raises(MailFetchError, match="unparseable Date header"):
+        extract_envelope(raw)
+
+
+def test_extract_envelope_with_no_from_header_is_an_empty_string() -> None:
+    raw = "Subject: hi\nDate: Mon, 1 Jan 2026 12:00:00 +0000\n\nbody\n"
+
+    envelope = extract_envelope(raw)
+
+    assert envelope.from_address == ""
+
+
+def test_extract_envelope_with_no_subject_header_is_an_empty_string() -> None:
+    raw = "From: a@example.com\nDate: Mon, 1 Jan 2026 12:00:00 +0000\n\nbody\n"
+
+    envelope = extract_envelope(raw)
+
+    assert envelope.subject == ""
 
 
 def test_sender_domain_extracts_and_lowercases_the_domain() -> None:
