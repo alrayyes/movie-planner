@@ -157,9 +157,18 @@ independent Amsterdam venues) gets its chain, city, and country filled
 in automatically — a name that doesn't match gets none of that, never
 a guess. `list --chain`/`--city` filter on it; `show` displays it. Most
 of those same venues also carry known GPS coordinates, pushed to the
-calendar as the event's `GEO` property (see
+calendar as the event's `GEO` property, and most now also carry a
+verified street address and postal code, extending the calendar
+event's `LOCATION` from "venue, city, country" to a full address a
+calendar client can geocode to the actual building (see
 [`docs/calendar-schema.md`](docs/calendar-schema.md)) — again, only
-ever a verified value, never estimated.
+ever a verified value, never estimated. This backfills onto an
+existing database automatically the next time any command runs — a
+venue row created before its table entry had street-level data picks
+it up on the next store open, nothing to run by hand. `sync refresh`
+(plain, not `--force`) is what gets the refreshed data onto the
+calendar itself for entries synced before this existed, without
+re-fetching OMDb ratings for entries that already have them.
 
 `import` accepts a `.csv` or `.json` file with the same fields as
 `examples/`, and fetches OMDb ratings the same as `log` does - unless a

@@ -129,6 +129,10 @@ _MIGRATED_VENUE_COLUMNS: tuple[tuple[str, str], ...] = (
     ("country", "TEXT"),
     ("latitude", "REAL"),
     ("longitude", "REAL"),
+    # Street address/postal code (issue #283) - same verified-only,
+    # independently-set rule as every other field here.
+    ("street_address", "TEXT"),
+    ("postal_code", "TEXT"),
 )
 
 
@@ -155,6 +159,8 @@ class Venue:
     country: str | None = None
     latitude: float | None = None
     longitude: float | None = None
+    street_address: str | None = None
+    postal_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -412,9 +418,20 @@ class Store:
                 "city = COALESCE(city, ?), "
                 "country = COALESCE(country, ?), "
                 "latitude = COALESCE(latitude, ?), "
-                "longitude = COALESCE(longitude, ?) "
+                "longitude = COALESCE(longitude, ?), "
+                "street_address = COALESCE(street_address, ?), "
+                "postal_code = COALESCE(postal_code, ?) "
                 "WHERE name = ?",
-                (location.chain, location.city, location.country, latitude, longitude, name),
+                (
+                    location.chain,
+                    location.city,
+                    location.country,
+                    latitude,
+                    longitude,
+                    location.street_address,
+                    location.postal_code,
+                    name,
+                ),
             )
 
     def close(self) -> None:
@@ -470,11 +487,13 @@ class Store:
         city = location.city if location else None
         country = location.country if location else None
         latitude, longitude = (location.coordinates or (None, None)) if location else (None, None)
+        street_address = location.street_address if location else None
+        postal_code = location.postal_code if location else None
         try:
             cur = self._conn.execute(
-                "INSERT INTO venues (name, chain, city, country, latitude, longitude) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (name, chain, city, country, latitude, longitude),
+                "INSERT INTO venues (name, chain, city, country, latitude, longitude, "
+                "street_address, postal_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (name, chain, city, country, latitude, longitude, street_address, postal_code),
             )
         except sqlite3.IntegrityError as e:
             raise StoreError(f"venue '{name}' already exists") from e
@@ -489,11 +508,14 @@ class Store:
             country=country,
             latitude=latitude,
             longitude=longitude,
+            street_address=street_address,
+            postal_code=postal_code,
         )
 
     def list_venues(self) -> list[Venue]:
         rows = self._conn.execute(
-            "SELECT id, name, chain, city, country, latitude, longitude FROM venues ORDER BY name"
+            "SELECT id, name, chain, city, country, latitude, longitude, "
+            "street_address, postal_code FROM venues ORDER BY name"
         )
         return [
             Venue(
@@ -504,6 +526,8 @@ class Store:
                 country=r[4],
                 latitude=r[5],
                 longitude=r[6],
+                street_address=r[7],
+                postal_code=r[8],
             )
             for r in rows
         ]

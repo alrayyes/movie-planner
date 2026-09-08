@@ -61,7 +61,10 @@ Sixel
 hardcoded
 geocodable
 geocoding
+geocode
+geocodes
 backfilled
+backfills
 GSC's?
 movie-planner-web
 pathe-mail-import
