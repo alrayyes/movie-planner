@@ -44,6 +44,11 @@ class MboxMailClient:
         if not path.is_file():
             raise MailFetchError(f"mbox file not found: {path}")
 
+        # `create` is provably a no-op here (issue #289) - `path.is_file()`
+        # already guarantees the file exists by this point, and
+        # mailbox.mbox's `create` only ever affects behavior when the
+        # path is missing. Mutating it (False/True/None/omitted) can't
+        # be observed.
         try:
             box = mailbox.mbox(str(path), create=False)
         except OSError as e:
@@ -51,6 +56,17 @@ class MboxMailClient:
 
         try:
             for message in box:
+                # message is a mailbox.mboxMessage, an email.message.Message
+                # subclass - `.get(name)` is case-insensitive (RFC 2822
+                # header names are), so mutating "From"/"Date"/"Message-ID"'s
+                # case below is equivalent, not a gap (same reasoning as
+                # envelope.py's own header lookups). The "" default on
+                # `.get("From", "")` is similarly equivalent to any other
+                # default without an "@" in it (including the case-mutated
+                # "None"/omitted defaults) - sender_domain() only cares
+                # whether "@" is present, so a missing From header always
+                # resolves to no domain regardless of which no-"@" default
+                # is used.
                 domain = sender_domain(str(message.get("From", "")))
                 if domain not in wanted:
                     continue
@@ -60,6 +76,15 @@ class MboxMailClient:
                     continue
                 try:
                     message_date = parsedate_to_datetime(str(date_header))
+                # TypeError is unreachable here (issue #289): `str(...)`
+                # above guarantees a str argument, and email.utils.
+                # parsedate_to_datetime only ever raises ValueError for a
+                # str it can't parse - verified against this module's own
+                # implementation, not assumed. Kept defensively regardless
+                # (a stdlib behavior change is a much smaller risk than a
+                # loop-ending `break` slipping in unnoticed), but no test
+                # can ever exercise this branch's own continue-vs-break
+                # choice.
                 except TypeError:
                     continue
                 except ValueError:
