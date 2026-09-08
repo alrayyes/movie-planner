@@ -79,5 +79,6 @@ namespaced
 deduplicat(e|ed|es|ing)
 unredacted
 unparsed
+unscoped
 Maildir
 lookups?
