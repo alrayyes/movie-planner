@@ -28,13 +28,15 @@ not LOCATION alone.
 - `KNOWN_VENUE_LOCATIONS`'s existing 14 venue groups backfilled with real,
   verified street addresses/postal codes wherever an official source
   confirms one - any that can't be confirmed stay without one.
-- New `movie-planner locations venues refresh` command
-  (dry-run by default, `--apply` to write) backfills an *already
-  existing* venue row's chain/city/country/coordinates/street address/
-  postal code from the current table - needed because a `Venue` row only
-  ever copies the table's data once, at creation time, and Ryan's real
-  database already has rows for most of these 14 venues from before this
-  change. Without it, the new fields would never reach his real calendar.
+- `Store._backfill_known_venue_locations()` - the existing, automatic
+  COALESCE backfill that already runs on every store open to catch up
+  chain/city/country/coordinates on a `venues` row created before the
+  hardcoded table had them - extended to cover `street_address`/
+  `postal_code` the same way. No new command needed: this mechanism
+  already exists (added for #170's coordinates), it just needs the two
+  new columns added to what it fills in. This is what actually gets the
+  new fields onto Ryan's real database - his venue rows for most of
+  these 14 groups already exist, created before this change.
 - `docs/calendar-schema.md` documents the two new properties and the
   extended LOCATION shape.
 
@@ -47,24 +49,19 @@ not LOCATION alone.
 ### Modified Capabilities
 
 - `calendar-sync`: the existing "Venue location on the pushed event"
-  requirement gains a fuller LOCATION shape and two new independently-set
-  `X-*` properties for a venue with verified street-level data.
-- `movie-log`: the existing "User-editable medium and venue lists"
-  requirement gains a new `locations venues refresh` command that
-  backfills an already-existing venue row's chain/city/country/
-  coordinates/street address/postal code from the current hardcoded
-  table - needed because that table only ever gets consulted once, when
-  a venue row is first created.
+  requirement gains a fuller LOCATION shape, two new independently-set
+  `X-*` properties for a venue with verified street-level data, and
+  extends the existing automatic venue-row backfill to the two new
+  fields.
 
 ## Impact
 
 - `src/movie_planner/store.py` - `Venue` dataclass, `_MIGRATED_VENUE_COLUMNS`,
-  new `refresh_venue_locations()` method.
+  `add_venue`, `_backfill_known_venue_locations()`.
 - `src/movie_planner/venue_locations.py` - `VenueLocation` dataclass, `_add()`,
   and the 14 existing venue-group calls.
-- `src/movie_planner/cli.py` - `_venue_location()`, new `locations venues
-  refresh` command.
+- `src/movie_planner/cli.py` - `_venue_location()`.
 - `src/movie_planner/calendar_sync.py` - `_extra_properties()`.
-- `docs/calendar-schema.md`, `README.md`.
+- `docs/calendar-schema.md`.
 - No breaking change: every new field is optional and additive: an entry at a
   venue with no street-level data behaves exactly as it does today.

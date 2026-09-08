@@ -181,6 +181,11 @@ def test_log_creates_entry_and_syncs_to_calendar(
 def test_log_pushes_a_known_venues_chain_and_location(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None
 ) -> None:
+    # GSC Gurney Plaza Penang, not Tuschinski: every Pathé Amsterdam
+    # venue now has a verified street address and postal code (issue
+    # #283), so its LOCATION is the fuller shape - GSC has a verified
+    # street address but no postal code, so it still exercises the
+    # plain "venue, city, country" shape this test is actually about.
     result = runner.invoke(
         app,
         [
@@ -194,7 +199,7 @@ def test_log_pushes_a_known_venues_chain_and_location(
             "--medium",
             "cinema",
             "--venue",
-            "Tuschinski",
+            "Gsc Gurney Plaza Penang",
         ],
     )
 
@@ -203,8 +208,8 @@ def test_log_pushes_a_known_venues_chain_and_location(
     (entry,) = store.list_entries()
     assert entry.caldav_uid is not None
     ical_text = calendar.events_by_uid[entry.caldav_uid].data
-    assert "LOCATION:Tuschinski\\, Amsterdam\\, Netherlands" in ical_text
-    assert "Chain: Pathé" in ical_text
+    assert "LOCATION:Gsc Gurney Plaza Penang\\, Penang\\, Malaysia" in ical_text
+    assert "Chain: GSC" in ical_text
     store.close()
 
 
@@ -263,6 +268,162 @@ def test_log_venue_with_no_known_coordinates_omits_geo(
     assert entry.caldav_uid is not None
     ical_text = calendar.events_by_uid[entry.caldav_uid].data
     assert "GEO:" not in ical_text
+    store.close()
+
+
+# --- venue street address: issue #283 ---
+
+
+@pytest.fixture
+def known_street_address(monkeypatch: pytest.MonkeyPatch) -> None:
+    from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
+
+    monkeypatch.setitem(
+        KNOWN_VENUE_LOCATIONS,
+        "Tuschinski",
+        VenueLocation(
+            chain="Pathé",
+            city="Amsterdam",
+            country="Netherlands",
+            coordinates=(52.3665062, 4.8947073),
+            street_address="Reguliersbreestraat 26-34",
+            postal_code="1017 CN",
+            canonical_name="Tuschinski",
+        ),
+    )
+
+
+def test_log_pushes_a_known_venues_full_street_address(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, known_street_address: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Tuschinski",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    # Parsed rather than a raw substring check: LOCATION is long enough
+    # here to get RFC 5545 line-folded.
+    cal = icalendar.Calendar.from_ical(ical_text)
+    (event,) = [c for c in cal.subcomponents if c.name == "VEVENT"]
+    assert (
+        str(event["location"])
+        == "Tuschinski, Reguliersbreestraat 26-34, 1017 CN Amsterdam, Netherlands"
+    )
+    assert "X-STREET-ADDRESS:Reguliersbreestraat 26-34" in ical_text
+    assert "X-POSTAL-CODE:1017 CN" in ical_text
+    store.close()
+
+
+def test_log_pushes_a_known_venue_with_no_street_address_unchanged(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Every real venue in the table now has verified street-level data
+    # (issue #283), so a venue with city/country but genuinely no
+    # street address has to be synthesized here.
+    from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
+
+    monkeypatch.setitem(
+        KNOWN_VENUE_LOCATIONS,
+        "Grand Vista Cinema",
+        VenueLocation(
+            chain=None,
+            city="Amsterdam",
+            country="Netherlands",
+            canonical_name="Grand Vista Cinema",
+        ),
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "LOCATION:Grand Vista Cinema\\, Amsterdam\\, Netherlands" in ical_text
+    assert "X-STREET-ADDRESS" not in ical_text
+    assert "X-POSTAL-CODE" not in ical_text
+    store.close()
+
+
+def test_log_pushes_a_venue_with_only_street_address_known(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
+
+    monkeypatch.setitem(
+        KNOWN_VENUE_LOCATIONS,
+        "Tuschinski",
+        VenueLocation(
+            chain="Pathé",
+            city="Amsterdam",
+            country="Netherlands",
+            coordinates=(52.3665062, 4.8947073),
+            street_address="Reguliersbreestraat 26-34",
+            postal_code=None,
+            canonical_name="Tuschinski",
+        ),
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Tuschinski",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    # LOCATION stays the shorter shape - a street with no postal code is
+    # a worse geocoding hint than the plain "venue, city, country".
+    assert "LOCATION:Tuschinski\\, Amsterdam\\, Netherlands" in ical_text
+    assert "X-STREET-ADDRESS:Reguliersbreestraat 26-34" in ical_text
+    assert "X-POSTAL-CODE" not in ical_text
     store.close()
 
 

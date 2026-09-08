@@ -45,6 +45,14 @@ either.
     try to map from `LOCATION`. Commas inside it are backslash-escaped
     per RFC 5545 `TEXT` escaping, same as any other `TEXT` value with a
     literal comma.
+  - `{venue name}, {street address}, {postal code} {city}, {country}`
+    — a venue with a verified street address _and_ postal code (issue
+    #283), extending the shape above to a full address a calendar
+    client can geocode to the actual building, not just the city. Only
+    when both are known: a street address with no postal code (or vice
+    versa) falls back to the shorter `{venue name}, {city}, {country}`
+    shape instead of a partial address - a worse geocoding hint than
+    the plain city/country string it would otherwise be.
 - **GEO** — present only for a venue with known coordinates (issue
   #170): `{latitude};{longitude}`, `icalendar`'s `vGeo` FLOAT pair. A
   venue with no coordinates on record gets no `GEO` property at all -
@@ -80,6 +88,18 @@ either.
     reader can consume without parsing `LOCATION` apart. Additive, not
     a replacement, same "omit, never guess" rule `GEO` already
     follows: a venue not in the table gets neither property.
+  - **`X-STREET-ADDRESS`**/**`X-POSTAL-CODE`** — a venue with a
+    verified street address/postal code (issue #283), same source as
+    the fuller `LOCATION` shape above. Split into two properties, not
+    one combined `X-ADDRESS`: international address ordering varies
+    too much for one string to serialize cleanly (postal-code-before-
+    city is Dutch convention, not universal; some countries have no
+    postal code at all), and it reuses `X-CITY`/`X-COUNTRY`'s exact
+    pattern - a direct 1:1 pass-through, no joining logic. Each is set
+    **independently** of the other, unlike `LOCATION` above, which
+    only includes either when both are known: a venue with a
+    confirmed street but no confirmed postal code still gets
+    `X-STREET-ADDRESS` alone, and vice versa.
   - **`X-ROW`**/**`X-SEAT`** — an entry's seat assignment, as text (for
     example `5`/`17`) - only ever set from a Pathé booking confirmation
     parse (issue #218), never from a manually logged entry. Same
@@ -115,8 +135,9 @@ either.
     doesn't pass an importer label (a test using `CalendarSync`
     directly, for example) gets neither property.
 
-A real example — an entry at a known venue, with a genre tag and
-coordinates on record, exactly as `build_vevent` produces it:
+A real example — an entry at a known venue, with a genre tag,
+coordinates, and a verified street address on record, exactly as
+`build_vevent` produces it:
 
 ```text
 BEGIN:VCALENDAR
@@ -128,11 +149,19 @@ DTSTART:20260827T134000
 DTEND:20260827T154600
 UID:0199c1f2-3a4b-7def-8a9b-0123456789ab
 GEO:52.3633802;4.8838439
-LOCATION:City\, Amsterdam\, Netherlands
+LOCATION:City\, Kleine-Gartmanplantsoen 15-19\, 1017 RP Amsterdam\, Nether
+ lands
 X-GENRE:Horror
+X-POSTAL-CODE:1017 RP
+X-STREET-ADDRESS:Kleine-Gartmanplantsoen 15-19
 END:VEVENT
 END:VCALENDAR
 ```
+
+Line-folded per RFC 5545 (75-octet limit, continuation lines start with a
+single space) - a real `LOCATION` this long always wraps like this; a
+reader needs to unfold it the same way a real CalDAV client would, not
+match it as one line.
 
 ## DESCRIPTION content
 

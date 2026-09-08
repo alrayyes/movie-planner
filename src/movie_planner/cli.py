@@ -421,6 +421,8 @@ def _push_new_or_warn(
             geo=_venue_geo(venue),
             city=venue.city if venue else None,
             country=venue.country if venue else None,
+            street_address=venue.street_address if venue else None,
+            postal_code=venue.postal_code if venue else None,
             importer=importer,
         )
     except Exception as e:  # noqa: BLE001 - any connect/push failure is a warning
@@ -452,6 +454,8 @@ def _push_update_or_warn(
             geo=_venue_geo(venue),
             city=venue.city if venue else None,
             country=venue.country if venue else None,
+            street_address=venue.street_address if venue else None,
+            postal_code=venue.postal_code if venue else None,
             importer=importer,
         )
     except Exception as e:  # noqa: BLE001
@@ -549,12 +553,23 @@ def _venue_location(venue: Venue | None) -> str | None:
     country" - a real, geocodable address string most calendar clients
     (Google Calendar, Apple Calendar) already try to map from LOCATION,
     which is why chain isn't folded in here too - see docs/calendar-schema.md.
+    A venue with a verified street address *and* postal code (issue #283)
+    extends this further to "name, street address, postal code city,
+    country" - only when both are known, same all-or-nothing pairing as
+    city/country above; a street with no postal code (or vice versa) is
+    a worse geocoding hint than the plain "name, city, country" fallback,
+    so it stays with the shorter shape instead of a partial address.
     """
     if venue is None:
         return None
-    if venue.city and venue.country:
-        return f"{venue.name}, {venue.city}, {venue.country}"
-    return venue.name
+    if not (venue.city and venue.country):
+        return venue.name
+    if venue.street_address and venue.postal_code:
+        return (
+            f"{venue.name}, {venue.street_address}, "
+            f"{venue.postal_code} {venue.city}, {venue.country}"
+        )
+    return f"{venue.name}, {venue.city}, {venue.country}"
 
 
 def _venue_geo(venue: Venue | None) -> tuple[float, float] | None:

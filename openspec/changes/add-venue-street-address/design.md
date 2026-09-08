@@ -5,20 +5,24 @@ See `proposal.md` - Why for motivation. Relevant current state:
 - `KNOWN_VENUE_LOCATIONS` (`venue_locations.py`) is the single hardcoded
   source of verified chain/city/country/coordinate data, keyed by venue
   name (including aliases, resolved to a canonical name via `_add()`).
-- `Store.add_venue`/`get_or_create_venue` copy chain/city/country/
-  latitude/longitude from that table into the `venues` table **once, at
-  row-creation time** - a `Venue` row never re-reads the table again
-  after that. `_venue_location`/`_venue_geo` (`cli.py`) both read the
-  stored `Venue` fields, not a live lookup.
-- Ryan's real database already has venue rows for most/all of the 14
-  groups in the table today, created long before this change. This
-  matters: it means simply adding `street_address`/`postal_code` to
-  `KNOWN_VENUE_LOCATIONS` does **not** make them reach his real calendar
-  - his existing `Venue` rows have no mechanism to pick up a field added
-  to the table after they were created. This gap already exists today
-  for chain/city/country/coordinates too (undocumented until now), but
-  this change is the first time it actually blocks the feature it ships
-  from working for the motivating real-world case.
+- `Store.add_venue` copies chain/city/country/latitude/longitude from
+  that table into the `venues` table at row-creation time.
+  `_venue_location`/`_venue_geo` (`cli.py`) both read the stored `Venue`
+  fields, not a live lookup.
+- **`Store._backfill_known_venue_locations()` already exists** and runs
+  automatically on every `Store()` open (from `_migrate()`), after the
+  `_MIGRATED_VENUE_COLUMNS` ALTERs. For every venue whose name matches
+  a `KNOWN_VENUE_LOCATIONS` entry, it `UPDATE`s each column with
+  `COALESCE(column, ?)` - fills the column only if it's still `NULL`,
+  one column at a time, never overwrites a value already set. Added for
+  issue #185, specifically so a database that already ran an earlier,
+  narrower migration (chain/city/country from #111) still picks up a
+  later one (coordinates from #170) without a single
+  all-columns-must-be-NULL gate skipping it. This already solves the
+  exact problem this change would otherwise need a new command for:
+  Ryan's real database has venue rows for most of the 14 groups today,
+  created before this change - the next time he opens the store (any
+  command), this mechanism fills in the two new columns automatically.
 
 ## Goals / Non-Goals
 
@@ -27,12 +31,10 @@ properties for a venue with verified data, including venues that
 already exist in a real database today.
 
 **Non-goals**: dynamic/live geocoding of a venue's address (still
-hardcoded/verified-only, same as every other field in the table);
-changing `_venue_location`/`_venue_geo` to read `KNOWN_VENUE_LOCATIONS`
-live instead of the stored `Venue` row (a bigger behavior change for
-every existing field, not just the two this change adds - out of
-scope); a generic "any field, any table" migration framework (this adds
-one command scoped to the fields `KNOWN_VENUE_LOCATIONS` actually has).
+hardcoded/verified-only, same as every other field in the table); a new
+CLI command for backfilling existing rows - `_backfill_known_venue_locations`
+already does this and just needs the two new columns added to what it
+fills in.
 
 ## Decisions
 
@@ -58,28 +60,17 @@ code (or vice versa) is a worse geocoding hint than the plain
 property is still exposed independently either way, so nothing is lost
 by holding `LOCATION` to the stricter pairing.
 
-**A new `Store.refresh_venue_locations()` method + `movie-planner
-locations venues refresh` command backfills existing venue
-rows from the current `KNOWN_VENUE_LOCATIONS` table.** For every venue
-row whose name matches a table entry, sets
-chain/city/country/latitude/longitude/street_address/postal_code to the
-table's current values, unconditionally - a full resync, not a
-fill-only-if-missing merge. This is safe because these six fields have
-exactly one writer: `add_venue` copying them from this same table at
-creation time. Nothing else ever sets them (there's no `--chain`/
-`--city`/etc. flag on `venues add`), so a row's value can only ever be
-"what the table said when the row was created" - there's no legitimate
-case of a row holding a value that deliberately diverges from the
-table, only a stale one. A venue row whose name isn't in the table at
-all is left completely untouched either way. Dry-run by default,
-`--apply` to write - mirrors `merge-aliases`'s existing UX exactly,
-since it's the same kind of "the hardcoded table now knows more than an
-existing row does" problem, just for "already correctly named" rows
-rather than aliases. Considered folding this into `merge-aliases`
-itself, rejected: that command's contract is specifically about alias
-collapsing (moving entries between rows); this is about refreshing a
-row's own columns in place - different operation, same UX shape, worth
-keeping separate so each command's name says what it actually does.
+**No new command - extend the existing `_backfill_known_venue_locations`
+COALESCE loop to the two new columns.** Simpler than a separate
+`locations venues refresh` command (the originally-considered
+approach): backfilling already happens automatically, for free, on the
+very next `Store()` open after upgrading - nothing for Ryan to
+remember to run. `COALESCE`'s fill-only semantics (vs. an unconditional
+overwrite) is also the right behavior here, not just the existing
+one: it's what already correctly handles the partial-migration case
+(#185), and there's no reason street_address/postal_code needs a
+different, stronger "always overwrite" rule than every other column in
+that same loop already uses.
 
 **Street address/postal code sourced the same way as every other
 verified field in the table** - each venue's chain/city/country/
@@ -91,38 +82,34 @@ guessed) for anything not confidently confirmed.
 
 ## Risks / Trade-offs
 
-- **A venue row created between this shipping and someone running
-  `refresh --apply` still shows the old, shorter LOCATION.**
-  Mitigation: same as every other backfill in this codebase (GEO,
-  #196's alias merge) - documented as a one-time step in the README,
-  not automatic. `sync refresh` alone doesn't fix a `Venue` row's own
-  stale columns; `refresh --apply` does that, and `sync
-  refresh` (or `--force`) is still what re-pushes the calendar events
-  once the row itself is current.
+- **A venue row created between this shipping and the next `Store()`
+  open still needs that next open to pick up the columns.** Not
+  actually a risk in practice: `_backfill_known_venue_locations` runs
+  on *every* open, including the very next command Ryan runs after
+  upgrading - there's no separate step to remember, unlike the
+  originally-considered `refresh --apply` command.
 - **A venue whose name doesn't exactly match a `KNOWN_VENUE_LOCATIONS`
-  key (an alias not yet merged) won't be refreshed by the new command.**
-  Mitigation: none needed beyond documenting the order - run
-  `merge-aliases --apply` first if it hasn't already been run, then
-  `refresh --apply`, same two-step shape the "Known gaps"
-  note in `docs/architecture.md` already describes for the alias case.
+  key (an alias not yet merged) isn't backfilled.** Pre-existing
+  behavior, unchanged by this change - `merge-aliases --apply` (issue
+  #196) is what resolves that, same as it already does for
+  chain/city/country/coordinates today.
 
 ## Migration Plan
 
 1. Ship the schema (new `Venue` columns via `_MIGRATED_VENUE_COLUMNS`,
-   new `VenueLocation` fields), `_venue_location`/`_extra_properties`
-   changes, and `refresh`.
-2. Anyone with an existing database runs `locations venues
-   refresh --apply` once to backfill existing venue rows'
-   `street_address`/`postal_code` (and refresh chain/city/country/
-   coordinates too, in case those ever drift from the table - no reason
-   to scope this narrower than "resync everything the table knows").
+   new `VenueLocation` fields, `_backfill_known_venue_locations`
+   extended to the two new columns), and the `_venue_location`/
+   `_extra_properties` changes.
+2. The next time anyone with an existing database runs any
+   `movie-planner` command, `Store.__init__` backfills
+   `street_address`/`postal_code` onto existing venue rows
+   automatically - no explicit step required.
 3. `sync refresh --force` (documented already, same as every prior
    LOCATION-affecting change) re-pushes every entry so the calendar
    reflects the refreshed venue data.
 
-No rollback concern: every new field is optional and additive, and
-`refresh` without `--apply` only reports what it would
-change.
+No rollback concern: every new field is optional and additive, and the
+backfill only ever fills a `NULL` column.
 
 ## Open Questions
 

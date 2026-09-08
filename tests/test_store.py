@@ -229,6 +229,37 @@ def test_add_venue_not_in_the_known_table_gets_no_coordinates(store: Store) -> N
     venue = store.add_venue("Grand Vista Cinema")
 
     assert venue.latitude is None
+
+
+def test_add_venue_with_known_street_address_gets_it(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
+
+    monkeypatch.setitem(
+        KNOWN_VENUE_LOCATIONS,
+        "Test Cinema",
+        VenueLocation(
+            chain=None,
+            city="Amsterdam",
+            country="Netherlands",
+            street_address="Teststraat 1",
+            postal_code="1000 AA",
+            canonical_name="Test Cinema",
+        ),
+    )
+
+    venue = store.add_venue("Test Cinema")
+
+    assert venue.street_address == "Teststraat 1"
+    assert venue.postal_code == "1000 AA"
+
+
+def test_add_venue_not_in_the_known_table_gets_no_street_address(store: Store) -> None:
+    venue = store.add_venue("Grand Vista Cinema")
+
+    assert venue.street_address is None
+    assert venue.postal_code is None
     assert venue.longitude is None
 
 
@@ -310,6 +341,113 @@ def test_migration_backfills_coordinates_for_a_venue_already_migrated_by_111(
         assert venue.chain == "Pathé"
         assert venue.latitude == pytest.approx(52.3665062)
         assert venue.longitude == pytest.approx(4.8947073)
+    finally:
+        s.close()
+
+
+def test_migration_backfills_street_address_for_an_existing_known_venue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Same shape as #170's coordinate backfill above (issue #283): a
+    # venue row created before the table gained a verified street
+    # address/postal code for it still needs to pick those up on the
+    # next store open, not just brand-new rows.
+    import sqlite3
+
+    from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
+
+    monkeypatch.setitem(
+        KNOWN_VENUE_LOCATIONS,
+        "Test Cinema",
+        VenueLocation(
+            chain=None,
+            city="Amsterdam",
+            country="Netherlands",
+            street_address="Teststraat 1",
+            postal_code="1000 AA",
+            canonical_name="Test Cinema",
+        ),
+    )
+
+    db_path = tmp_path / "movies.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE media (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            is_physical_place INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE venues (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+        CREATE TABLE entries (
+            id INTEGER PRIMARY KEY, title TEXT NOT NULL, date TEXT NOT NULL,
+            start_time TEXT, end_time TEXT,
+            medium_id INTEGER NOT NULL REFERENCES media(id),
+            venue_id INTEGER REFERENCES venues(id)
+        );
+        """
+    )
+    conn.execute("INSERT INTO venues (name) VALUES ('Test Cinema')")
+    conn.commit()
+    conn.close()
+
+    s = Store(db_path)
+    try:
+        (venue,) = s.list_venues()
+        assert venue.street_address == "Teststraat 1"
+        assert venue.postal_code == "1000 AA"
+    finally:
+        s.close()
+
+
+def test_migration_never_overwrites_an_already_set_street_address(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sqlite3
+
+    from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
+
+    monkeypatch.setitem(
+        KNOWN_VENUE_LOCATIONS,
+        "Test Cinema",
+        VenueLocation(
+            chain=None,
+            city="Amsterdam",
+            country="Netherlands",
+            street_address="Teststraat 1",
+            postal_code="1000 AA",
+            canonical_name="Test Cinema",
+        ),
+    )
+
+    db_path = tmp_path / "movies.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE media (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            is_physical_place INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE venues (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, street_address TEXT
+        );
+        CREATE TABLE entries (
+            id INTEGER PRIMARY KEY, title TEXT NOT NULL, date TEXT NOT NULL,
+            start_time TEXT, end_time TEXT,
+            medium_id INTEGER NOT NULL REFERENCES media(id),
+            venue_id INTEGER REFERENCES venues(id)
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO venues (name, street_address) VALUES ('Test Cinema', 'Manually Set 5')"
+    )
+    conn.commit()
+    conn.close()
+
+    s = Store(db_path)
+    try:
+        (venue,) = s.list_venues()
+        assert venue.street_address == "Manually Set 5"
     finally:
         s.close()
 

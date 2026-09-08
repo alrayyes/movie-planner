@@ -857,6 +857,53 @@ def test_push_new_includes_city_and_country_as_x_properties(store: Store) -> Non
     assert "X-COUNTRY:Netherlands" in ical_text
 
 
+def test_push_new_includes_street_address_and_postal_code_as_x_properties(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(
+        entry,
+        venue="Pathé De Munt",
+        street_address="Vijzelstraat 15",
+        postal_code="1017 HD",
+    )
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-STREET-ADDRESS:Vijzelstraat 15" in ical_text
+    assert "X-POSTAL-CODE:1017 HD" in ical_text
+
+
+def test_push_new_omits_street_address_when_entry_has_none(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-STREET-ADDRESS" not in ical_text
+    assert "X-POSTAL-CODE" not in ical_text
+
+
+def test_push_new_sets_street_address_and_postal_code_independently(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None, street_address="Vijzelstraat 15")
+
+    assert synced.caldav_uid is not None
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    assert "X-STREET-ADDRESS:Vijzelstraat 15" in ical_text
+    assert "X-POSTAL-CODE" not in ical_text
+
+
 def test_push_new_includes_row_and_seat_as_x_properties(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(
@@ -1096,6 +1143,32 @@ def test_push_update_stale_uid_recovery_keeps_importer(store: Store) -> None:
     assert refreshed.caldav_uid is not None
     ical_text = calendar.events_by_uid[refreshed.caldav_uid].data
     assert "X-IMPORTER:log" in ical_text
+
+
+def test_push_update_stale_uid_recovery_keeps_street_address(store: Store) -> None:
+    # Same class of bug as #262/#257, same call site - guards street
+    # address/postal code (issue #283) against the same mistake.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(
+        entry,
+        venue=None,
+        street_address="Teststraat 1",
+        postal_code="1000 AA",
+    )
+    stale_uid = entry.caldav_uid
+    assert stale_uid is not None
+    del calendar.events_by_uid[stale_uid]  # simulates an external wipe
+
+    sync.push_update(entry, venue=None, street_address="Teststraat 1", postal_code="1000 AA")
+
+    refreshed = store.get_entry(entry.id)
+    assert refreshed.caldav_uid is not None
+    ical_text = calendar.events_by_uid[refreshed.caldav_uid].data
+    assert "X-STREET-ADDRESS:Teststraat 1" in ical_text
+    assert "X-POSTAL-CODE:1000 AA" in ical_text
 
 
 def test_push_update_failure_is_wrapped_and_retryable(store: Store) -> None:

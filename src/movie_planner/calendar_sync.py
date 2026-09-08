@@ -190,6 +190,8 @@ def _extra_properties(
     *,
     city: str | None = None,
     country: str | None = None,
+    street_address: str | None = None,
+    postal_code: str | None = None,
     importer: str | None = None,
 ) -> dict[str, str]:
     values: dict[str, str | None] = {
@@ -205,6 +207,13 @@ def _extra_properties(
         # hardcoded chain/location table.
         "X-CITY": city,
         "X-COUNTRY": country,
+        # Same reasoning as X-CITY/X-COUNTRY, split rather than one
+        # combined X-ADDRESS (issue #283, agreed jointly with
+        # movie-planner-web): a direct 1:1 passthrough, each omitted
+        # independently when its own value isn't known - LOCATION is the
+        # only place these two are ever paired together.
+        "X-STREET-ADDRESS": street_address,
+        "X-POSTAL-CODE": postal_code,
         # Structured, unlike screening_details' free text (issue #218) -
         # already on Entry itself, so no extra push_new/push_update
         # parameter is needed the way city/country above required one.
@@ -260,6 +269,8 @@ class CalendarSync:
         geo: tuple[float, float] | None = None,
         city: str | None = None,
         country: str | None = None,
+        street_address: str | None = None,
+        postal_code: str | None = None,
         importer: str | None = None,
     ) -> Entry:
         # uuid7, not uuid4: time-ordered, so newly-created entries insert
@@ -275,7 +286,12 @@ class CalendarSync:
             venue=venue,
             description=build_description(entry, chain=chain, screening_details=screening_details),
             extra_properties=_extra_properties(
-                entry, city=city, country=country, importer=importer
+                entry,
+                city=city,
+                country=country,
+                street_address=street_address,
+                postal_code=postal_code,
+                importer=importer,
             ),
             geo=geo,
         )
@@ -317,6 +333,8 @@ class CalendarSync:
         geo: tuple[float, float] | None = None,
         city: str | None = None,
         country: str | None = None,
+        street_address: str | None = None,
+        postal_code: str | None = None,
         importer: str | None = None,
     ) -> None:
         if entry.caldav_uid is None:
@@ -330,7 +348,12 @@ class CalendarSync:
             venue=venue,
             description=build_description(entry, chain=chain, screening_details=screening_details),
             extra_properties=_extra_properties(
-                entry, city=city, country=country, importer=importer
+                entry,
+                city=city,
+                country=country,
+                street_address=street_address,
+                postal_code=postal_code,
+                importer=importer,
             ),
             geo=geo,
         )
@@ -351,6 +374,8 @@ class CalendarSync:
                 geo=geo,
                 city=city,
                 country=country,
+                street_address=street_address,
+                postal_code=postal_code,
                 importer=importer,
             )
         except Exception as e:

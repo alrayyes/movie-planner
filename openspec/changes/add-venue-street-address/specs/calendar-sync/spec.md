@@ -12,7 +12,12 @@ VEVENT's `X-STREET-ADDRESS` and `X-POSTAL-CODE` properties. Each of
 street address and postal code is set independently: a venue with only
 one of the two SHALL have only that property set, and LOCATION SHALL
 still use the shorter "venue name, city, country" shape unless both are
-known.
+known. An already-existing venue row whose street address/postal code
+weren't known when it was created SHALL pick them up automatically the
+next time the store is opened, once the hardcoded table has verified
+data for it - the same automatic backfill chain/city/country/
+coordinates already get, never overwriting a value the row already
+has.
 
 #### Scenario: Pushing an entry at a venue with a known location
 - **WHEN** an entry at a venue with a known chain, city, and country is
@@ -44,3 +49,15 @@ known.
 - **THEN** the VEVENT carries neither `X-STREET-ADDRESS` nor
   `X-POSTAL-CODE`, and LOCATION uses the shorter "venue name, city,
   country" shape
+
+#### Scenario: An existing venue row picks up a newly-verified street address
+- **WHEN** the store is opened and an existing venue row's name matches
+  a hardcoded table entry that now has a street address/postal code the
+  row doesn't
+- **THEN** the row is updated with those values, and a subsequent push
+  for an entry at that venue includes them
+
+#### Scenario: Backfill never overwrites a value a venue row already has
+- **WHEN** the store is opened and an existing venue row already has its
+  own value for a field the hardcoded table also has a value for
+- **THEN** the row's existing value is left unchanged
