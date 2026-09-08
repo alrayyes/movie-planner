@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.23.1...movie-planner-v1.24.0) (2026-09-08)
+
+
+### Features
+
+* **calendar:** extend LOCATION to a full street address ([#284](https://github.com/alrayyes/movie-planner/issues/284)) ([bac1498](https://github.com/alrayyes/movie-planner/commit/bac14986909cd2dd1eabfd672ac7eec762c6ad76))
+
 ## [1.23.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.23.0...movie-planner-v1.23.1) (2026-09-07)
 
 
