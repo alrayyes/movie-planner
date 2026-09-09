@@ -940,7 +940,7 @@ def _poster_url_for(cfg: config_module.Config, entry: Entry) -> str | None:
     if match is None:
         return None
     client = OmdbClient(cfg.omdb_api_key)
-    ratings = client.lookup(imdb_id=match.group(1))
+    ratings = client.lookup(imdb_id=match.group())
     return ratings.poster if ratings else None
 
 
