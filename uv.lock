@@ -831,7 +831,7 @@ wheels = [
 
 [[package]]
 name = "movie-planner"
-version = "1.26.9"
+version = "1.26.10"
 source = { editable = "." }
 dependencies = [
     { name = "caldav" },
