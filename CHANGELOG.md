@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.26.6](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.5...movie-planner-v1.26.6) (2026-09-09)
+
+
+### Bug Fixes
+
+* **calendar-pull:** close calendar_pull.py mutmut gaps ([#345](https://github.com/alrayyes/movie-planner/issues/345)) ([2ceb359](https://github.com/alrayyes/movie-planner/commit/2ceb359f733aad16c3951f79427193fcaa509e90)), closes [#294](https://github.com/alrayyes/movie-planner/issues/294)
+* **calendar-sync:** close calendar_sync.py mutmut gaps ([#343](https://github.com/alrayyes/movie-planner/issues/343)) ([69af02a](https://github.com/alrayyes/movie-planner/commit/69af02a34480d7bb5c2edc115e016e42c2ee3999)), closes [#292](https://github.com/alrayyes/movie-planner/issues/292)
+* **omdb:** close omdb.py mutmut gaps ([#342](https://github.com/alrayyes/movie-planner/issues/342)) ([e952acf](https://github.com/alrayyes/movie-planner/commit/e952acf8d34565866869a238fc316ea7d2e09859)), closes [#293](https://github.com/alrayyes/movie-planner/issues/293)
+* **venue-locations:** close venue_locations.py mutmut gaps ([#346](https://github.com/alrayyes/movie-planner/issues/346)) ([82a2b87](https://github.com/alrayyes/movie-planner/commit/82a2b8737c7529499dc5401ef3322572b2714353)), closes [#300](https://github.com/alrayyes/movie-planner/issues/300)
+
 ## [1.26.5](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.4...movie-planner-v1.26.5) (2026-09-09)
 
 
