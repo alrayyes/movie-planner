@@ -1,5 +1,20 @@
 from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
 
+# --- chain/city/country: issue #111; coordinates: issue #170 ---
+
+
+def test_tuschinski_has_a_verified_chain_city_and_country() -> None:
+    location = KNOWN_VENUE_LOCATIONS["Tuschinski"]
+    assert location.chain == "Pathé"
+    assert location.city == "Amsterdam"
+    assert location.country == "Netherlands"
+
+
+def test_tuschinski_has_verified_coordinates() -> None:
+    location = KNOWN_VENUE_LOCATIONS["Tuschinski"]
+    assert location.coordinates == (52.3665062, 4.8947073)
+
+
 # --- street_address/postal_code: issue #283 ---
 
 
