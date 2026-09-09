@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.11](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.10...movie-planner-v1.26.11) (2026-09-09)
+
+
+### Documentation
+
+* **openspec:** sync and archive add-imap-pathe-mail-import ([#354](https://github.com/alrayyes/movie-planner/issues/354)) ([13f1461](https://github.com/alrayyes/movie-planner/commit/13f1461f146189c4e343dba7cca7e4912b62f3de))
+
 ## [1.26.10](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.9...movie-planner-v1.26.10) (2026-09-09)
 
 
