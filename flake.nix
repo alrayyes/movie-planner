@@ -152,8 +152,20 @@
           # non-nixpkgs versions (the way uv-build is, above) — same
           # "use nixpkgs' own versions" tradeoff the `dependencies` list
           # just above already makes.
+          #
+          # rapidfuzz (issue #330): a different case, not just lagging -
+          # nixpkgs has never packaged 3.14.6 at all (its own commit
+          # history for pkgs/development/python-modules/rapidfuzz tops
+          # out at 3.14.3 -> 3.14.5, no later bump exists yet), so no
+          # nixpkgs revision, however recent, satisfies pyproject.toml's
+          # rapidfuzz==3.14.6 pin. Same fix as the others above, not a
+          # version-override the way uv-build gets one - rapidfuzz is a
+          # runtime dependency covered by the same "use nixpkgs' own
+          # versions" tradeoff, and 3.14.5 -> 3.14.6 is a patch bump with
+          # no behavior this project depends on.
           pythonRelaxDeps = [
             "icalendar"
+            "rapidfuzz"
             "tomlkit"
             "typer"
           ];
