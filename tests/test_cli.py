@@ -274,6 +274,8 @@ def test_log_pushes_a_known_venues_chain_and_location(
     ical_text = calendar.events_by_uid[entry.caldav_uid].data
     assert "LOCATION:Gsc Gurney Plaza Penang\\, Penang\\, Malaysia" in ical_text
     assert "Chain: GSC" in ical_text
+    assert "X-CITY:Penang" in ical_text
+    assert "X-COUNTRY:Malaysia" in ical_text
     store.close()
 
 
@@ -491,6 +493,43 @@ def test_log_pushes_a_venue_with_only_street_address_known(
     store.close()
 
 
+def test_venue_location_with_city_but_no_country_uses_the_plain_name() -> None:
+    # Both city AND country are required for the extended LOCATION shape -
+    # a venue with only one known is treated the same as neither known.
+    from movie_planner.cli import _venue_location
+    from movie_planner.store import Venue
+
+    venue = Venue(id=1, name="Mystery Cinema", city="Paris", country=None)
+
+    assert _venue_location(venue) == "Mystery Cinema"
+
+
+def test_venue_geo_requires_both_coordinates() -> None:
+    from movie_planner.cli import _venue_geo
+    from movie_planner.store import Venue
+
+    venue = Venue(id=1, name="Mystery Cinema", latitude=48.85, longitude=None)
+
+    assert _venue_geo(venue) is None
+
+
+def test_venue_for_entry_returns_none_when_the_venue_id_has_no_match(
+    config_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An entry can carry a venue_id with no matching row (e.g. store data
+    # from before a venue was merged/removed out from under it) - next()'s
+    # own default handles that, rather than blowing up with StopIteration.
+    from movie_planner.cli import _venue_for_entry
+    from movie_planner.store import Entry
+
+    store = _store(config_path)
+    monkeypatch.setattr(store, "list_venues", lambda: [])
+    entry = Entry(id=1, title="Dune", date=date(2026, 1, 1), medium_id=1, venue_id=999)
+
+    assert _venue_for_entry(store, entry) is None
+    store.close()
+
+
 def test_log_venue_not_required_for_non_physical_medium(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None
 ) -> None:
@@ -639,6 +678,119 @@ def test_log_fetches_omdb_ratings(
     (entry,) = store.list_entries()
     assert entry.imdb_rating == "8.5/10"
     store.close()
+
+
+def test_log_with_imdb_id_passes_it_to_the_omdb_lookup(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    def lookup(self: OmdbClient, **kw: object) -> MovieRatings | None:
+        captured.update(kw)
+        return None
+
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lookup)
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--imdb-id",
+            "tt1160419",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["imdb_id"] == "tt1160419"
+
+
+def test_log_shows_the_exact_omdb_fetch_failure_message(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def failing_lookup(self: OmdbClient, **kw: object) -> MovieRatings:
+        raise RuntimeError("omdb is down")
+
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", failing_lookup)
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Warning: could not fetch ratings: omdb is down" in result.output
+
+
+def test_log_no_omdb_match_shows_the_exact_message(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "No OMDb match found for 'Dune'." in result.output
+
+
+def test_log_shows_the_exact_tmdb_fetch_failure_message(
+    config_path_with_tmdb: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ratings = MovieRatings(
+        imdb="8.5/10", rotten_tomatoes=None, metacritic=None, imdb_id="tt1160419"
+    )
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: ratings)
+
+    def failing_lookup(self: TmdbClient, **kw: object) -> None:
+        raise RuntimeError("tmdb is down")
+
+    monkeypatch.setattr("movie_planner.cli.TmdbClient.lookup_movie_details", failing_lookup)
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path_with_tmdb),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Warning: could not fetch TMDb details: tmdb is down" in result.output
 
 
 def test_log_sync_failure_still_persists_the_entry(config_path: Path, no_omdb_match: None) -> None:
@@ -1168,8 +1320,11 @@ def test_init_non_interactive_missing_value_fails_clearly(tmp_path: Path) -> Non
         app, ["--config", str(config_path), "--caldav-url", "https://example.com", "init"]
     )
 
-    assert result.exit_code != 0
-    assert "--caldav-username" in result.output
+    assert result.exit_code == 1
+    assert (
+        "No --caldav-username given and not running interactively; "
+        "pass --caldav-username explicitly." in result.output
+    )
     assert not config_path.exists()
 
 
@@ -1186,10 +1341,27 @@ def test_init_interactive_prompts_for_missing_values(
     )
 
     assert result.exit_code == 0, result.output
+    assert "CalDAV URL" in result.output
+    assert "CalDAV username" in result.output
+    assert "OMDb API key" in result.output
     loaded = config_module.load_config(config_path)
     assert loaded.caldav_url == "https://baikal.example.com/dav.php/calendars/moviewatcher/movies/"
     assert loaded.caldav_username == "moviewatcher"
     assert loaded.omdb_api_key == "abc123"
+
+
+def test_write_starter_config_creates_missing_parent_directories(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `_write_starter_config` (the offer-to-create-it path off a missing
+    # config, not `init`'s own separate mkdir) has to be `parents=True` -
+    # not a bare `mkdir()`, which would only work one level deep.
+    config_path = tmp_path / "a" / "b" / "c" / "config.toml"
+    monkeypatch.setattr("movie_planner.cli._is_interactive", lambda: True)
+
+    runner.invoke(app, ["--config", str(config_path), "list"], input="y\n")
+
+    assert config_path.is_file()
 
 
 def test_init_flag_skips_the_prompt_for_that_value(
@@ -1215,8 +1387,20 @@ def test_missing_config_non_interactively_points_at_init(tmp_path: Path) -> None
 
     result = runner.invoke(app, ["--config", str(config_path), "list"])
 
-    assert result.exit_code != 0
-    assert "movie-planner init" in result.output
+    assert result.exit_code == 1
+    assert (
+        f"No config file found at {config_path}. Run 'movie-planner init' to create a starter one."
+        in result.output
+    )
+
+
+def test_missing_config_non_interactively_message_goes_to_stderr(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+
+    result = runner.invoke(app, ["--config", str(config_path), "list"])
+
+    assert "movie-planner init" in result.stderr
+    assert "movie-planner init" not in result.stdout
 
 
 def test_missing_config_interactively_offers_to_create_it(
@@ -1227,9 +1411,27 @@ def test_missing_config_interactively_offers_to_create_it(
 
     result = runner.invoke(app, ["--config", str(config_path), "list"], input="y\n")
 
-    assert result.exit_code != 0
+    assert result.exit_code == 1
+    assert f"No config file found at {config_path}. Create a starter one now?" in result.output
     assert config_path.is_file()
-    assert "wrote a starter config" in result.output.lower()
+    assert (
+        f"Wrote a starter config to {config_path}. Edit it with your CalDAV "
+        "credentials and OMDb API key, then run this command again." in result.output
+    )
+
+
+def test_missing_config_interactively_blank_answer_defaults_to_creating_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The confirm's own default (True) - just pressing Enter accepts it,
+    # same as a real terminal would show "[Y/n]" and take a bare Enter
+    # as "yes".
+    config_path = tmp_path / "config.toml"
+    monkeypatch.setattr("movie_planner.cli._is_interactive", lambda: True)
+
+    runner.invoke(app, ["--config", str(config_path), "list"], input="\n")
+
+    assert config_path.is_file()
 
 
 def test_missing_config_interactively_declined_does_not_write_one(
@@ -1240,8 +1442,30 @@ def test_missing_config_interactively_declined_does_not_write_one(
 
     result = runner.invoke(app, ["--config", str(config_path), "list"], input="n\n")
 
-    assert result.exit_code != 0
+    assert result.exit_code == 1
     assert not config_path.is_file()
+
+
+def test_config_load_error_shows_the_error_and_exits_1(tmp_path: Path) -> None:
+    # A config file that exists but is missing a required section hits
+    # _cfg's ConfigError branch, distinct from "file doesn't exist" above.
+    config_path = tmp_path / "config.toml"
+    config_path.write_text('[omdb]\napi_key = "abc123"\n\n[storage]\ndb_path = "movies.db"\n')
+
+    result = runner.invoke(app, ["--config", str(config_path), "list"])
+
+    assert result.exit_code == 1
+    assert "config is missing required key 'caldav'" in result.output
+
+
+def test_config_load_error_message_goes_to_stderr(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text('[omdb]\napi_key = "abc123"\n\n[storage]\ndb_path = "movies.db"\n')
+
+    result = runner.invoke(app, ["--config", str(config_path), "list"])
+
+    assert "config is missing required key 'caldav'" in result.stderr
+    assert "config is missing required key 'caldav'" not in result.stdout
 
 
 # --- error paths ---
@@ -1276,6 +1500,28 @@ def test_log_with_invalid_date_fails(config_path: Path, calendar: FakeCalendar) 
 
     assert result.exit_code != 0
     assert "not a valid date" in result.output.lower()
+
+
+def test_log_with_invalid_start_time_fails(config_path: Path, calendar: FakeCalendar) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--start-time",
+            "not-a-time",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "'not-a-time' is not a valid time (expected HH:MM)" in result.output
 
 
 def test_update_unknown_entry_fails(config_path: Path) -> None:
@@ -1362,6 +1608,133 @@ def test_update_changes_entry_and_propagates_to_calendar(
     assert updated.caldav_uid is not None
     assert "Dune Part Two" in calendar.events_by_uid[updated.caldav_uid].data
     store.close()
+
+
+def test_update_pushes_the_full_venue_shape_to_the_calendar(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, known_street_address: None
+) -> None:
+    # `update` re-pushes via _push_update_or_warn, a separate code path
+    # from `log`'s own _push_new_or_warn - every venue-derived field has
+    # to be threaded through there too, not just re-proven for create.
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Tuschinski",
+        ],
+    )
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid is not None
+    store.close()
+
+    result = runner.invoke(
+        app,
+        ["--config", str(config_path), "update", str(entry.id), "--title", "Dune Part Two"],
+    )
+
+    assert result.exit_code == 0, result.output
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    cal = icalendar.Calendar.from_ical(ical_text)
+    (event,) = [c for c in cal.subcomponents if c.name == "VEVENT"]
+    assert (
+        str(event["location"])
+        == "Tuschinski, Reguliersbreestraat 26-34, 1017 CN Amsterdam, Netherlands"
+    )
+    assert "Chain: Pathé" in ical_text
+    assert "GEO:52.3665062;4.8947073" in ical_text
+    assert "X-CITY:Amsterdam" in ical_text
+    assert "X-COUNTRY:Netherlands" in ical_text
+    assert "X-STREET-ADDRESS:Reguliersbreestraat 26-34" in ical_text
+    assert "X-POSTAL-CODE:1017 CN" in ical_text
+
+
+def test_update_recovers_when_the_calendar_uid_no_longer_exists(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    # push_update's own NotFoundError recovery (movie-planner#166)
+    # recreates the event via the *real* store passed through
+    # _push_update_or_warn - not a placeholder - since it has to record
+    # the fresh caldav_uid before creating the new event.
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    old_uid = entry.caldav_uid
+    assert old_uid is not None
+    store.close()
+    del calendar.events_by_uid[old_uid]
+
+    result = runner.invoke(
+        app,
+        ["--config", str(config_path), "update", str(entry.id), "--title", "Dune Part Two"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Warning" not in result.output
+    store = _store(config_path)
+    updated = store.get_entry(entry.id)
+    store.close()
+    assert updated.caldav_uid is not None
+    assert updated.caldav_uid != old_uid
+    assert updated.caldav_uid in calendar.events_by_uid
+    assert "Dune Part Two" in calendar.events_by_uid[updated.caldav_uid].data
+
+
+def test_update_shows_the_exact_calendar_push_failure_message(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    store.close()
+
+    calendar.fail_next = True
+    result = runner.invoke(
+        app,
+        ["--config", str(config_path), "update", str(entry.id), "--title", "Dune Part Two"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (
+        "Warning: could not sync the update to 'Dune Part Two' to the calendar: "
+        "could not sync the update to 'Dune Part Two' to the calendar: simulated failure"
+        in result.output
+    )
 
 
 def test_update_refresh_metadata_fetches_ratings_for_that_entry_alone(
@@ -1470,6 +1843,40 @@ def test_delete_removes_entry_and_calendar_event(
     store = _store(config_path)
     assert store.list_entries() == []
     assert calendar.events_by_uid[uid].deleted is True
+    store.close()
+
+
+def test_delete_shows_the_exact_calendar_removal_failure_message(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    store.close()
+
+    calendar.fail_next = True
+    result = runner.invoke(app, ["--config", str(config_path), "delete", str(entry.id)])
+
+    assert result.exit_code == 0, result.output
+    assert (
+        "Warning: could not remove 'Dune' from the calendar: "
+        "could not remove 'Dune' from the calendar: simulated failure" in result.output
+    )
+    store = _store(config_path)
+    assert store.list_entries() == []
     store.close()
 
 
@@ -1938,6 +2345,24 @@ def test_from_pathe_email_via_file_creates_new_entry(
     store.close()
 
 
+def test_from_pathe_email_echoes_the_parsed_booking_before_confirming(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    email_path = tmp_path / "ticket.eml"
+    email_path.write_text(PATHE_EMAIL_PLAIN)
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "from-pathe-email", str(email_path)], input="y\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    assert f"Booking {PATHE_BOOKING_REF}:" in result.output
+    assert "  The Dog Stars" in result.output
+    assert "  2026-08-29 12:40:00-14:58:00" in result.output
+    assert "  Pathé De Munt" in result.output
+    assert "  Original Version, Auditorium 1 DOLBY - Row 5 Seat 17" in result.output
+
+
 def test_from_pathe_email_matching_by_booking_ref_updates_row_and_seat(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
 ) -> None:
@@ -1959,6 +2384,13 @@ def test_from_pathe_email_matching_by_booking_ref_updates_row_and_seat(
     (entry,) = store.list_entries()
     assert entry.row == "9"
     assert entry.seat == "3"
+    assert entry.caldav_uid is not None
+    # The re-push (_finalize_entry's update branch, via
+    # _push_update_or_warn) has to carry the fresh screening_details
+    # through too, not just the row/seat already checked above.
+    cal = icalendar.Calendar.from_ical(calendar.events_by_uid[entry.caldav_uid].data)
+    (event,) = [c for c in cal.subcomponents if c.name == "VEVENT"]
+    assert "Auditorium 1 DOLBY - Row 9 Seat 3" in str(event["description"])
     store.close()
 
 
@@ -2704,6 +3136,72 @@ def test_caldav_url_flag_overrides_config_file(
     assert captured["url"] == "https://override.example.com/calendars/movies/"
 
 
+def test_caldav_username_flag_overrides_config_file(
+    config_path: Path, no_omdb_match: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, str] = {}
+
+    def fake_connect(cls: type[CalendarClient], /, **kw: str) -> CalendarClient:
+        captured.update(kw)
+        return CalendarClient(FakeCalendar())
+
+    monkeypatch.setattr(CalendarClient, "connect", classmethod(fake_connect))
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "--caldav-username",
+            "override-user",
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["username"] == "override-user"
+
+
+def test_connect_calendar_passes_the_configured_username_and_password(
+    config_path: Path, no_omdb_match: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # config_path's own fixture data: username "moviewatcher", password
+    # "secret" - _connect_calendar has to thread both through unchanged,
+    # not just url.
+    captured: dict[str, str] = {}
+
+    def fake_connect(cls: type[CalendarClient], /, **kw: str) -> CalendarClient:
+        captured.update(kw)
+        return CalendarClient(FakeCalendar())
+
+    monkeypatch.setattr(CalendarClient, "connect", classmethod(fake_connect))
+
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["username"] == "moviewatcher"
+    assert captured["password"] == "secret"
+
+
 def test_omdb_api_key_flag_overrides_config_file(
     config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3005,6 +3503,8 @@ def test_sync_pull_approved_new_candidate_creates_an_entry(
     result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="y\ncinema\n")
 
     assert result.exit_code == 0, result.output
+    assert "Log this as a new entry? [y/N]: y\n" in result.output
+    assert "Applied 1 of 1 candidates." in result.output
     store = _store(config_path)
     (entry,) = store.list_entries()
     assert entry.title == "Arrival"
@@ -3035,6 +3535,7 @@ def test_sync_pull_new_candidate_medium_defaults_to_cinema_when_venue_present(
     result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="y\n\n")
 
     assert result.exit_code == 0, result.output
+    assert "Medium for this entry [cinema]: " in result.output
     store = _store(config_path)
     (entry,) = store.list_entries()
     medium = next(m for m in store.list_media() if m.id == entry.medium_id)
@@ -3060,11 +3561,52 @@ def test_sync_pull_new_candidate_no_venue_has_no_default_medium(
     )
 
     assert result.exit_code == 0, result.output
+    assert "Medium for this entry: " in result.output
+    assert "Medium for this entry [cinema]:" not in result.output
     store = _store(config_path)
     (entry,) = store.list_entries()
     medium = next(m for m in store.list_media() if m.id == entry.medium_id)
     assert medium.name == "netflix"
     assert medium.is_physical_place is False
+    store.close()
+
+
+def test_sync_pull_approved_new_candidate_persists_every_parsed_field(
+    config_path: Path, calendar: FakeCalendar
+) -> None:
+    ical = build_vevent(
+        uid="web-uid-full",
+        title="Arrival",
+        entry_date=date(2026, 2, 1),
+        start_time=time(19, 30),
+        end_time=time(21, 45),
+        venue="Grand Vista Cinema",
+        extra_properties={
+            "X-DIRECTOR": "Denis Villeneuve",
+            "X-ACTORS": "Amy Adams",
+            "X-GENRE": "Sci-Fi",
+            "X-YEAR": "2016",
+            "X-POSTER-URL": "https://example.com/poster.jpg",
+            "X-ROW": "5",
+            "X-SEAT": "12",
+        },
+    )
+    calendar.add_event(ical)
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="y\ncinema\n")
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.start_time == time(19, 30)
+    assert entry.end_time == time(21, 45)
+    assert entry.row == "5"
+    assert entry.seat == "12"
+    assert entry.director == "Denis Villeneuve"
+    assert entry.actors == "Amy Adams"
+    assert entry.genre == "Sci-Fi"
+    assert entry.release_year == 2016
+    assert entry.poster_url == "https://example.com/poster.jpg"
     store.close()
 
 
@@ -3084,6 +3626,8 @@ def test_sync_pull_declined_new_candidate_creates_nothing(
     result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="n\n")
 
     assert result.exit_code == 0, result.output
+    assert "Log this as a new entry? [y/N]: n\n" in result.output
+    assert "Applied 0 of 1 candidates." in result.output
     store = _store(config_path)
     assert store.list_entries() == []
     store.close()
@@ -3149,9 +3693,79 @@ def test_sync_pull_approved_changed_candidate_updates_the_entry(
     result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="y\n")
 
     assert result.exit_code == 0, result.output
+    assert "Apply this change to the local store? [y/N]: y\n" in result.output
+    assert "Applied 1 of 1 candidates." in result.output
     store = _store(config_path)
     (updated,) = store.list_entries()
     assert updated.title == "Dune: Part One"
+    store.close()
+
+
+def test_sync_pull_approved_changed_candidate_persists_every_parsed_field(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    uid = entry.caldav_uid
+    assert uid is not None
+    store.close()
+
+    # movie-planner-web edited every field this covers directly on the
+    # calendar - the venue is new (not yet in the local store), proving
+    # _apply_changed_candidate's own get_or_create_venue call, not just
+    # that venue_id gets threaded through.
+    ical = build_vevent(
+        uid=uid,
+        title="Dune: Part Two",
+        entry_date=date(2026, 3, 15),
+        start_time=time(19, 30),
+        end_time=time(21, 45),
+        venue="Grand Vista Cinema",
+        extra_properties={
+            "X-DIRECTOR": "Denis Villeneuve",
+            "X-ACTORS": "Zendaya",
+            "X-GENRE": "Sci-Fi",
+            "X-YEAR": "2024",
+            "X-POSTER-URL": "https://example.com/poster2.jpg",
+            "X-ROW": "9",
+            "X-SEAT": "3",
+        },
+    )
+    calendar.events_by_uid[uid].data = ical
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="y\n")
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    (updated,) = store.list_entries()
+    assert updated.title == "Dune: Part Two"
+    assert updated.date == date(2026, 3, 15)
+    assert updated.start_time == time(19, 30)
+    assert updated.end_time == time(21, 45)
+    assert updated.row == "9"
+    assert updated.seat == "3"
+    assert updated.director == "Denis Villeneuve"
+    assert updated.actors == "Zendaya"
+    assert updated.genre == "Sci-Fi"
+    assert updated.release_year == 2024
+    assert updated.poster_url == "https://example.com/poster2.jpg"
+    venue = next(v for v in store.list_venues() if v.id == updated.venue_id)
+    assert venue.name == "Grand Vista Cinema"
     store.close()
 
 
@@ -3192,6 +3806,7 @@ def test_sync_pull_declined_changed_candidate_leaves_entry_unchanged(
     result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="n\n")
 
     assert result.exit_code == 0, result.output
+    assert "Applied 0 of 1 candidates." in result.output
     store = _store(config_path)
     (unchanged,) = store.list_entries()
     assert unchanged.title == "Dune"
@@ -3269,6 +3884,11 @@ def test_sync_pull_approved_removed_candidate_deletes_the_entry(
     result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="y\n")
 
     assert result.exit_code == 0, result.output
+    assert f"Removed entry {entry.id}: 'Dune' ({entry.date}) - no longer on the calendar" in (
+        result.output
+    )
+    assert "Remove this entry from the local store? [y/N]: y\n" in result.output
+    assert "Applied 1 of 1 candidates." in result.output
     store = _store(config_path)
     assert store.list_entries() == []
     store.close()
@@ -3302,6 +3922,7 @@ def test_sync_pull_declined_removed_candidate_keeps_the_entry(
     result = runner.invoke(app, ["--config", str(config_path), "sync", "pull"], input="n\n")
 
     assert result.exit_code == 0, result.output
+    assert "Applied 0 of 1 candidates." in result.output
     store = _store(config_path)
     (kept,) = store.list_entries()
     assert kept.id == entry.id
@@ -3429,6 +4050,39 @@ def test_update_stamps_x_importer(
     assert "X-IMPORTER:update" in ical_text
 
 
+def test_refresh_stamps_x_importer_on_the_repush(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    # `sync refresh` re-pushes an already-synced entry through
+    # _finalize_entry's update branch (_push_update_or_warn), a
+    # different importer value and a different call site from `log`'s
+    # own create push above.
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert entry.caldav_uid is not None
+    store.close()
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert result.exit_code == 0, result.output
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "X-IMPORTER:sync-refresh" in ical_text
+
+
 # --- --verbose: issue #258 ---
 
 
@@ -3492,6 +4146,51 @@ def test_without_verbose_nothing_is_printed_to_stderr(
     assert result.stderr == ""
 
 
+def test_configure_logging_verbose_formats_a_debug_record_as_the_bare_message(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import logging
+
+    from movie_planner.cli import _configure_logging
+
+    logger = logging.getLogger("movie_planner")
+    try:
+        _configure_logging(True)
+        assert logger.level == logging.DEBUG
+        assert logger.propagate is False
+        logger.debug("hello from the debug handler")
+    finally:
+        _configure_logging(False)
+
+    captured = capsys.readouterr()
+    assert captured.err == "hello from the debug handler\n"
+
+
+def test_configure_logging_not_verbose_clears_handlers_and_propagates(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import logging
+
+    from movie_planner.cli import _configure_logging
+
+    logger = logging.getLogger("movie_planner")
+    try:
+        _configure_logging(True)  # dirty the state first
+        _configure_logging(False)
+        assert logger.handlers == []
+        assert logger.level == logging.WARNING
+        assert logger.propagate is True
+        logger.warning("should propagate to the root logger's own handling")
+    finally:
+        _configure_logging(False)
+
+    # Nothing of movie_planner's own writes it directly to stderr any more -
+    # a handler-less, propagating logger is root's problem now, not this
+    # one's own StreamHandler(sys.stderr).
+    captured = capsys.readouterr()
+    assert "should propagate" not in captured.err
+
+
 # --- activity: issue #276 ---
 
 
@@ -3548,3 +4247,437 @@ def test_activity_empty_says_so(config_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     assert "no activity" in result.output.lower()
+
+
+# --- private helpers exercised directly: pure/isolated logic the CLI-level
+# tests above can't reach a mutation of on their own (mutmut gaps, #290) ---
+
+
+def test_format_activity_formats_the_header_and_diff_exactly() -> None:
+    from datetime import datetime
+
+    from movie_planner.cli import _format_activity
+    from movie_planner.store import ActivityLogEntry
+
+    activity_entry = ActivityLogEntry(
+        id=1,
+        action="update",
+        entry_id=7,
+        entry_title="Dune",
+        changes={"title": ("Dune", "Dune Part Two"), "notes": (None, "great")},
+        created_at=datetime(2026, 1, 1, 12, 30, 45),
+    )
+
+    result = _format_activity(activity_entry)
+
+    assert result == (
+        "[1] 2026-01-01T12:30:45 update #7 'Dune': "
+        "title: 'Dune' -> 'Dune Part Two', notes: None -> 'great'"
+    )
+
+
+def test_format_time_range_with_only_a_start_time() -> None:
+    from movie_planner.calendar_pull import ParsedEvent
+    from movie_planner.cli import _format_time_range
+
+    parsed = ParsedEvent(
+        uid="u1",
+        title="Dune",
+        date=date(2026, 1, 1),
+        start_time=time(19, 30),
+        end_time=None,
+        venue_name=None,
+        director=None,
+        actors=None,
+        genre=None,
+        release_year=None,
+        poster_url=None,
+        row=None,
+        seat=None,
+    )
+
+    assert _format_time_range(parsed) == " 19:30"
+
+
+def test_format_time_range_with_a_start_and_end_time() -> None:
+    from movie_planner.calendar_pull import ParsedEvent
+    from movie_planner.cli import _format_time_range
+
+    parsed = ParsedEvent(
+        uid="u1",
+        title="Dune",
+        date=date(2026, 1, 1),
+        start_time=time(19, 30),
+        end_time=time(21, 45),
+        venue_name=None,
+        director=None,
+        actors=None,
+        genre=None,
+        release_year=None,
+        poster_url=None,
+        row=None,
+        seat=None,
+    )
+
+    assert _format_time_range(parsed) == " 19:30-21:45"
+
+
+def test_format_time_range_with_neither_time() -> None:
+    from movie_planner.calendar_pull import ParsedEvent
+    from movie_planner.cli import _format_time_range
+
+    parsed = ParsedEvent(
+        uid="u1",
+        title="Dune",
+        date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue_name=None,
+        director=None,
+        actors=None,
+        genre=None,
+        release_year=None,
+        poster_url=None,
+        row=None,
+        seat=None,
+    )
+
+    assert _format_time_range(parsed) == ""
+
+
+def test_describe_new_candidate_without_a_venue() -> None:
+    from movie_planner.calendar_pull import ParsedEvent
+    from movie_planner.cli import _describe_new_candidate
+
+    parsed = ParsedEvent(
+        uid="u1",
+        title="Dune",
+        date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue_name=None,
+        director=None,
+        actors=None,
+        genre=None,
+        release_year=None,
+        poster_url=None,
+        row=None,
+        seat=None,
+    )
+
+    assert _describe_new_candidate(parsed) == "New entry: 'Dune' on 2026-01-01"
+
+
+def test_describe_new_candidate_with_a_venue() -> None:
+    from movie_planner.calendar_pull import ParsedEvent
+    from movie_planner.cli import _describe_new_candidate
+
+    parsed = ParsedEvent(
+        uid="u1",
+        title="Dune",
+        date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue_name="Grand Vista Cinema",
+        director=None,
+        actors=None,
+        genre=None,
+        release_year=None,
+        poster_url=None,
+        row=None,
+        seat=None,
+    )
+
+    assert _describe_new_candidate(parsed) == "New entry: 'Dune' on 2026-01-01 @ Grand Vista Cinema"
+
+
+def test_format_diff_value_none_is_rendered_as_unknown() -> None:
+    from movie_planner.cli import _format_diff_value
+
+    assert _format_diff_value(None) == "unknown"
+
+
+def test_format_diff_value_non_none_uses_repr() -> None:
+    from movie_planner.cli import _format_diff_value
+
+    assert _format_diff_value("Dune") == "'Dune'"
+
+
+def test_describe_changed_candidate_formats_every_diff_line() -> None:
+    from movie_planner.calendar_pull import ChangedCandidate, FieldDiff, ParsedEvent
+    from movie_planner.cli import _describe_changed_candidate
+    from movie_planner.store import Entry
+
+    entry = Entry(id=3, title="Dune", date=date(2026, 1, 1), medium_id=1)
+    parsed = ParsedEvent(
+        uid="u1",
+        title="Dune: Part One",
+        date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue_name=None,
+        director=None,
+        actors=None,
+        genre=None,
+        release_year=None,
+        poster_url=None,
+        row=None,
+        seat=None,
+    )
+    candidate = ChangedCandidate(
+        entry=entry,
+        parsed=parsed,
+        diffs=[
+            FieldDiff(field="title", stored="Dune", calendar="Dune: Part One"),
+            FieldDiff(field="row", stored=None, calendar="5"),
+        ],
+    )
+
+    result = _describe_changed_candidate(candidate)
+
+    assert result == (
+        "Changed entry 3: 'Dune'\n  title: 'Dune' -> 'Dune: Part One'\n  row: unknown -> '5'"
+    )
+
+
+def test_fetch_poster_bytes_requests_with_redirects_and_a_ten_second_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from movie_planner.cli import _fetch_poster_bytes
+
+    class _FakeResponse:
+        def __init__(self) -> None:
+            self.content = b"poster-bytes"
+            self.raise_for_status_called = False
+
+        def raise_for_status(self) -> None:
+            self.raise_for_status_called = True
+
+    fake_response = _FakeResponse()
+    calls: dict[str, object] = {}
+
+    def fake_get(url: str, **kwargs: object) -> _FakeResponse:
+        calls["url"] = url
+        calls["kwargs"] = kwargs
+        return fake_response
+
+    monkeypatch.setattr("movie_planner.cli.httpx.get", fake_get)
+
+    result = _fetch_poster_bytes("https://example.com/poster.jpg")
+
+    assert calls["url"] == "https://example.com/poster.jpg"
+    assert calls["kwargs"] == {"follow_redirects": True, "timeout": 10}
+    assert fake_response.raise_for_status_called is True
+    assert result == b"poster-bytes"
+
+
+def test_poster_url_for_falls_back_to_a_live_omdb_lookup_by_imdb_id(
+    config_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `show` normally never reaches this path (the poster URL is already
+    # cached on the entry from `log`'s own fetch) - `_fetch_poster_bytes`
+    # is what's monkeypatched away there. This exercises the fallback
+    # live lookup itself directly.
+    from movie_planner.cli import _poster_url_for
+
+    store = _store(config_path)
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.update_entry(entry.id, imdb_url="https://www.imdb.com/title/tt1160419/")
+    cfg = config_module.load_config(config_path)
+    store.close()
+
+    captured: dict[str, object] = {}
+
+    class _SpyClient(OmdbClient):
+        def __init__(self, api_key: str) -> None:
+            captured["api_key"] = api_key
+            super().__init__(api_key)
+
+        def lookup(self, **kw: object) -> MovieRatings:
+            captured["imdb_id"] = kw["imdb_id"]
+            return MovieRatings(
+                imdb="8.5/10",
+                rotten_tomatoes=None,
+                metacritic=None,
+                poster="https://example.com/poster.jpg",
+            )
+
+    monkeypatch.setattr("movie_planner.cli.OmdbClient", _SpyClient)
+
+    result = _poster_url_for(cfg, entry)
+
+    assert result == "https://example.com/poster.jpg"
+    assert captured["api_key"] == "test-key"
+    assert captured["imdb_id"] == "tt1160419"
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        ("y\n", True),
+        ("Y\n", True),
+        ("yes\n", True),
+        ("YES\n", True),
+        ("n\n", False),
+        ("no\n", False),
+        ("\n", False),
+        ("maybe\n", False),
+    ],
+)
+def test_confirm_via_tty_interprets_the_typed_answer(
+    monkeypatch: pytest.MonkeyPatch, answer: str, expected: bool
+) -> None:
+    from movie_planner.cli import _confirm_via_tty
+
+    class _FakeTty:
+        def __init__(self, mode: str) -> None:
+            self.mode = mode
+
+        def __enter__(self) -> _FakeTty:
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+        def write(self, _: str) -> None:
+            pass
+
+        def flush(self) -> None:
+            pass
+
+        def readline(self) -> str:
+            return answer
+
+    monkeypatch.setattr("builtins.open", lambda path, mode="r": _FakeTty(mode))
+
+    assert _confirm_via_tty("Proceed?") is expected
+
+
+def test_confirm_via_tty_writes_the_exact_prompt_to_dev_tty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from movie_planner.cli import _confirm_via_tty
+
+    calls: list[tuple[str, str]] = []
+    written: list[str] = []
+
+    class _FakeTty:
+        def __init__(self, mode: str) -> None:
+            self.mode = mode
+
+        def __enter__(self) -> _FakeTty:
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+        def write(self, s: str) -> None:
+            written.append(s)
+
+        def flush(self) -> None:
+            pass
+
+        def readline(self) -> str:
+            return "y\n"
+
+    def fake_open(path: str, mode: str = "r") -> _FakeTty:
+        calls.append((path, mode))
+        return _FakeTty(mode)
+
+    monkeypatch.setattr("builtins.open", fake_open)
+
+    _confirm_via_tty("Apply this change?")
+
+    assert calls == [("/dev/tty", "r"), ("/dev/tty", "w")]
+    assert written == ["Apply this change? [y/N] "]
+
+
+def test_confirm_via_tty_no_controlling_terminal_exits_with_a_clear_message(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import typer
+
+    from movie_planner.cli import _confirm_via_tty
+
+    def fake_open(path: str, mode: str = "r") -> None:
+        raise OSError("no such device")
+
+    monkeypatch.setattr("builtins.open", fake_open)
+
+    with pytest.raises(typer.Exit) as exc_info:
+        _confirm_via_tty("Proceed?")
+
+    assert exc_info.value.exit_code == 1
+    captured = capsys.readouterr()
+    assert (
+        captured.out
+        == "No controlling terminal available to confirm. Pass --yes to skip confirmation.\n"
+    )
+
+
+def test_confirm_from_stdin_delegates_to_confirm_via_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    from movie_planner.cli import _confirm
+
+    captured: dict[str, object] = {}
+
+    def fake_confirm_via_tty(message: str) -> bool:
+        captured["message"] = message
+        return True
+
+    monkeypatch.setattr("movie_planner.cli._confirm_via_tty", fake_confirm_via_tty)
+
+    result = _confirm("Proceed?", from_stdin=True)
+
+    assert result is True
+    assert captured["message"] == "Proceed?"
+
+
+def test_confirm_not_from_stdin_delegates_to_typer_confirm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from movie_planner.cli import _confirm
+
+    captured: dict[str, object] = {}
+
+    def fake_confirm(message: str, **kw: object) -> bool:
+        captured["message"] = message
+        return True
+
+    monkeypatch.setattr("movie_planner.cli.typer.confirm", fake_confirm)
+
+    result = _confirm("Proceed?", from_stdin=False)
+
+    assert result is True
+    assert captured["message"] == "Proceed?"
+
+
+def test_fetch_tmdb_details_or_warn_skips_without_a_tmdb_api_key(
+    config_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `not cfg.tmdb_api_key or not entry.imdb_url` - a *missing tmdb key
+    # alone* has to skip too, not only "neither is known".
+    from movie_planner.cli import _fetch_tmdb_details_or_warn
+
+    constructed = {"called": False}
+
+    class _SpyClient:
+        def __init__(self, api_key: str) -> None:
+            constructed["called"] = True
+
+        def lookup_movie_details(self, **kw: object) -> None:
+            return None
+
+    monkeypatch.setattr("movie_planner.cli.TmdbClient", _SpyClient)
+
+    store = _store(config_path)
+    cfg = config_module.load_config(config_path)
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.update_entry(entry.id, imdb_url="https://www.imdb.com/title/tt1160419/")
+
+    result = _fetch_tmdb_details_or_warn(cfg, store, entry)
+
+    assert result == entry
+    assert constructed["called"] is False
+    store.close()
