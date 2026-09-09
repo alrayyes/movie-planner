@@ -15,6 +15,7 @@ from caldav.davclient import DAVClient
 from caldav.lib.error import NotFoundError
 
 from movie_planner.store import Entry, Store
+from movie_planner.user_agent import USER_AGENT_HEADER
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +156,7 @@ class CalendarClient:
 
     @classmethod
     def connect(cls, *, url: str, username: str, password: str) -> CalendarClient:
-        client = DAVClient(url=url, username=username, password=password)
+        client = DAVClient(url=url, username=username, password=password, headers=USER_AGENT_HEADER)
         # caldav.DAVClient.calendar() ships no annotations at all - cast
         # covers the return type, but the call itself still needs the
         # ignore for strict mode's disallow_untyped_calls.

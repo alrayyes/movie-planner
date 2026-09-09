@@ -16,6 +16,7 @@ from movie_planner.calendar_sync import (
     build_vevent,
 )
 from movie_planner.store import Entry, Store
+from movie_planner.user_agent import USER_AGENT_HEADER
 
 # --- build_vevent: task 4.2, the three time-completeness mapping rules ---
 
@@ -326,14 +327,15 @@ def test_build_description_joins_multiple_lines_with_a_single_newline() -> None:
 
 
 def test_calendar_client_connect_wires_up_the_dav_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    init_calls: dict[str, str] = {}
+    init_calls: dict[str, object] = {}
     calendar_urls: list[str] = []
 
     class FakeDAVClient:
-        def __init__(self, url: str, username: str, password: str) -> None:
+        def __init__(self, url: str, username: str, password: str, headers: dict[str, str]) -> None:
             init_calls["url"] = url
             init_calls["username"] = username
             init_calls["password"] = password
+            init_calls["headers"] = headers
 
         def calendar(self, url: str) -> FakeCalendar:
             calendar_urls.append(url)
@@ -350,6 +352,7 @@ def test_calendar_client_connect_wires_up_the_dav_client(monkeypatch: pytest.Mon
     assert isinstance(client, CalendarClient)
     assert init_calls["username"] == "moviewatcher"
     assert init_calls["password"] == "secret"
+    assert init_calls["headers"] == USER_AGENT_HEADER
     assert calendar_urls == ["https://baikal.example.com/calendars/movies/"]
 
 

@@ -10,6 +10,7 @@ from fakes import FakeCalendar
 from movie_planner.calendar_sync import CalendarClient, CalendarSync
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
 from movie_planner.store import Entry, Store
+from movie_planner.user_agent import USER_AGENT_HEADER
 
 MATCH_RESPONSE = {
     "Title": "Dune",
@@ -69,6 +70,12 @@ def test_init_without_an_http_client_targets_the_omdb_api_base_url() -> None:
     client = OmdbClient(api_key="test-key")
 
     assert str(client._http.base_url) == "https://www.omdbapi.com/"
+
+
+def test_init_without_an_http_client_sets_the_movie_planner_user_agent() -> None:
+    client = OmdbClient(api_key="test-key")
+
+    assert client._http.headers["User-Agent"] == USER_AGENT_HEADER["User-Agent"]
 
 
 def test_lookup_by_title_returns_ratings() -> None:

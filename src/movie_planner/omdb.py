@@ -12,6 +12,7 @@ from dataclasses import dataclass
 import httpx
 
 from movie_planner.store import Entry, Store
+from movie_planner.user_agent import USER_AGENT_HEADER
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,9 @@ def _parse_release_year(value: object) -> int | None:
 class OmdbClient:
     def __init__(self, api_key: str, http_client: httpx.Client | None = None) -> None:
         self._api_key = api_key
-        self._http = http_client or httpx.Client(base_url="https://www.omdbapi.com/")
+        self._http = http_client or httpx.Client(
+            base_url="https://www.omdbapi.com/", headers=USER_AGENT_HEADER
+        )
         self._cache: dict[str, MovieRatings | None] = {}
 
     def lookup(

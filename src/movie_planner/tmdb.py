@@ -15,6 +15,8 @@ from dataclasses import dataclass
 
 import httpx
 
+from movie_planner.user_agent import USER_AGENT_HEADER
+
 logger = logging.getLogger(__name__)
 
 # The default for content certification (issue #311) - the most widely
@@ -107,7 +109,9 @@ def _popularity(value: object) -> float | None:
 class TmdbClient:
     def __init__(self, api_key: str, http_client: httpx.Client | None = None) -> None:
         self._api_key = api_key
-        self._http = http_client or httpx.Client(base_url="https://api.themoviedb.org/3/")
+        self._http = http_client or httpx.Client(
+            base_url="https://api.themoviedb.org/3/", headers=USER_AGENT_HEADER
+        )
         self._cache: dict[str, TmdbMovieDetails | None] = {}
 
     def lookup_movie_details(self, *, imdb_id: str) -> TmdbMovieDetails | None:
