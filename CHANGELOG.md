@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.8](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.7...movie-planner-v1.26.8) (2026-09-09)
+
+
+### Bug Fixes
+
+* **nix:** resync flake.lock with [#250](https://github.com/alrayyes/movie-planner/issues/250)'s caldav/rapidfuzz bumps ([#251](https://github.com/alrayyes/movie-planner/issues/251)) ([88dc141](https://github.com/alrayyes/movie-planner/commit/88dc141b1b6ff9e0e59739d1f5ea8bfdb00c95e5))
+
 ## [1.26.7](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.6...movie-planner-v1.26.7) (2026-09-09)
 
 
