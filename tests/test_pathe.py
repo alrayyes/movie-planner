@@ -92,8 +92,14 @@ def test_parses_raw_mime_single_part_message() -> None:
 
 
 def test_unrecognized_content_raises_a_clear_error() -> None:
-    with pytest.raises(PatheEmailParseError, match="could not parse this as a Pathé"):
+    with pytest.raises(PatheEmailParseError) as exc_info:
         parse_pathe_email("this is not a Pathé booking confirmation at all")
+
+    # The full message, not just a substring - a substring check would still
+    # match even if the text were wrapped in extra characters (mutmut's own
+    # "XX...XX" mutation technique), since the original text stays a
+    # substring of the wrapped version.
+    assert str(exc_info.value) == "could not parse this as a Pathé booking confirmation email"
 
 
 def test_missing_booking_number_raises() -> None:
@@ -127,8 +133,12 @@ def test_mime_message_with_no_plain_or_html_part_raises_the_original_message() -
     msg.add_attachment(b"not text", maintype="application", subtype="octet-stream")
     assert msg.is_multipart()
 
-    with pytest.raises(PatheEmailParseError, match="text/plain"):
+    with pytest.raises(PatheEmailParseError) as exc_info:
         parse_pathe_email(msg.as_string())
+
+    # Exact text, same reasoning as test_unrecognized_content_raises_a_clear_error
+    # above - "text/plain" alone stays a substring of a mutated, wrapped message.
+    assert str(exc_info.value) == "could not find a text/plain part in the email"
 
 
 # --- HTML-derived text shape: movie-planner#158 ---
@@ -184,6 +194,18 @@ def test_parses_the_legacy_html_derived_shape() -> None:
     assert booking.screening_details == "Original Version, Auditorium 4 - Row 2 Seat 4"
 
 
+def test_legacy_html_derived_shape_with_no_language_line_still_finds_the_auditorium() -> None:
+    # Same edge case as test_screening_details_with_no_language_line_still_finds_the_seat
+    # above, for the html-legacy-wording shape's own screening-details helper -
+    # the language block between the title and the date/time can be empty.
+    stripped_body = extract_envelope(PATHE_EMAIL_LEGACY_HTML).body
+    without_language = stripped_body.replace("Original Version\n", "")
+
+    booking = parse_pathe_email(without_language)
+
+    assert booking.screening_details == "Auditorium 4 - Row 2 Seat 4"
+
+
 # --- three more real historical templates: movie-planner#200 ---
 #
 # All three are Dutch and print no year in their own date text - unlike
@@ -210,8 +232,16 @@ def test_mobiel_shape_without_received_date_raises() -> None:
     # error, not a wrong guess.
     envelope = extract_envelope(PATHE_EMAIL_MOBIEL)
 
-    with pytest.raises(PatheEmailParseError, match="received_date"):
+    with pytest.raises(PatheEmailParseError) as exc_info:
         parse_pathe_email(envelope.body)
+
+    # Exact text, same reasoning as test_unrecognized_content_raises_a_clear_error
+    # above - "received_date" alone stays a substring of a mutated message,
+    # whichever half of the two concatenated string literals gets wrapped.
+    assert str(exc_info.value) == (
+        "this template's date has no year of its own - pass the email's "
+        "own Date header as received_date to infer one"
+    )
 
 
 def test_parses_the_ticketbevestiging_shape() -> None:
@@ -337,3 +367,181 @@ def test_row_and_seat_are_none_when_not_present() -> None:
 
     assert booking.row is None
     assert booking.seat is None
+
+
+# --- remaining mutmut gaps: movie-planner#298 ---
+#
+# _extract_body's own header-detection and MIME-fallback branches, below,
+# aren't reachable through any of the real templates above the same way -
+# every real fixture's plain or html part is a direct, top-level part
+# get_body() finds on its own, so a test built only from real Pathé
+# shapes can't tell the "found the right part" line apart from a mutant
+# that skips it. These import _extract_body directly and build the
+# specific MIME shapes needed to pin each branch, the same way
+# movie-planner#323 tested mail_import.cli's own private helpers
+# directly for the same reason.
+
+
+def test_extract_body_header_detection_uses_the_blank_line_not_any_whitespace() -> None:
+    # The header block is "text up to the first blank line" - split on
+    # "\n\n", not split on the first run of whitespace (which would stop
+    # at the first space or newline instead, cutting the header block off
+    # after a single word).
+    from movie_planner.pathe import _extract_body
+
+    raw = "X-Test:garbage\nFrom: a@a.com\n\nBody text here."
+
+    assert _extract_body(raw) == "Body text here."
+
+
+def test_extract_body_header_detection_only_considers_the_first_paragraph() -> None:
+    # Same "first paragraph only" rule as
+    # test_header_detection_only_looks_at_the_first_paragraph above, but
+    # with the decoy header in a *middle* paragraph rather than the last
+    # one - splitting from the wrong end (the last blank line rather than
+    # the first) would still exclude a decoy in the very last paragraph,
+    # so that test alone can't tell "first" from "last" apart.
+    from movie_planner.pathe import _extract_body
+
+    raw = (
+        "Booking number\n\nN°REF123\n\nHi John,\nSubject: decoy\n\n"
+        "More paragraph\n\nFinal paragraph."
+    )
+
+    assert _extract_body(raw) == raw
+
+
+def test_extract_body_plain_part_is_the_one_get_body_picks_not_the_first_walk_match() -> None:
+    # get_body(preferencelist=("plain",)) is expected to skip a part
+    # nested inside a container marked Content-Disposition: attachment,
+    # even though that part's own disposition is inline - the
+    # walk()-based fallback below it only checks each leaf's own
+    # disposition, so it would wrongly pick the attachment-nested part if
+    # it ran instead. Building a message where the real inline part isn't
+    # the first thing walk() would see is what actually exercises the
+    # get_body() call, rather than the fallback that follows it.
+    from movie_planner.pathe import _extract_body
+
+    outer = EmailMessage()
+    outer["From"] = "a@a.com"
+    outer["To"] = "b@b.com"
+    outer["Subject"] = "test"
+    outer.make_mixed()
+
+    attachment_container = EmailMessage()
+    attachment_container.make_mixed()
+    attachment_container["Content-Disposition"] = "attachment"
+    nested_plain = EmailMessage()
+    nested_plain.set_content("nested plain part, wrongly inside an attachment container")
+    attachment_container.attach(nested_plain)
+    outer.attach(attachment_container)
+
+    real_plain = EmailMessage()
+    real_plain.set_content("the real, top-level inline plain part")
+    outer.attach(real_plain)
+
+    assert _extract_body(outer.as_string()) == "the real, top-level inline plain part\n"
+
+
+def test_extract_body_walk_fallback_matches_text_plain_content_type_exactly() -> None:
+    # Only reachable once get_body(plain) has already returned None (here,
+    # because the sole plain part sits inside an attachment-marked
+    # container) - pins the walk loop's own "text/plain" comparison,
+    # which a typo'd or wrongly-cased constant would never match.
+    from movie_planner.pathe import _extract_body
+
+    outer = EmailMessage()
+    outer["From"] = "a@a.com"
+    outer["To"] = "b@b.com"
+    outer["Subject"] = "test"
+    outer.make_mixed()
+
+    attachment_container = EmailMessage()
+    attachment_container.make_mixed()
+    attachment_container["Content-Disposition"] = "attachment"
+    nested_plain = EmailMessage()
+    nested_plain.set_content("only reachable via the walk() fallback")
+    attachment_container.attach(nested_plain)
+    outer.attach(attachment_container)
+
+    assert _extract_body(outer.as_string()) == "only reachable via the walk() fallback\n"
+
+
+def test_extract_body_html_fallback_prefers_get_body_over_the_first_walk_match() -> None:
+    # Same "get_body(), not the first walk() match" case as
+    # test_extract_body_plain_part_is_the_one_get_body_picks_not_the_first_walk_match
+    # above, for the html fallback path.
+    from movie_planner.pathe import _extract_body
+
+    outer = EmailMessage()
+    outer["From"] = "a@a.com"
+    outer["To"] = "b@b.com"
+    outer["Subject"] = "test"
+    outer.make_mixed()
+
+    attachment_container = EmailMessage()
+    attachment_container.make_mixed()
+    attachment_container["Content-Disposition"] = "attachment"
+    decoy_html = EmailMessage()
+    decoy_html.set_content("<p>decoy - inside an attachment container</p>", subtype="html")
+    attachment_container.attach(decoy_html)
+    outer.attach(attachment_container)
+
+    real_html = EmailMessage()
+    real_html.set_content("<p>Real one</p>", subtype="html")
+    outer.attach(real_html)
+
+    assert _extract_body(outer.as_string()) == "Real one"
+
+
+def test_extract_body_html_walk_fallback_skips_actual_attachment_disposition_parts() -> None:
+    # Only reachable once get_body(html) has already returned None (here,
+    # because both html parts sit inside an attachment-marked container) -
+    # pins the walk loop's own "text/html" content-type match and its
+    # "not actually an attachment" disposition check, in the order a real
+    # attachment (first) then a real inline part (second) would meet them.
+    from movie_planner.pathe import _extract_body
+
+    outer = EmailMessage()
+    outer["From"] = "a@a.com"
+    outer["To"] = "b@b.com"
+    outer["Subject"] = "test"
+    outer.make_mixed()
+
+    attachment_container = EmailMessage()
+    attachment_container.make_mixed()
+    attachment_container["Content-Disposition"] = "attachment"
+
+    attached_html = EmailMessage()
+    attached_html.set_content("<p>attached - should be skipped</p>", subtype="html")
+    attached_html["Content-Disposition"] = "attachment"
+    attachment_container.attach(attached_html)
+
+    real_html = EmailMessage()
+    real_html.set_content("<p>Real inline html</p>", subtype="html")
+    attachment_container.attach(real_html)
+
+    outer.attach(attachment_container)
+
+    assert _extract_body(outer.as_string()) == "Real inline html"
+
+
+def test_cinema_without_city_strips_only_the_trailing_city_after_the_last_comma() -> None:
+    # rpartition, not partition - a cinema string with more than one comma
+    # (an address written out further than "<venue>, <city>") should still
+    # only lose the last, city-shaped segment.
+    from movie_planner.pathe import _cinema_without_city
+
+    assert (
+        _cinema_without_city("Pathé De Munt, Amsterdam, Netherlands") == "Pathé De Munt, Amsterdam"
+    )
+
+
+def test_parse_reservering_shape_returns_none_unless_both_header_and_reference_match() -> None:
+    # "Referentie: ..." alone (no matching header line) shouldn't be
+    # enough to proceed - it needs to return None so parse_pathe_email
+    # can fall through to the next template, not crash trying to read
+    # fields off a header_match that's actually None.
+    from movie_planner.pathe import _parse_reservering_shape
+
+    assert _parse_reservering_shape("Referentie: ABC123", None) is None
