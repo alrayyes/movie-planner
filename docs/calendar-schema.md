@@ -45,6 +45,14 @@ either.
     try to map from `LOCATION`. Commas inside it are backslash-escaped
     per RFC 5545 `TEXT` escaping, same as any other `TEXT` value with a
     literal comma.
+  - `{venue name}, {street address}, {postal code} {city}, {country}`
+    — a venue with a verified street address _and_ postal code (issue
+    #283), extending the shape above to a full address a calendar
+    client can geocode to the actual building, not just the city. Only
+    when both are known: a street address with no postal code (or vice
+    versa) falls back to the shorter `{venue name}, {city}, {country}`
+    shape instead of a partial address - a worse geocoding hint than
+    the plain city/country string it would otherwise be.
 - **GEO** — present only for a venue with known coordinates (issue
   #170): `{latitude};{longitude}`, `icalendar`'s `vGeo` FLOAT pair. A
   venue with no coordinates on record gets no `GEO` property at all -
@@ -68,8 +76,13 @@ either.
   - **`X-POSTER-URL`** — the poster image URL.
   - **`X-DIRECTOR`** — OMDb's `Director`, verbatim (can itself be a
     comma-separated list for a co-directed film).
-  - **`X-ACTORS`** — OMDb's `Actors`, a comma-separated string,
-    verbatim - not split into a list.
+  - **`X-ACTORS`** — a comma-separated string, verbatim, not split into
+    a list. OMDb's own `Actors` by default, but overridden with TMDb's
+    full cast (issue #311) whenever TMDb resolves a match for the
+    entry - OMDb's own field only ever returns a handful of top-billed
+    names, with no full-cast endpoint at any tier, so TMDb's fuller
+    list wins when it's available. A TMDb match with no cast data
+    leaves OMDb's own value standing rather than blanking it.
   - **`X-GENRE`** — OMDb's `Genre`, also comma-separated, verbatim.
   - **`X-YEAR`** — the release year, as a plain integer string (for
     example `2021`) - not the watched date, which is `DTSTART`/`DTEND`
@@ -80,6 +93,18 @@ either.
     reader can consume without parsing `LOCATION` apart. Additive, not
     a replacement, same "omit, never guess" rule `GEO` already
     follows: a venue not in the table gets neither property.
+  - **`X-STREET-ADDRESS`**/**`X-POSTAL-CODE`** — a venue with a
+    verified street address/postal code (issue #283), same source as
+    the fuller `LOCATION` shape above. Split into two properties, not
+    one combined `X-ADDRESS`: international address ordering varies
+    too much for one string to serialize cleanly (postal-code-before-
+    city is Dutch convention, not universal; some countries have no
+    postal code at all), and it reuses `X-CITY`/`X-COUNTRY`'s exact
+    pattern - a direct 1:1 pass-through, no joining logic. Each is set
+    **independently** of the other, unlike `LOCATION` above, which
+    only includes either when both are known: a venue with a
+    confirmed street but no confirmed postal code still gets
+    `X-STREET-ADDRESS` alone, and vice versa.
   - **`X-ROW`**/**`X-SEAT`** — an entry's seat assignment, as text (for
     example `5`/`17`) - only ever set from a Pathé booking confirmation
     parse (issue #218), never from a manually logged entry. Same
@@ -97,7 +122,10 @@ either.
     country/language of origin, a different thing from the _venue's_
     `X-CITY`/`X-COUNTRY` above, and reusing that name would collide.
     `Plot`, `Awards`, and `Released` are longer-form text and go into
-    `DESCRIPTION` instead - see below.
+    `DESCRIPTION` instead - see below. `X-WEBSITE` is overridden with
+    TMDb's own `homepage` (issue #311) whenever TMDb has one - OMDb's
+    own `Website` field is routinely `N/A`, same override rule as
+    `X-ACTORS` above.
   - **`X-TRAILER-URL`** — a YouTube link to the movie's official trailer
     (issue #236), from TMDb rather than OMDb - looked up by the `imdbID`
     an OMDb match already returned, so it only ever runs right after a
@@ -106,9 +134,36 @@ either.
     optional, unlike `omdb.api_key`), no TMDb match, or no official
     YouTube trailer among TMDb's videos, and the entry simply has no
     `X-TRAILER-URL` at all.
+  - **`X-COLLECTION`**, **`X-CERTIFICATION`**, **`X-KEYWORDS`**,
+    **`X-BUDGET`**, **`X-POPULARITY`** — the rest of TMDb's own response
+    fields with no OMDb equivalent (issue #311), fetched in the same
+    call as `X-TRAILER-URL` above, same "piggybacks on a successful OMDb
+    match, never on its own" rule. `X-CERTIFICATION` is TMDb's own
+    content rating, always the US (MPAA) certification when TMDb has
+    one - deliberately distinct from `X-RATED` (OMDb's field, a
+    different rating system) and never falls back to another country's
+    rating, which would use an incompatible scale. `X-BUDGET` is a
+    plain integer string (production budget, in US dollars) - TMDb's
+    own box-office revenue figure is deliberately never captured here,
+    since revenue keeps changing after release and budget doesn't.
+    `X-POPULARITY` is TMDb's own popularity score, a plain decimal
+    string - a genuine `0` is kept, not treated as unset, unlike
+    `X-BUDGET`, where TMDb itself uses `0` as "nothing entered." A
+    refresh that gets a thinner TMDb response than a previous one (a
+    missing sub-resource, a transient gap in TMDb's own data) never
+    resets an already-known value on any of these back to unset.
+  - **`X-IMPORTER`**/**`X-IMPORTER-VERSION`** — debugging provenance
+    (issue #257): which movie-planner command performed this push
+    (`log`, `import:csv`, `import:json`, `from-pathe-email`,
+    `sync-retry`, `sync-refresh`, `update`) and which version of the
+    tool did it, read from the installed package at push time. Same
+    "omit, never guess" rule as everything else here - a caller that
+    doesn't pass an importer label (a test using `CalendarSync`
+    directly, for example) gets neither property.
 
-A real example — an entry at a known venue, with a genre tag and
-coordinates on record, exactly as `build_vevent` produces it:
+A real example — an entry at a known venue, with a genre tag,
+coordinates, and a verified street address on record, exactly as
+`build_vevent` produces it:
 
 ```text
 BEGIN:VCALENDAR
@@ -120,11 +175,30 @@ DTSTART:20260827T134000
 DTEND:20260827T154600
 UID:0199c1f2-3a4b-7def-8a9b-0123456789ab
 GEO:52.3633802;4.8838439
-LOCATION:City\, Amsterdam\, Netherlands
+LOCATION:City\, Kleine-Gartmanplantsoen 15-19\, 1017 RP Amsterdam\, Nether
+ lands
+X-BUDGET:10000000
+X-CERTIFICATION:PG-13
+X-COLLECTION:Insidious Collection
 X-GENRE:Horror
+X-KEYWORDS:haunted house, medium, supernatural
+X-POPULARITY:45.231
+X-POSTAL-CODE:1017 RP
+X-STREET-ADDRESS:Kleine-Gartmanplantsoen 15-19
 END:VEVENT
 END:VCALENDAR
 ```
+
+Note the commas in `X-KEYWORDS` aren't backslash-escaped the way the ones
+in `LOCATION` are - `LOCATION` is one of iCalendar's own known TEXT-typed
+properties, so the `icalendar` library escapes it automatically; a custom
+`X-*` property is opaque to it and gets added as a plain string, no
+escaping applied.
+
+Line-folded per RFC 5545 (75-octet limit, continuation lines start with a
+single space) - a real `LOCATION` this long always wraps like this; a
+reader needs to unfold it the same way a real CalDAV client would, not
+match it as one line.
 
 ## DESCRIPTION content
 
@@ -232,7 +306,10 @@ counterpart ("De Munt") via `KNOWN_VENUE_LOCATIONS`'s `canonical_name`
   orphaned alias rows) - and, separately, a `sync refresh --force` over
   the affected date range afterward, since the migration only touches
   the local store and never rewrites an already-pushed calendar event's
-  `LOCATION` on its own.
+  `LOCATION` on its own. The same command also catches and fixes a
+  known venue's own `LOCATION` string baked whole into the venue name
+  (movie-planner-web#400) - the shape a now-fixed `sync pull` bug could
+  produce; see the `sync pull` section below for the mechanism.
 
 Screening details aren't stored anywhere on the entry itself — only
 `from-pathe-email` ever supplies them for a push. `sync refresh`,
@@ -281,3 +358,15 @@ A structured property missing entirely from an event (row/seat
 especially - see movie-planner-web#294) is shown as the field going to
 "unknown," not phrased as a confirmed deletion, since a missing
 property doesn't by itself mean someone removed it on purpose.
+
+`LOCATION` resolution strips a trailing address suffix only when it
+exactly matches the event's own `X-CITY`/`X-COUNTRY` (and, when
+present, `X-STREET-ADDRESS`/`X-POSTAL-CODE`) - issue #283's fuller
+shape is tried first, since it's the more specific match, falling back
+to the plain "name, city, country" shape. A bug here (movie-planner-
+web#400) tried only the plain shape, so it never matched the fuller
+one - the postal code sits between the comma and the city - and
+`sync pull` ended up treating the venue's _entire_ `LOCATION` string as
+its name. `locations venues merge-aliases` (Venue identity, earlier in
+this file) catches and fixes any venue row this already created, the
+same way it already fixed a pre-#196 aliased name.

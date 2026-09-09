@@ -1,3 +1,4 @@
+import base64
 from datetime import date, time
 
 import pytest
@@ -70,6 +71,40 @@ def test_render_poster_kitty_non_png_bytes_returns_none() -> None:
     rendered = render_poster(b"\xff\xd8\xffJFIFjpegbytes", "kitty")
 
     assert rendered is None
+
+
+# --- _render_kitty: exact escape-sequence layout, not just a leading marker ---
+
+
+def test_render_kitty_single_chunk_is_final_with_control_data() -> None:
+    from movie_planner.display import _render_kitty
+
+    rendered = _render_kitty(_PNG_MAGIC + b"restofimage")
+
+    encoded = base64.b64encode(_PNG_MAGIC + b"restofimage").decode("ascii")
+    assert rendered == f"\033_Ga=T,f=100,m=0;{encoded}\033\\"
+
+
+def test_render_kitty_splits_into_chunks_at_the_configured_chunk_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from movie_planner.display import _render_kitty
+
+    # Shrink the chunk size instead of feeding in a >4096-char base64
+    # payload: a couple of surviving mutants here turn the chunk loop's
+    # range into something pathological (e.g. iterating the full encoded
+    # length one character at a time), and pairing that with real-sized
+    # data made the mutant's own test run time out rather than fail
+    # cleanly. A tiny chunk size exercises the exact same multi-chunk
+    # ("more data follows") logic with a handful of iterations either way.
+    monkeypatch.setattr("movie_planner.display._KITTY_CHUNK_SIZE", 4)
+    raw = b"hello"
+    encoded = base64.b64encode(raw).decode("ascii")
+    assert encoded == "aGVsbG8="
+
+    rendered = _render_kitty(raw)
+
+    assert rendered == "\033_Ga=T,f=100,m=1;aGVs\033\\\033_Gm=0;bG8=\033\\"
 
 
 def _entry(**overrides: object) -> Entry:
@@ -151,3 +186,36 @@ def test_format_entry_omits_absent_fields() -> None:
     assert "Genre" not in text
     assert "Cast" not in text
     assert "Year" not in text
+
+
+def test_format_entry_start_time_without_end_time_omits_the_range() -> None:
+    entry = _entry(start_time=time(19, 0))
+
+    text = format_entry(entry, medium_name="cinema", venue=None)
+
+    lines = text.splitlines()
+    assert lines[1] == "  19:00"
+
+
+def test_format_entry_imdb_url_without_rating_shows_url_only() -> None:
+    entry = _entry(imdb_url="https://www.imdb.com/title/tt1160419/")
+
+    text = format_entry(entry, medium_name="cinema", venue=None)
+
+    assert "  IMDb: https://www.imdb.com/title/tt1160419/" in text.splitlines()
+
+
+def test_format_entry_letterboxd_url_without_rating_omits_the_suffix() -> None:
+    entry = _entry(letterboxd_url="https://letterboxd.com/film/dune-2021/")
+
+    text = format_entry(entry, medium_name="cinema", venue=None)
+
+    assert "  Letterboxd: https://letterboxd.com/film/dune-2021/" in text.splitlines()
+
+
+def test_format_entry_joins_lines_with_a_single_newline() -> None:
+    entry = _entry()
+
+    text = format_entry(entry, medium_name="netflix", venue=None)
+
+    assert text == "Dune (2026-01-01)\n  netflix"

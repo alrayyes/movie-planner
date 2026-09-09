@@ -40,6 +40,19 @@ def test_write_section_creates_a_new_file_and_its_parent_directory(tmp_path: Pat
     assert 'caldav_url = "https://example.com"' in config_path.read_text()
 
 
+def test_write_section_creates_multiple_levels_of_missing_parent_directories(
+    tmp_path: Path,
+) -> None:
+    # Two missing levels ("a" doesn't exist either), not one - a single
+    # missing level is still created by `mkdir()`'s own default, so it
+    # wouldn't distinguish `parents=True` from `parents=False`/omitted.
+    config_path = tmp_path / "a" / "b" / "config.toml"
+
+    write_section(config_path, '[movie_planner]\ncaldav_url = "https://example.com"\n')
+
+    assert config_path.is_file()
+
+
 def test_write_section_preserves_an_existing_unrelated_section(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text('[mail_import]\nsource = "mbox"\n')

@@ -75,10 +75,21 @@ def sender_domain(from_address: str) -> str | None:
 
 
 def extract_envelope(raw: str) -> MailEnvelope:
+    # A few mutmut survivors here are equivalent, not gaps (issue #289):
+    # `[0]` after any `str.split(sep, n)` is always "everything up to
+    # the first occurrence of sep", regardless of what `n` actually is
+    # (a wider maxsplit, or unlimited) - so mutating the count here
+    # can't ever be observed. `rsplit` instead of `split` is similarly
+    # unobservable through the one thing `head` is used for below: its
+    # result only ever grows (never shrinks) the text `_HEADER_RE`
+    # searches, so it can only add potential matches, never remove one.
     head = raw.split("\n\n", 1)[0]
     if not _HEADER_RE.search(head):
         raise MailFetchError("not a recognizable email (no RFC822 headers found)")
 
+    # `msg.get(name, ...)` is case-insensitive (RFC 2822 header field
+    # names are) - "Date"/"date"/"DATE" all find the same header, so
+    # mutating this literal's case is also equivalent, not a gap.
     msg = email.message_from_string(raw, policy=email.policy.default)
     date_header = msg.get("Date")
     if date_header is None:
@@ -110,6 +121,10 @@ def html_to_text(html: str) -> str:
     """
     text = _BLOCK_BREAK_RE.sub("\n", html)
     text = _TAG_RE.sub("", text)
+    # "\xa0" vs "\xA0" is a mutmut survivor that's provably equivalent,
+    # not a gap (issue #289) - both hex escapes parse to the exact same
+    # character (`"\xa0" == "\xA0"`), so there's no test that could ever
+    # tell them apart.
     text = unescape(text).replace("\xa0", " ")
     text = re.sub(r"[ \t]+", " ", text)
     lines = (line.strip() for line in text.splitlines())
@@ -121,6 +136,22 @@ _URL_RE = re.compile(r"https?://\S+")
 
 
 def _extract_body(msg: email.message.EmailMessage) -> str:
+    # A cluster of mutmut survivors in the plain_part/html_part walk()
+    # fallbacks below are left un-killed on purpose (issue #289): every
+    # realistic multipart shape tried has get_body() itself already
+    # finding any legitimate plain/html part, so the walk() fallback's
+    # own internals (its content-type string, its `is None` guard, the
+    # assignment inside its loop, `break` vs `return`) only ever run for
+    # the one case actually reachable and tested below - an attachment
+    # get_body() correctly refuses to treat as the body. That case is
+    # covered (a flipped/weakened disposition check is genuinely
+    # caught); the "loop finds a legitimate part get_body() somehow
+    # missed" branch these other mutants live in has no constructed
+    # counterexample, so it reads as unreachable in practice rather than
+    # a real gap. Same reasoning for _URL_RE.sub's replacement string
+    # ("" vs "XXXX") - _DIGIT_RE only checks for *any* digit surviving,
+    # and a fully-replaced URL match leaves none either way, so no
+    # digit-presence test can tell the two apart.
     if not msg.is_multipart():
         return msg.get_content()  # type: ignore[no-any-return]
 

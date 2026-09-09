@@ -14,6 +14,71 @@ def store(tmp_path: Path) -> Iterator[Store]:
     s.close()
 
 
+# --- _row_to_entry: mutation-testing coverage, issue #291 ---
+#
+# Only reachable with a mismatched row through this private helper
+# directly - every real caller builds `row` from a SELECT over the
+# fixed _ENTRY_COLUMNS tuple, so a real Store never passes it one of
+# the wrong length. That's exactly the invariant strict=True enforces,
+# so it's tested here rather than declared unobservable.
+
+
+def test_row_to_entry_raises_on_a_row_with_the_wrong_column_count() -> None:
+    from movie_planner.store import _ENTRY_COLUMNS, _row_to_entry
+
+    short_row = tuple(range(len(_ENTRY_COLUMNS) - 1))
+
+    with pytest.raises(ValueError, match="zip"):
+        _row_to_entry(short_row)
+
+
+# --- import failures: issue #254 ---
+
+
+def test_record_import_failure_and_list_it(store: Store) -> None:
+    failure = store.record_import_failure(source="movies.csv", row_number=3, error="bad date")
+
+    assert failure.source == "movies.csv"
+    assert failure.row_number == 3
+    assert failure.error == "bad date"
+
+    (listed,) = store.list_import_failures()
+    assert listed == failure
+
+
+def test_record_import_failure_records_a_timezone_aware_timestamp(store: Store) -> None:
+    failure = store.record_import_failure(source="movies.csv", row_number=3, error="bad date")
+
+    assert failure.created_at.tzinfo is not None
+
+
+def test_list_import_failures_most_recent_first(store: Store) -> None:
+    first = store.record_import_failure(source="a.csv", row_number=1, error="e1")
+    second = store.record_import_failure(source="b.csv", row_number=2, error="e2")
+
+    listed = store.list_import_failures()
+
+    assert [f.id for f in listed] == [second.id, first.id]
+
+
+def test_list_import_failures_empty_when_none_recorded(store: Store) -> None:
+    assert store.list_import_failures() == []
+
+
+def test_clear_import_failures_removes_everything_and_reports_the_count(store: Store) -> None:
+    store.record_import_failure(source="a.csv", row_number=1, error="e1")
+    store.record_import_failure(source="b.csv", row_number=2, error="e2")
+
+    cleared = store.clear_import_failures()
+
+    assert cleared == 2
+    assert store.list_import_failures() == []
+
+
+def test_clear_import_failures_returns_zero_when_none_recorded(store: Store) -> None:
+    assert store.clear_import_failures() == 0
+
+
 def test_init_creates_all_tables_on_first_run(tmp_path: Path) -> None:
     db_path = tmp_path / "movies.db"
 
@@ -28,7 +93,114 @@ def test_init_creates_all_tables_on_first_run(tmp_path: Path) -> None:
         }
     finally:
         conn.close()
-    assert {"entries", "media", "venues"} <= tables
+    assert {"entries", "media", "venues", "import_failures", "activity_log"} <= tables
+
+
+def test_init_creates_missing_nested_parent_directories(tmp_path: Path) -> None:
+    # mkdir(parents=True) - a db_path whose *grandparent* directory
+    # doesn't exist yet either has to work, not just a missing direct
+    # parent.
+    db_path = tmp_path / "a" / "b" / "movies.db"
+
+    Store(db_path).close()
+
+    assert db_path.is_file()
+
+
+# --- activity log: issue #276 ---
+
+
+def _medium(store: Store) -> int:
+    return store.add_medium("cinema", is_physical_place=True).id
+
+
+def test_create_entry_records_a_create_activity(store: Store) -> None:
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=_medium(store))
+
+    (activity,) = store.list_activity()
+    assert activity.action == "create"
+    assert activity.entry_id == entry.id
+    assert activity.entry_title == "Dune"
+    assert activity.changes is None
+
+
+def test_update_entry_records_only_the_fields_that_actually_changed(store: Store) -> None:
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=_medium(store))
+
+    store.update_entry(entry.id, title="Dune Part Two", notes="great")
+
+    activities = store.list_activity()
+    update = next(a for a in activities if a.action == "update")
+    assert update.entry_id == entry.id
+    assert update.entry_title == "Dune Part Two"
+    assert update.changes == {
+        "title": ("Dune", "Dune Part Two"),
+        "notes": (None, "great"),
+    }
+
+
+def test_update_entry_passing_the_same_value_records_no_activity(store: Store) -> None:
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=_medium(store))
+
+    store.update_entry(entry.id, title="Dune")
+
+    activities = [a for a in store.list_activity() if a.action == "update"]
+    assert activities == []
+
+
+def test_update_entry_passing_the_same_date_records_no_activity(store: Store) -> None:
+    # Regression check for the _serialize_entry_field comparison itself:
+    # "date" is one of the fields that gets serialized (to an isoformat
+    # string) before comparing old vs new, unlike a plain str field like
+    # title - both sides of that comparison have to serialize using the
+    # right field name, or a same-value update misreports as a change.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+
+    store.update_entry(entry.id, date=date(2024, 3, 15))
+
+    activities = [a for a in store.list_activity() if a.action == "update"]
+    assert activities == []
+
+
+def test_delete_entry_records_a_delete_activity_with_the_titles(store: Store) -> None:
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=_medium(store))
+
+    store.delete_entry(entry.id)
+
+    (activity,) = [a for a in store.list_activity() if a.action == "delete"]
+    assert activity.entry_id == entry.id
+    assert activity.entry_title == "Dune"
+    assert activity.changes is None
+
+
+def test_list_activity_most_recent_first(store: Store) -> None:
+    medium_id = _medium(store)
+    first = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium_id)
+    second = store.create_entry(title="Arrival", date=date(2026, 1, 2), medium_id=medium_id)
+
+    activities = store.list_activity()
+
+    assert [a.entry_id for a in activities] == [second.id, first.id]
+
+
+def test_list_activity_reports_each_activitys_own_distinct_row_id(store: Store) -> None:
+    medium_id = _medium(store)
+    store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium_id)
+    store.create_entry(title="Arrival", date=date(2026, 1, 2), medium_id=medium_id)
+
+    ids = [a.id for a in store.list_activity()]
+
+    assert all(isinstance(i, int) for i in ids)
+    assert len(set(ids)) == len(ids)
+
+
+def test_create_entry_records_a_timezone_aware_activity_timestamp(store: Store) -> None:
+    store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=_medium(store))
+
+    (activity,) = store.list_activity()
+
+    assert activity.created_at.tzinfo is not None
 
 
 def test_add_and_list_media(store: Store) -> None:
@@ -66,10 +238,19 @@ def test_remove_medium_in_use_is_rejected(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
 
-    with pytest.raises(StoreError, match="cinema"):
+    with pytest.raises(StoreError, match=r"^medium 'cinema' is referenced by 1 entry$"):
         store.remove_medium("cinema")
 
     assert store.list_media() == [medium]
+
+
+def test_remove_medium_in_use_by_two_entries_uses_plural_wording(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+    store.create_entry(title="Arrival", date=date(2024, 3, 16), medium_id=medium.id)
+
+    with pytest.raises(StoreError, match=r"^medium 'cinema' is referenced by 2 entries$"):
+        store.remove_medium("cinema")
 
 
 def test_add_and_list_venues(store: Store) -> None:
@@ -126,6 +307,37 @@ def test_add_venue_not_in_the_known_table_gets_no_coordinates(store: Store) -> N
     venue = store.add_venue("Grand Vista Cinema")
 
     assert venue.latitude is None
+
+
+def test_add_venue_with_known_street_address_gets_it(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
+
+    monkeypatch.setitem(
+        KNOWN_VENUE_LOCATIONS,
+        "Test Cinema",
+        VenueLocation(
+            chain=None,
+            city="Amsterdam",
+            country="Netherlands",
+            street_address="Teststraat 1",
+            postal_code="1000 AA",
+            canonical_name="Test Cinema",
+        ),
+    )
+
+    venue = store.add_venue("Test Cinema")
+
+    assert venue.street_address == "Teststraat 1"
+    assert venue.postal_code == "1000 AA"
+
+
+def test_add_venue_not_in_the_known_table_gets_no_street_address(store: Store) -> None:
+    venue = store.add_venue("Grand Vista Cinema")
+
+    assert venue.street_address is None
+    assert venue.postal_code is None
     assert venue.longitude is None
 
 
@@ -211,6 +423,113 @@ def test_migration_backfills_coordinates_for_a_venue_already_migrated_by_111(
         s.close()
 
 
+def test_migration_backfills_street_address_for_an_existing_known_venue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Same shape as #170's coordinate backfill above (issue #283): a
+    # venue row created before the table gained a verified street
+    # address/postal code for it still needs to pick those up on the
+    # next store open, not just brand-new rows.
+    import sqlite3
+
+    from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
+
+    monkeypatch.setitem(
+        KNOWN_VENUE_LOCATIONS,
+        "Test Cinema",
+        VenueLocation(
+            chain=None,
+            city="Amsterdam",
+            country="Netherlands",
+            street_address="Teststraat 1",
+            postal_code="1000 AA",
+            canonical_name="Test Cinema",
+        ),
+    )
+
+    db_path = tmp_path / "movies.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE media (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            is_physical_place INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE venues (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+        CREATE TABLE entries (
+            id INTEGER PRIMARY KEY, title TEXT NOT NULL, date TEXT NOT NULL,
+            start_time TEXT, end_time TEXT,
+            medium_id INTEGER NOT NULL REFERENCES media(id),
+            venue_id INTEGER REFERENCES venues(id)
+        );
+        """
+    )
+    conn.execute("INSERT INTO venues (name) VALUES ('Test Cinema')")
+    conn.commit()
+    conn.close()
+
+    s = Store(db_path)
+    try:
+        (venue,) = s.list_venues()
+        assert venue.street_address == "Teststraat 1"
+        assert venue.postal_code == "1000 AA"
+    finally:
+        s.close()
+
+
+def test_migration_never_overwrites_an_already_set_street_address(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sqlite3
+
+    from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
+
+    monkeypatch.setitem(
+        KNOWN_VENUE_LOCATIONS,
+        "Test Cinema",
+        VenueLocation(
+            chain=None,
+            city="Amsterdam",
+            country="Netherlands",
+            street_address="Teststraat 1",
+            postal_code="1000 AA",
+            canonical_name="Test Cinema",
+        ),
+    )
+
+    db_path = tmp_path / "movies.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE media (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            is_physical_place INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE venues (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, street_address TEXT
+        );
+        CREATE TABLE entries (
+            id INTEGER PRIMARY KEY, title TEXT NOT NULL, date TEXT NOT NULL,
+            start_time TEXT, end_time TEXT,
+            medium_id INTEGER NOT NULL REFERENCES media(id),
+            venue_id INTEGER REFERENCES venues(id)
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO venues (name, street_address) VALUES ('Test Cinema', 'Manually Set 5')"
+    )
+    conn.commit()
+    conn.close()
+
+    s = Store(db_path)
+    try:
+        (venue,) = s.list_venues()
+        assert venue.street_address == "Manually Set 5"
+    finally:
+        s.close()
+
+
 def test_migration_never_overwrites_an_already_set_coordinate(tmp_path: Path) -> None:
     import sqlite3
 
@@ -263,7 +582,21 @@ def test_remove_venue_in_use_is_rejected(store: Store) -> None:
     venue = store.add_venue("Grand Vista Cinema")
     store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id, venue_id=venue.id)
 
-    with pytest.raises(StoreError, match="Grand Vista Cinema"):
+    with pytest.raises(StoreError, match=r"^venue 'Grand Vista Cinema' is referenced by 1 entry$"):
+        store.remove_venue("Grand Vista Cinema")
+
+
+def test_remove_venue_in_use_by_two_entries_uses_plural_wording(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    venue = store.add_venue("Grand Vista Cinema")
+    store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id, venue_id=venue.id)
+    store.create_entry(
+        title="Arrival", date=date(2024, 3, 16), medium_id=medium.id, venue_id=venue.id
+    )
+
+    with pytest.raises(
+        StoreError, match=r"^venue 'Grand Vista Cinema' is referenced by 2 entries$"
+    ):
         store.remove_venue("Grand Vista Cinema")
 
 
@@ -386,6 +719,26 @@ def test_list_entries_filtered_by_medium(store: Store) -> None:
     entries = store.list_entries(medium_id=cinema.id)
 
     assert [e.title for e in entries] == ["Cinema movie"]
+
+
+def test_list_entries_filtered_by_multiple_venue_ids(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    venue_a = store.add_venue("Venue A")
+    venue_b = store.add_venue("Venue B")
+    venue_c = store.add_venue("Venue C")
+    store.create_entry(
+        title="At A", date=date(2024, 3, 15), medium_id=medium.id, venue_id=venue_a.id
+    )
+    store.create_entry(
+        title="At B", date=date(2024, 3, 16), medium_id=medium.id, venue_id=venue_b.id
+    )
+    store.create_entry(
+        title="At C", date=date(2024, 3, 17), medium_id=medium.id, venue_id=venue_c.id
+    )
+
+    entries = store.list_entries(venue_ids=[venue_a.id, venue_b.id])
+
+    assert {e.title for e in entries} == {"At A", "At B"}
 
 
 def test_update_entry_changes_the_stored_date(store: Store) -> None:
@@ -583,6 +936,35 @@ def test_update_entry_sets_poster_url(store: Store) -> None:
     assert updated.poster_url == "https://m.media-amazon.com/images/dune-poster.jpg"
     reloaded = store.get_entry(entry.id)
     assert reloaded.poster_url == "https://m.media-amazon.com/images/dune-poster.jpg"
+
+
+def test_new_entry_has_no_omdb_last_no_match(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+
+    assert entry.omdb_last_no_match is None
+
+
+def test_update_entry_sets_omdb_last_no_match(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+
+    updated = store.update_entry(entry.id, omdb_last_no_match=date(2026, 9, 7))
+
+    assert updated.omdb_last_no_match == date(2026, 9, 7)
+    reloaded = store.get_entry(entry.id)
+    assert reloaded.omdb_last_no_match == date(2026, 9, 7)
+
+
+def test_update_entry_clears_omdb_last_no_match(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2024, 3, 15), medium_id=medium.id)
+    entry = store.update_entry(entry.id, omdb_last_no_match=date(2026, 9, 7))
+
+    updated = store.update_entry(entry.id, omdb_last_no_match=None)
+
+    assert updated.omdb_last_no_match is None
 
 
 def test_new_entry_has_no_trailer_url(store: Store) -> None:
@@ -816,6 +1198,12 @@ def test_apply_creates_the_canonical_venue_and_moves_entries(store: Store) -> No
     assert [v.name for v in venues] == ["De Munt"]
     canonical = venues[0]
     assert merge.canonical_venue_id == canonical.id
+    assert merge.alias_venue_id == alias_id
+    # The newly created canonical venue gets De Munt's own known
+    # coordinates, not a blank (None, None) - `location.coordinates`
+    # is a real, non-empty tuple here, so it must be used as-is.
+    assert canonical.latitude == pytest.approx(52.3664519)
+    assert canonical.longitude == pytest.approx(4.8934706)
     assert store.get_entry(entry.id).venue_id == canonical.id
 
 
@@ -864,6 +1252,14 @@ def test_apply_removes_the_orphaned_alias_row_even_with_no_entries(store: Store)
     assert [v.name for v in store.list_venues()] == ["De Munt"]
 
 
+def test_merge_venue_aliases_defaults_to_a_dry_run(store: Store) -> None:
+    _seed_legacy_venue(store, "De Munt 4DX")
+
+    store.merge_venue_aliases()  # apply not passed - must not touch anything
+
+    assert [v.name for v in store.list_venues()] == ["De Munt 4DX"]
+
+
 def test_no_aliases_present_returns_an_empty_list_and_changes_nothing(store: Store) -> None:
     store.add_venue("De Munt")
     store.add_venue("Grand Vista Cinema")
@@ -881,6 +1277,131 @@ def test_a_venue_not_in_the_known_table_is_never_touched(store: Store) -> None:
 
     assert merges == []
     assert [v.name for v in store.list_venues()] == ["Grand Vista Cinema"]
+
+
+# --- merge_venue_aliases also catches a baked-address name: movie-planner-web#400 ---
+#
+# A now-fixed calendar_pull.py bug (issue #283's own LOCATION shape not
+# being stripped correctly by _resolve_venue_name) let `sync pull`
+# create venue rows named after the *whole* LOCATION string instead of
+# just the venue - these tests seed that exact shape directly via SQL,
+# the same "legacy data" pattern as the alias tests above.
+
+
+def test_dry_run_finds_a_venue_named_after_its_own_full_location_string(store: Store) -> None:
+    baked_id = _seed_legacy_venue(store, "De Munt, Vijzelstraat 15, 1017 HD Amsterdam, Netherlands")
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(
+        title="Dune", date=date(2024, 3, 15), medium_id=medium.id, venue_id=baked_id
+    )
+
+    (merge,) = store.merge_venue_aliases(apply=False)
+
+    assert merge.alias_name == "De Munt, Vijzelstraat 15, 1017 HD Amsterdam, Netherlands"
+    assert merge.canonical_name == "De Munt"
+    assert merge.entries_moved == 1
+    assert store.get_entry(entry.id).venue_id == baked_id  # unchanged - dry run
+
+
+def test_apply_merges_a_baked_address_name_and_preserves_the_streets_data(store: Store) -> None:
+    baked_id = _seed_legacy_venue(store, "De Munt, Vijzelstraat 15, 1017 HD Amsterdam, Netherlands")
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(
+        title="Dune", date=date(2024, 3, 15), medium_id=medium.id, venue_id=baked_id
+    )
+
+    store.merge_venue_aliases(apply=True)
+
+    (canonical,) = store.list_venues()
+    assert canonical.name == "De Munt"
+    assert canonical.street_address == "Vijzelstraat 15"
+    assert canonical.postal_code == "1017 HD"
+    assert store.get_entry(entry.id).venue_id == canonical.id
+
+
+def test_a_venue_named_after_the_short_location_shape_is_also_caught(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The plain "name, city, country" shape (no street/postal known) -
+    # every real venue in the table has both by now, so this simulates
+    # one that doesn't, the same way test_add_venue_with_known_street_
+    # address_gets_it above injects a test-only table entry.
+    from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
+
+    monkeypatch.setitem(
+        KNOWN_VENUE_LOCATIONS,
+        "Grand Vista Cinema",
+        VenueLocation(
+            chain=None,
+            city="Springfield",
+            country="USA",
+            canonical_name="Grand Vista Cinema",
+        ),
+    )
+    baked_id = _seed_legacy_venue(store, "Grand Vista Cinema, Springfield, USA")
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(
+        title="Dune", date=date(2024, 3, 15), medium_id=medium.id, venue_id=baked_id
+    )
+
+    (merge,) = store.merge_venue_aliases(apply=False)
+
+    assert merge.alias_name == "Grand Vista Cinema, Springfield, USA"
+    assert merge.canonical_name == "Grand Vista Cinema"
+    assert merge.entries_moved == 1
+    assert store.get_entry(entry.id).venue_id == baked_id  # unchanged - dry run
+
+
+def test_baked_address_matching_stops_once_a_canonical_name_has_been_seen(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Two KNOWN_VENUE_LOCATIONS entries sharing a canonical_name (real
+    # data never does this - every alias of one venue points at the
+    # identical VenueLocation object) - the first one checked doesn't
+    # match, and _baked_address_location's own dedup then skips the
+    # second entirely without checking it, even though *it* would have
+    # matched. A real match this way is never found.
+    from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
+
+    monkeypatch.setitem(
+        KNOWN_VENUE_LOCATIONS,
+        "Alias A",
+        VenueLocation(chain=None, city="CityA", country="X", canonical_name="Test Cinema"),
+    )
+    monkeypatch.setitem(
+        KNOWN_VENUE_LOCATIONS,
+        "Alias B",
+        VenueLocation(chain=None, city="CityB", country="Y", canonical_name="Test Cinema"),
+    )
+    _seed_legacy_venue(store, "Test Cinema, CityB, Y")
+
+    assert store.merge_venue_aliases(apply=False) == []
+
+
+def test_a_venue_matching_only_a_partial_address_is_not_falsely_recognized(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The "full" (street + postal) shape is only ever built when *both*
+    # are known - a venue with just one of the two set must fall through
+    # to the "short" shape check instead of being matched against a
+    # half-populated full string.
+    from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
+
+    monkeypatch.setitem(
+        KNOWN_VENUE_LOCATIONS,
+        "Partial Cinema",
+        VenueLocation(
+            chain=None,
+            city="Springfield",
+            country="USA",
+            street_address="Main St 1",
+            postal_code=None,
+            canonical_name="Partial Cinema",
+        ),
+    )
+    _seed_legacy_venue(store, "Partial Cinema, Main St 1, None Springfield, USA")
+
+    assert store.merge_venue_aliases(apply=False) == []
 
 
 def test_close_does_not_raise(store: Store) -> None:

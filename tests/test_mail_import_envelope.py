@@ -42,15 +42,66 @@ def test_extract_envelope_reads_from_subject_date_and_body() -> None:
 
 
 def test_extract_envelope_rejects_content_with_no_headers() -> None:
-    with pytest.raises(MailFetchError, match="no RFC822 headers"):
+    with pytest.raises(MailFetchError) as exc_info:
         extract_envelope("just some plain text\n\nwith a blank line\n")
+
+    # Exact message, not just a substring - a mutated message that still
+    # happens to contain "no RFC822 headers" as a substring (e.g. with
+    # junk appended either side) would otherwise still pass.
+    assert str(exc_info.value) == "not a recognizable email (no RFC822 headers found)"
+
+
+def test_extract_envelope_finds_a_header_before_the_first_blank_line_even_with_junk_ahead() -> None:
+    # A real header line earlier than the split point still counts, even
+    # with an unrecognized header (Return-Path, here) ahead of it in the
+    # same header block - this only distinguishes from a bug that
+    # truncates the header block at the first whitespace of any kind,
+    # rather than the first blank *line*.
+    raw = "Return-Path: <bounce@example.com>\nFrom: a@b.com\nSubject: hi\nDate: Mon, 1 Jan 2026 12:00:00 +0000\n\nbody\n"
+
+    extract_envelope(raw)  # does not raise
+
+
+def test_extract_envelope_does_not_treat_body_text_as_a_header() -> None:
+    # A forwarded message's own quoted "From:"/"Subject:" lines living in
+    # the *body* must never count as this email's own headers - only
+    # text before the first blank line does.
+    raw = "Weird-Header: x\n\nForwarded message:\nFrom: someone@example.com\nSubject: fwd\n"
+
+    with pytest.raises(MailFetchError, match="no RFC822 headers"):
+        extract_envelope(raw)
 
 
 def test_extract_envelope_rejects_a_missing_date_header() -> None:
     raw = "From: a@example.com\nSubject: hi\n\nbody\n"
 
-    with pytest.raises(MailFetchError, match="no Date header"):
+    with pytest.raises(MailFetchError) as exc_info:
         extract_envelope(raw)
+
+    assert str(exc_info.value) == "email has no Date header"
+
+
+def test_extract_envelope_rejects_an_unparseable_date_header() -> None:
+    raw = "From: a@example.com\nSubject: hi\nDate: not a real date\n\nbody\n"
+
+    with pytest.raises(MailFetchError, match="unparseable Date header"):
+        extract_envelope(raw)
+
+
+def test_extract_envelope_with_no_from_header_is_an_empty_string() -> None:
+    raw = "Subject: hi\nDate: Mon, 1 Jan 2026 12:00:00 +0000\n\nbody\n"
+
+    envelope = extract_envelope(raw)
+
+    assert envelope.from_address == ""
+
+
+def test_extract_envelope_with_no_subject_header_is_an_empty_string() -> None:
+    raw = "From: a@example.com\nDate: Mon, 1 Jan 2026 12:00:00 +0000\n\nbody\n"
+
+    envelope = extract_envelope(raw)
+
+    assert envelope.subject == ""
 
 
 def test_sender_domain_extracts_and_lowercases_the_domain() -> None:
@@ -59,6 +110,15 @@ def test_sender_domain_extracts_and_lowercases_the_domain() -> None:
 
 def test_sender_domain_with_no_address_is_none() -> None:
     assert sender_domain("not an email address") is None
+
+
+def test_sender_domain_with_an_extra_at_sign_takes_the_last_split() -> None:
+    # A quoted local-part can itself legally contain "@" (RFC 5322), so
+    # the parsed address can have more than one - rsplit(..., 1) takes
+    # everything after the *last* one, not split() (which would take
+    # the first) and not a wider maxsplit (which would take a middle
+    # segment instead of the real domain).
+    assert sender_domain('"a@b"@example.com') == "example.com"
 
 
 # --- HTML-only fallback: movie-planner#158 ---
@@ -147,3 +207,49 @@ def test_extract_envelope_with_neither_plain_nor_html_returns_empty_body() -> No
     envelope = extract_envelope(msg.as_string())
 
     assert envelope.body == ""
+
+
+def test_extract_envelope_ignores_an_html_attachment_with_no_real_html_body() -> None:
+    # get_body() correctly refuses to treat an attachment as the html
+    # body, leaving _extract_body's own walk() fallback to run - which
+    # has to make the same "not an attachment" check itself, not just
+    # match on content type (issue tracked under the mutation-testing
+    # coverage gaps milestone: a flipped/weakened disposition check
+    # here would silently start treating the attachment as real body
+    # content).
+    msg = EmailMessage()
+    msg["From"] = "Cinema Chain <noreply@example-chain.com>"
+    msg["Subject"] = "Your booking confirmation"
+    msg["Date"] = "Sat, 04 Jul 2026 19:00:00 +0200"
+    msg.set_content("Good Boy plain body, no digits here")
+    msg.add_attachment(
+        b"<p>this is an attachment, not the real body</p>",
+        maintype="text",
+        subtype="html",
+        filename="e-ticket.html",
+    )
+
+    envelope = extract_envelope(msg.as_string())
+
+    assert "Good Boy plain body" in envelope.body
+    assert "this is an attachment" not in envelope.body
+
+
+def test_extract_envelope_prefers_plain_with_a_digit_even_when_html_exists() -> None:
+    # Both a real plain and a real html alternative exist, with
+    # deliberately *different* text, and the plain one has a digit -
+    # that's the "keep the plain part" branch of an OR, not an AND:
+    # this only distinguishes the two once the alternatives' content
+    # actually differs (matching text either way would pass regardless
+    # of which branch is taken).
+    msg = EmailMessage()
+    msg["From"] = "Cinema Chain <noreply@example-chain.com>"
+    msg["Subject"] = "Your booking confirmation"
+    msg["Date"] = "Sat, 04 Jul 2026 19:00:00 +0200"
+    msg.set_content("Good Boy, booking AB1CD23")
+    msg.add_alternative("<p>Please view this email in an HTML-capable client</p>", subtype="html")
+
+    envelope = extract_envelope(msg.as_string())
+
+    assert "Good Boy, booking AB1CD23" in envelope.body
+    assert "HTML-capable client" not in envelope.body

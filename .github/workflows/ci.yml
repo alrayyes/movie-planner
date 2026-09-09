@@ -85,10 +85,12 @@ jobs:
   # Mutation testing: mutates src/ (excluding test_e2e.py's real-Baikal-
   # container coverage from the rerun set - ruinous to repeat per mutant,
   # see pyproject.toml's [tool.mutmut] comment) and reruns the rest of the
-  # suite against each mutant. Non-blocking by design: `mutmut run` exits 0
-  # regardless of survivor count, so this reports rather than gates - a
-  # surviving mutant is a missing test case to pick up later, not a merge
-  # blocker for a codebase that wasn't built mutation-clean from day one.
+  # suite against each mutant. Still non-blocking for now: `mutmut run`
+  # exits 0 regardless of survivor count, so this reports rather than
+  # gates. The dotfiles-wide rule says a surviving mutant should always
+  # block a merge, but this repo has 891 pre-existing survivors (#303) -
+  # gating on the full run today would fail every PR over debt nobody
+  # touched. #303 tracks scoping this to just the PR's own diff.
   mutmut:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -164,7 +166,7 @@ jobs:
       actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes

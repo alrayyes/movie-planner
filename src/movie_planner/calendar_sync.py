@@ -3,9 +3,11 @@ authoritative - see design.md's "Source of truth" and "Sync failure"
 decisions. Nothing here ever reads the calendar back into the store.
 """
 
+import logging
 import uuid
 from collections.abc import Sequence
 from datetime import date, datetime, time
+from importlib.metadata import version
 from typing import Protocol, cast
 
 import icalendar
@@ -13,6 +15,8 @@ from caldav.davclient import DAVClient
 from caldav.lib.error import NotFoundError
 
 from movie_planner.store import Entry, Store
+
+logger = logging.getLogger(__name__)
 
 
 class CalendarSyncError(Exception):
@@ -182,7 +186,13 @@ class CalendarClient:
 
 
 def _extra_properties(
-    entry: Entry, *, city: str | None = None, country: str | None = None
+    entry: Entry,
+    *,
+    city: str | None = None,
+    country: str | None = None,
+    street_address: str | None = None,
+    postal_code: str | None = None,
+    importer: str | None = None,
 ) -> dict[str, str]:
     values: dict[str, str | None] = {
         "X-POSTER-URL": entry.poster_url,
@@ -197,6 +207,13 @@ def _extra_properties(
         # hardcoded chain/location table.
         "X-CITY": city,
         "X-COUNTRY": country,
+        # Same reasoning as X-CITY/X-COUNTRY, split rather than one
+        # combined X-ADDRESS (issue #283, agreed jointly with
+        # movie-planner-web): a direct 1:1 passthrough, each omitted
+        # independently when its own value isn't known - LOCATION is the
+        # only place these two are ever paired together.
+        "X-STREET-ADDRESS": street_address,
+        "X-POSTAL-CODE": postal_code,
         # Structured, unlike screening_details' free text (issue #218) -
         # already on Entry itself, so no extra push_new/push_update
         # parameter is needed the way city/country above required one.
@@ -225,6 +242,25 @@ def _extra_properties(
         # Same "omit, never guess" rule: no tmdb.api_key configured, or no
         # official YouTube trailer found, and this is simply absent.
         "X-TRAILER-URL": entry.trailer_url,
+        # TMDb-derived fields with no OMDb equivalent (issue #311) -
+        # X-ACTORS/X-WEBSITE above are also TMDb-sourced when TMDb has a
+        # richer value, but reuse those existing properties rather than
+        # adding parallel ones. X-CERTIFICATION, not X-RATED - a
+        # different rating system (TMDb's release_dates) from OMDb's own
+        # Rated, which stays untouched.
+        "X-COLLECTION": entry.collection,
+        "X-CERTIFICATION": entry.certification,
+        "X-KEYWORDS": entry.keywords,
+        "X-BUDGET": str(entry.budget) if entry.budget is not None else None,
+        "X-POPULARITY": str(entry.popularity) if entry.popularity is not None else None,
+        # Debugging provenance (issue #257) - which movie-planner command
+        # performed this push, and which version of the tool did it.
+        # Same "omit, never guess" rule: a caller that doesn't pass
+        # importer (a test using CalendarSync directly, say) gets
+        # neither property, rather than a guessed "unknown" importer
+        # with a real version attached to it.
+        "X-IMPORTER": importer,
+        "X-IMPORTER-VERSION": version("movie-planner") if importer else None,
     }
     return {name: value for name, value in values.items() if value}
 
@@ -244,6 +280,9 @@ class CalendarSync:
         geo: tuple[float, float] | None = None,
         city: str | None = None,
         country: str | None = None,
+        street_address: str | None = None,
+        postal_code: str | None = None,
+        importer: str | None = None,
     ) -> Entry:
         # uuid7, not uuid4: time-ordered, so newly-created entries insert
         # sequentially rather than at a random point - and it's already
@@ -257,14 +296,43 @@ class CalendarSync:
             end_time=entry.end_time,
             venue=venue,
             description=build_description(entry, chain=chain, screening_details=screening_details),
-            extra_properties=_extra_properties(entry, city=city, country=country),
+            extra_properties=_extra_properties(
+                entry,
+                city=city,
+                country=country,
+                street_address=street_address,
+                postal_code=postal_code,
+                importer=importer,
+            ),
             geo=geo,
         )
+        logger.debug("Calendar push (create, uid=%s):\n%s", uid, ical_text)
+        # The local store records this UID *before* the CalDAV create,
+        # not after (issue #246). An interruption between the two - a
+        # killed process, a dropped connection after the server actually
+        # created the event - used to leave caldav_uid unset locally
+        # while a real, orphaned event sat on the calendar; the next
+        # retry had no way to tell it had already been created and made
+        # a second, genuinely duplicate one. With the write done first,
+        # the local record and the (possibly not-yet-existing) calendar
+        # event always agree on the UID, so any later push for this
+        # entry - push_update, from a normal retry or `sync refresh` -
+        # either finds the real event and updates it, or gets
+        # NotFoundError and recovers through the same path #166 already
+        # added, in both cases without ever creating a second event.
+        #
+        # A caught create_event failure deliberately does NOT roll this
+        # back to None: there's no reliable way here to tell "definitely
+        # never reached the server" apart from "reached it, and only the
+        # response was lost" - rolling back would reopen this exact bug
+        # for the second case. Leaving it recorded is safe either way,
+        # for the same reason above.
+        updated = self._store.update_entry(entry.id, caldav_uid=uid)
         try:
             self._client.create_event(ical_text)
         except Exception as e:
             raise CalendarSyncError(f"could not sync '{entry.title}' to the calendar: {e}") from e
-        return self._store.update_entry(entry.id, caldav_uid=uid)
+        return updated
 
     def push_update(
         self,
@@ -276,6 +344,9 @@ class CalendarSync:
         geo: tuple[float, float] | None = None,
         city: str | None = None,
         country: str | None = None,
+        street_address: str | None = None,
+        postal_code: str | None = None,
+        importer: str | None = None,
     ) -> None:
         if entry.caldav_uid is None:
             raise CalendarSyncError(f"'{entry.title}' has never been synced to the calendar")
@@ -287,9 +358,17 @@ class CalendarSync:
             end_time=entry.end_time,
             venue=venue,
             description=build_description(entry, chain=chain, screening_details=screening_details),
-            extra_properties=_extra_properties(entry, city=city, country=country),
+            extra_properties=_extra_properties(
+                entry,
+                city=city,
+                country=country,
+                street_address=street_address,
+                postal_code=postal_code,
+                importer=importer,
+            ),
             geo=geo,
         )
+        logger.debug("Calendar push (update, uid=%s):\n%s", entry.caldav_uid, ical_text)
         try:
             self._client.update_event(entry.caldav_uid, ical_text)
         except NotFoundError:
@@ -304,6 +383,11 @@ class CalendarSync:
                 chain=chain,
                 screening_details=screening_details,
                 geo=geo,
+                city=city,
+                country=country,
+                street_address=street_address,
+                postal_code=postal_code,
+                importer=importer,
             )
         except Exception as e:
             raise CalendarSyncError(

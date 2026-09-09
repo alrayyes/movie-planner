@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Callable, Iterator
 from datetime import date
 from pathlib import Path
@@ -64,6 +65,12 @@ def _client(handler: Callable[[httpx.Request], httpx.Response]) -> OmdbClient:
     return OmdbClient(api_key="test-key", http_client=http_client)
 
 
+def test_init_without_an_http_client_targets_the_omdb_api_base_url() -> None:
+    client = OmdbClient(api_key="test-key")
+
+    assert str(client._http.base_url) == "https://www.omdbapi.com/"
+
+
 def test_lookup_by_title_returns_ratings() -> None:
     seen_params = {}
 
@@ -98,12 +105,81 @@ def test_lookup_by_imdb_id_sends_the_id_param() -> None:
     assert "t" not in seen_params
 
 
+def test_lookup_sends_the_request_to_the_api_root() -> None:
+    seen_path = None
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal seen_path
+        seen_path = request.url.path
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    client.lookup(title="Dune")
+
+    assert seen_path == "/"
+
+
 def test_lookup_no_match_returns_none() -> None:
     client = _client(lambda request: httpx.Response(200, json=NO_MATCH_RESPONSE))
 
     ratings = client.lookup(title="Not A Real Movie Title Xyz")
 
     assert ratings is None
+
+
+def test_lookup_logs_the_request_and_result_at_debug_level(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    with caplog.at_level(logging.DEBUG, logger="movie_planner.omdb"):
+        client.lookup(title="Dune")
+
+    messages = [r.message for r in caplog.records]
+    assert any("Dune" in m for m in messages)
+    assert not any("test-key" in m for m in messages)  # the API key is a secret, never logged
+
+
+def test_lookup_logs_the_exact_request_line(caplog: pytest.LogCaptureFixture) -> None:
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    with caplog.at_level(logging.DEBUG, logger="movie_planner.omdb"):
+        client.lookup(title="Dune")
+
+    request_messages = [r.message for r in caplog.records if r.message.startswith("OMDb request:")]
+    assert request_messages == ["OMDb request: {'t': 'Dune', 'type': 'movie'}"]
+
+
+def test_lookup_logs_the_exact_message_on_a_successful_match(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    with caplog.at_level(logging.DEBUG, logger="movie_planner.omdb"):
+        client.lookup(title="Dune")
+
+    messages = [r.message for r in caplog.records]
+    assert "OMDb response: Dune matched imdb_id=tt1160419" in messages
+
+
+def test_lookup_no_match_logs_it_at_debug_level(caplog: pytest.LogCaptureFixture) -> None:
+    client = _client(lambda request: httpx.Response(200, json=NO_MATCH_RESPONSE))
+
+    with caplog.at_level(logging.DEBUG, logger="movie_planner.omdb"):
+        client.lookup(title="Not A Real Movie Title Xyz")
+
+    assert any("no match" in r.message.lower() for r in caplog.records)
+
+
+def test_lookup_logs_the_exact_message_on_no_match(caplog: pytest.LogCaptureFixture) -> None:
+    client = _client(lambda request: httpx.Response(200, json=NO_MATCH_RESPONSE))
+
+    with caplog.at_level(logging.DEBUG, logger="movie_planner.omdb"):
+        client.lookup(title="Not A Real Movie Title Xyz")
+
+    messages = [r.message for r in caplog.records]
+    assert "OMDb response: no match for Not A Real Movie Title Xyz" in messages
 
 
 def test_lookup_missing_rating_source_is_none() -> None:
@@ -121,6 +197,18 @@ def test_lookup_missing_rating_source_is_none() -> None:
     assert ratings.rotten_tomatoes is None
     assert ratings.metacritic is None
     assert ratings.imdb_id is None
+
+
+def test_lookup_with_no_ratings_key_leaves_all_ratings_none() -> None:
+    response = {k: v for k, v in MATCH_RESPONSE.items() if k != "Ratings"}
+    client = _client(lambda request: httpx.Response(200, json=response))
+
+    ratings = client.lookup(title="Dune")
+
+    assert ratings is not None
+    assert ratings.imdb is None
+    assert ratings.rotten_tomatoes is None
+    assert ratings.metacritic is None
 
 
 def test_lookup_returns_the_imdb_id() -> None:
@@ -313,9 +401,11 @@ def test_lookup_caches_no_match_too() -> None:
 
     client = _client(handler)
 
-    client.lookup(title="Missing")
-    client.lookup(title="Missing")
+    first = client.lookup(title="Missing")
+    second = client.lookup(title="Missing")
 
+    assert first is None
+    assert second is None
     assert call_count == 1
 
 
@@ -470,7 +560,7 @@ def test_needs_omdb_fetch_with_every_field_present_is_false() -> None:
 def test_lookup_requires_title_or_imdb_id() -> None:
     client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
 
-    with pytest.raises(ValueError, match="title or imdb_id"):
+    with pytest.raises(ValueError, match="^lookup needs a title or imdb_id$"):
         client.lookup()
 
 
@@ -525,6 +615,26 @@ def test_lookup_with_imdb_id_ignores_the_year_hint() -> None:
     assert "y" not in seen_params
 
 
+def test_lookup_with_title_and_imdb_id_skips_the_year_scoped_branch() -> None:
+    """A caller passing both a title and an imdb_id has already resolved the
+    match - the year hint (movie-planner#216's disambiguation) only exists
+    to help a bare title search, and must never cause an imdb_id lookup to
+    take a detour through a title search instead.
+    """
+    seen_params = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_params.update(dict(request.url.params))
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    client.lookup(title="Dune", imdb_id="tt1160419")
+
+    assert seen_params["i"] == "tt1160419"
+    assert "t" not in seen_params
+
+
 def test_lookup_by_title_sends_the_type_movie_param() -> None:
     seen_params = {}
 
@@ -553,12 +663,35 @@ def test_lookup_by_imdb_id_sends_no_type_param() -> None:
     assert "type" not in seen_params
 
 
+def test_lookup_by_title_accepts_an_explicit_movie_type() -> None:
+    response = {**MATCH_RESPONSE, "Type": "movie"}
+    client = _client(lambda request: httpx.Response(200, json=response))
+
+    ratings = client.lookup(title="Dune")
+
+    assert ratings is not None
+
+
 def test_lookup_by_title_rejects_a_series_result() -> None:
     client = _client(lambda request: httpx.Response(200, json=SERIES_RESPONSE))
 
     ratings = client.lookup(title="Good Boy")
 
     assert ratings is None
+
+
+def test_lookup_logs_the_exact_message_when_rejecting_a_series_result(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    client = _client(lambda request: httpx.Response(200, json=SERIES_RESPONSE))
+
+    with caplog.at_level(logging.DEBUG, logger="movie_planner.omdb"):
+        client.lookup(title="Good Boy")
+
+    messages = [r.message for r in caplog.records]
+    assert (
+        "OMDb response: Good Boy matched a non-movie Type=series, treated as no match" in messages
+    )
 
 
 def test_lookup_by_title_rejecting_a_series_result_is_cached() -> None:
@@ -571,9 +704,11 @@ def test_lookup_by_title_rejecting_a_series_result_is_cached() -> None:
 
     client = _client(handler)
 
-    client.lookup(title="Good Boy")
-    client.lookup(title="Good Boy")
+    first = client.lookup(title="Good Boy")
+    second = client.lookup(title="Good Boy")
 
+    assert first is None
+    assert second is None
     assert call_count == 1
 
 
@@ -588,6 +723,26 @@ def test_lookup_by_imdb_id_does_not_reject_a_series_result() -> None:
 
     assert ratings is not None
     assert ratings.imdb_id == "tt9999999"
+
+
+def test_lookup_with_title_and_imdb_id_does_not_apply_type_filtering() -> None:
+    """Same reasoning as `test_lookup_by_imdb_id_does_not_reject_a_series_result`,
+    but with a title also supplied - the type filter must key off whether an
+    imdb_id was given, not merely off whether it's a title-only search.
+    """
+    seen_params = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_params.update(dict(request.url.params))
+        return httpx.Response(200, json=SERIES_RESPONSE)
+
+    client = _client(handler)
+
+    ratings = client.lookup(title="Good Boy", imdb_id="tt9999999")
+
+    assert ratings is not None
+    assert ratings.imdb_id == "tt9999999"
+    assert "type" not in seen_params
 
 
 def test_lookup_by_title_with_no_year_sends_no_year_param() -> None:
@@ -620,6 +775,32 @@ def test_lookup_caches_a_year_scoped_match_separately_from_a_plain_one() -> None
     assert call_count == 2
 
 
+def test_lookup_caches_different_years_separately() -> None:
+    """Two year-scoped searches for the same title are two different
+    disambiguation hints (movie-planner#216) and must never collide on one
+    cache entry - each has to reach the network and return its own match.
+    """
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if dict(request.url.params).get("y") == "1900":
+            return httpx.Response(200, json={**MATCH_RESPONSE, "imdbID": "tt-old"})
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    first = client.lookup(title="Dune", year=2021)
+    second = client.lookup(title="Dune", year=1900)
+
+    assert first is not None
+    assert second is not None
+    assert first.imdb_id == "tt1160419"
+    assert second.imdb_id == "tt-old"
+    assert call_count == 2
+
+
 # --- fetch_and_store_ratings: task 5.2 ---
 
 
@@ -642,6 +823,23 @@ def test_fetch_and_store_ratings_on_a_match(store: Store) -> None:
     assert updated.rotten_tomatoes_rating == "83%"
     assert updated.metacritic_rating == "74/100"
     assert store.get_entry(entry.id).imdb_rating == "8.0/10"
+
+
+def test_fetch_and_store_ratings_uses_the_given_imdb_id(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Some Other Title", date=date(2026, 1, 1), medium_id=medium.id)
+    seen_params = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_params.update(dict(request.url.params))
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    client = _client(handler)
+
+    fetch_and_store_ratings(store, client, entry, imdb_id="tt1160419")
+
+    assert seen_params["i"] == "tt1160419"
+    assert "t" not in seen_params
 
 
 def test_fetch_and_store_ratings_uses_the_entrys_year_as_a_hint(store: Store) -> None:
@@ -748,6 +946,31 @@ def test_fetch_and_store_ratings_on_no_match(store: Store) -> None:
 
     assert found is False
     assert updated.imdb_rating is None
+
+
+def test_fetch_and_store_ratings_on_no_match_records_todays_date(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Not A Real Movie", date=date(2026, 1, 1), medium_id=medium.id)
+    client = _client(lambda request: httpx.Response(200, json=NO_MATCH_RESPONSE))
+
+    updated, found = fetch_and_store_ratings(store, client, entry)
+
+    assert found is False
+    assert updated.omdb_last_no_match == date.today()
+    reloaded = store.get_entry(entry.id)
+    assert reloaded.omdb_last_no_match == date.today()
+
+
+def test_fetch_and_store_ratings_on_a_match_clears_a_prior_no_match(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.update_entry(entry.id, omdb_last_no_match=date(2026, 1, 1))
+
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+    updated, found = fetch_and_store_ratings(store, client, entry)
+
+    assert found is True
+    assert updated.omdb_last_no_match is None
 
 
 def test_entry_logs_updates_and_syncs_with_no_metadata_at_all(store: Store) -> None:

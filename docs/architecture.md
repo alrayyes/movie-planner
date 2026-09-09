@@ -23,7 +23,8 @@ flowchart LR
         Pull["sync pull\n(manual, approval-gated;\neverything else stays\npush-only)"]
     end
 
-    Store -- "ratings, poster,\ndirector, cast, genre" --> OMDb["OMDb API"]
+    Store -- "ratings, poster,\ndirector, genre" --> OMDb["OMDb API"]
+    Store -- "cast, trailer, collection,\ncertification, keywords,\nbudget, popularity\n(optional)" --> TMDb["TMDb API"]
     Sync -- "LOCATION, GEO,\nX-* properties" --> CalDAV[("Baikal / CalDAV calendar")]
     CalDAV -- "new/changed/removed\ncandidates" --> Pull
     Pull -. "only on approval" .-> Store
@@ -38,8 +39,11 @@ flowchart LR
 
 - **movie-planner** (this repo's main CLI) owns the SQLite store - the
   only source of truth, per [`docs/calendar-schema.md`](calendar-schema.md).
-  It reads from a CSV/JSON file or stdin (`import`), a piped or given
-  email (`from-pathe-email`), or interactive prompts (`log`) - and
+  It reads from a bulk-import file or stdin (`import` - CSV and JSON
+  today, and a registry a new format plugs into without touching
+  `cli.py`; see CONTRIBUTING.md's "Adding a new import format"), a
+  piped or given email (`from-pathe-email`), or interactive prompts
+  (`log`) - and
   pushes to the calendar. `log`/`import`/`update`/`sync refresh`/
   `sync retry` never read the calendar back; `sync pull` (issue #235)
   is the one, manually run exception - it reconciles calendar-side
@@ -61,10 +65,15 @@ flowchart LR
   pointing both `init` commands at the same path doesn't clobber the
   other tool's settings. An older config file with no namespaced
   wrapper, for either tool, still loads exactly as before.
-- **OMDb** enriches entries with ratings, poster, director, cast,
-  genre, and release year - fetched by `movie-planner` itself
-  (`log`, `import`, `sync refresh`, `from-pathe-email`), never by the
-  mail-import tool.
+- **OMDb** enriches entries with ratings, poster, director, genre, and
+  release year - fetched by `movie-planner` itself (`log`, `import`,
+  `sync refresh`, `from-pathe-email`), never by the mail-import tool.
+- **TMDb** (optional, unlike OMDb) enriches the same entry further once
+  OMDb has matched it - full cast (overriding OMDb's own, which only
+  ever returns a handful of top-billed names), trailer, collection,
+  content certification, homepage, keywords, budget, and popularity
+  (issue #311). Piggybacks on the `imdbID` an OMDb match already
+  returned; never looked up on its own.
 - **The CalDAV calendar** (Baikal or otherwise) is a synced mirror,
   written to by every `movie-planner` command except `sync pull`,
   which is the only one that also reads it back (approval-gated, see
@@ -106,6 +115,21 @@ For anyone (human or agent) picking this project up mid-thread:
   issue #166) does. Current read: this is `retry`'s documented
   contract working as intended, not a bug - reopen the question if
   that stops feeling right in practice.
+- **`push_new` records `caldav_uid` locally before creating the
+  calendar event, not after** (issue #246) - a killed process or
+  dropped connection between the two used to leave the local entry
+  with no `caldav_uid` at all while a real, orphaned event sat on the
+  calendar with no local row pointing at it; the next retry couldn't
+  tell it had already been created and made a genuine duplicate.
+  Reordering the write means the local record and the calendar event
+  (whether or not it exists yet) always agree on the UID, so any later
+  push for that entry recovers through the same not-found path
+  described in the preceding bullet rather than creating a second
+  event. This narrows `sync retry`'s already-narrow scope further: a
+  `push_new` failure now leaves a `caldav_uid` too, even a normal
+  caught one, not just a crash, so `sync retry` only still helps an
+  entry that's never even attempted a push at all - `sync refresh` is
+  the correct retry for anything that has.
 - **"`list` also shows cached shows"** (issue #168) - reported live;
   Ryan later clarified "shows" probably means cached showings, that
   is, viewings/entries, not TV series - but two things are still

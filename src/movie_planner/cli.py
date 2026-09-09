@@ -6,6 +6,7 @@ import dataclasses
 import email
 import email.policy
 import email.utils
+import logging
 import re
 import sys
 from dataclasses import dataclass
@@ -18,6 +19,7 @@ import typer
 
 from movie_planner import config as config_module
 from movie_planner import config_file
+from movie_planner.bug_report import build_bug_report
 from movie_planner.calendar_pull import (
     Candidate,
     ChangedCandidate,
@@ -29,21 +31,23 @@ from movie_planner.calendar_pull import (
 from movie_planner.calendar_sync import CalendarClient, CalendarSync
 from movie_planner.display import detect_terminal_image_protocol, format_entry, render_poster
 from movie_planner.duplicates import find_duplicate
-from movie_planner.importers import parse_csv, parse_json, parse_json_text, run_import
+from movie_planner.importers import IMPORT_FORMATS, parse_json_text, run_import
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
 from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
-from movie_planner.store import Entry, Medium, Store, StoreError, Venue
-from movie_planner.tmdb import TmdbClient
+from movie_planner.store import ActivityLogEntry, Entry, Medium, Store, StoreError, Venue
+from movie_planner.tmdb import TmdbClient, TmdbMovieDetails
 
 app = typer.Typer(help="movie-planner: log watched movies and sync them to a calendar.")
 locations_app = typer.Typer(help="Manage the medium and venue lists.")
 media_app = typer.Typer(help="Manage the medium list.")
 venues_app = typer.Typer(help="Manage the venue list.")
 sync_app = typer.Typer(help="Manage calendar sync.")
+import_failures_app = typer.Typer(help="Inspect and clear past import failures.")
 locations_app.add_typer(media_app, name="media")
 locations_app.add_typer(venues_app, name="venues")
 app.add_typer(locations_app, name="locations")
 app.add_typer(sync_app, name="sync")
+app.add_typer(import_failures_app, name="import-failures")
 
 
 @dataclass(frozen=True)
@@ -60,6 +64,7 @@ class _ConfigOverrides:
     omdb_api_key: str | None = None
     tmdb_api_key: str | None = None
     db_path: Path | None = None
+    verbose: bool = False
 
 
 # Click derives each env var from its option name under this prefix, e.g.
@@ -117,6 +122,16 @@ def callback(
             "log, without editing the config file. Also settable as $MOVIE_PLANNER_DB_PATH."
         ),
     ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            help="Print diagnostic detail (OMDb/TMDb requests, the exact calendar payload "
+            "pushed, why a duplicate was or wasn't detected) to stderr, for every command. "
+            "Normal output is unchanged - this only adds detail, on top of it. Also settable "
+            "as $MOVIE_PLANNER_VERBOSE.",
+        ),
+    ] = False,
 ) -> None:
     """movie-planner: log watched movies and sync them to a calendar."""
     # Stores the raw overrides rather than loading the config here: loading
@@ -129,7 +144,29 @@ def callback(
         omdb_api_key=omdb_api_key,
         tmdb_api_key=tmdb_api_key,
         db_path=db_path,
+        verbose=verbose,
     )
+    _configure_logging(verbose)
+
+
+def _configure_logging(verbose: bool) -> None:
+    """Every movie_planner.* module logs its diagnostic detail at DEBUG -
+    OMDb/TMDb requests, the exact calendar payload, duplicate-detection
+    decisions. Nothing prints unless --verbose asks for it, and even then
+    it goes to stderr, never stdout, so normal command output is
+    unaffected either way (issue #258).
+    """
+    logger = logging.getLogger("movie_planner")
+    if verbose:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        logger.handlers = [handler]
+        logger.setLevel(logging.DEBUG)
+        logger.propagate = False
+    else:
+        logger.handlers = []
+        logger.setLevel(logging.WARNING)
+        logger.propagate = True
 
 
 _STARTER_CONFIG = """\
@@ -334,6 +371,36 @@ db_path = "~/.local/share/movie-planner/movies.db"
     )
 
 
+@app.command("bug-report")
+def bug_report(
+    ctx: typer.Context,
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            help="Write the report to this file instead of printing it to stdout.",
+        ),
+    ] = None,
+) -> None:
+    """Generates a diagnostic report safe to share - with an AI session, in
+    a GitHub issue, with anyone helping debug (issue #256). Never
+    includes CalDAV credentials, API keys, entry titles/notes, or venue
+    names - only tool/Python version, config shape, and store counts.
+    """
+    cfg = _cfg(ctx)
+    store = _open_store(cfg)
+    try:
+        report = build_bug_report(cfg, store)
+    finally:
+        store.close()
+
+    if output is not None:
+        output.write_text(report)
+        typer.echo(f"Wrote bug report to {output}")
+    else:
+        typer.echo(report)
+
+
 def _parse_date(value: str) -> date:
     try:
         return date.fromisoformat(value)
@@ -371,6 +438,7 @@ def _push_new_or_warn(
     store: Store,
     entry: Entry,
     *,
+    importer: str,
     screening_details: str | None = None,
 ) -> Entry:
     venue = _venue_for_entry(store, entry)
@@ -384,6 +452,9 @@ def _push_new_or_warn(
             geo=_venue_geo(venue),
             city=venue.city if venue else None,
             country=venue.country if venue else None,
+            street_address=venue.street_address if venue else None,
+            postal_code=venue.postal_code if venue else None,
+            importer=importer,
         )
     except Exception as e:  # noqa: BLE001 - any connect/push failure is a warning
         typer.secho(
@@ -398,6 +469,7 @@ def _push_update_or_warn(
     store: Store,
     entry: Entry,
     *,
+    importer: str,
     screening_details: str | None = None,
 ) -> None:
     if entry.caldav_uid is None:
@@ -413,6 +485,9 @@ def _push_update_or_warn(
             geo=_venue_geo(venue),
             city=venue.city if venue else None,
             country=venue.country if venue else None,
+            street_address=venue.street_address if venue else None,
+            postal_code=venue.postal_code if venue else None,
+            importer=importer,
         )
     except Exception as e:  # noqa: BLE001
         typer.secho(
@@ -427,6 +502,7 @@ def _finalize_entry(
     entry: Entry,
     *,
     fetch_metadata: bool,
+    importer: str,
     imdb_id: str | None = None,
     screening_details: str | None = None,
 ) -> Entry:
@@ -434,13 +510,18 @@ def _finalize_entry(
     entry has never been synced, update otherwise. The one orchestration
     sequence shared by every command that ends with "an entry now
     exists/changed locally, make the calendar agree" - see design.md's
-    "One shared orchestration helper" decision.
+    "One shared orchestration helper" decision. `importer` (issue #257)
+    names the calling command for the pushed event's X-IMPORTER/
+    X-IMPORTER-VERSION properties - required, not optional, so a new
+    call site can't forget to set it.
     """
     if fetch_metadata:
         entry = _fetch_metadata_or_warn(cfg, store, entry, imdb_id=imdb_id)
     if entry.caldav_uid is None:
-        return _push_new_or_warn(cfg, store, entry, screening_details=screening_details)
-    _push_update_or_warn(cfg, store, entry, screening_details=screening_details)
+        return _push_new_or_warn(
+            cfg, store, entry, importer=importer, screening_details=screening_details
+        )
+    _push_update_or_warn(cfg, store, entry, importer=importer, screening_details=screening_details)
     return entry
 
 
@@ -472,14 +553,15 @@ def _fetch_metadata_or_warn(
     if not matched:
         typer.echo(f"No OMDb match found for '{entry.title}'.")
         return updated
-    return _fetch_trailer_or_warn(cfg, store, updated)
+    return _fetch_tmdb_details_or_warn(cfg, store, updated)
 
 
-def _fetch_trailer_or_warn(cfg: config_module.Config, store: Store, entry: Entry) -> Entry:
-    """TMDb trailer lookup (issue #236) - piggybacks on the imdb_id an
-    OMDb match already produced, so it's only ever attempted right after
-    a successful OMDb fetch, never on its own. A config with no
-    tmdb.api_key set is the common case, not an error - simply skipped.
+def _fetch_tmdb_details_or_warn(cfg: config_module.Config, store: Store, entry: Entry) -> Entry:
+    """TMDb lookup (issue #236, extended by #311) - piggybacks on the
+    imdb_id an OMDb match already produced, so it's only ever attempted
+    right after a successful OMDb fetch, never on its own. A config with
+    no tmdb.api_key set is the common case, not an error - simply
+    skipped.
     """
     if not cfg.tmdb_api_key or not entry.imdb_url:
         return entry
@@ -488,13 +570,37 @@ def _fetch_trailer_or_warn(cfg: config_module.Config, store: Store, entry: Entry
         return entry
     try:
         client = TmdbClient(cfg.tmdb_api_key)
-        trailer_url = client.lookup_trailer_url(imdb_id=match.group())
-    except Exception as e:  # noqa: BLE001 - trailer lookup is optional, never fatal
-        typer.secho(f"Warning: could not fetch a trailer: {e}", fg=typer.colors.YELLOW)
+        details = client.lookup_movie_details(imdb_id=match.group())
+    except Exception as e:  # noqa: BLE001 - TMDb lookup is optional, never fatal
+        typer.secho(f"Warning: could not fetch TMDb details: {e}", fg=typer.colors.YELLOW)
         return entry
-    if trailer_url is None:
+    if details is None:
         return entry
-    return store.update_entry(entry.id, trailer_url=trailer_url)
+    return _apply_tmdb_details(store, entry, details)
+
+
+def _apply_tmdb_details(store: Store, entry: Entry, details: TmdbMovieDetails) -> Entry:
+    # Every field here falls back to the entry's current value when TMDb
+    # doesn't have one, rather than a blind overwrite - a re-fetch that
+    # gets a thinner TMDb response than last time (a missing sub-
+    # resource, a transient gap in TMDb's own data) must never reset an
+    # already-known field back to unknown. `actors`/`website` are also
+    # OMDb-derived columns, so their fallback is what OMDb already set;
+    # every other field has no OMDb equivalent, so the fallback is
+    # simply "leave it as it was".
+    return store.update_entry(
+        entry.id,
+        trailer_url=details.trailer_url if details.trailer_url is not None else entry.trailer_url,
+        actors=details.actors if details.actors is not None else entry.actors,
+        website=details.homepage if details.homepage is not None else entry.website,
+        collection=details.collection if details.collection is not None else entry.collection,
+        certification=details.certification
+        if details.certification is not None
+        else entry.certification,
+        keywords=details.keywords if details.keywords is not None else entry.keywords,
+        budget=details.budget if details.budget is not None else entry.budget,
+        popularity=details.popularity if details.popularity is not None else entry.popularity,
+    )
 
 
 def _venue_location(venue: Venue | None) -> str | None:
@@ -503,12 +609,23 @@ def _venue_location(venue: Venue | None) -> str | None:
     country" - a real, geocodable address string most calendar clients
     (Google Calendar, Apple Calendar) already try to map from LOCATION,
     which is why chain isn't folded in here too - see docs/calendar-schema.md.
+    A venue with a verified street address *and* postal code (issue #283)
+    extends this further to "name, street address, postal code city,
+    country" - only when both are known, same all-or-nothing pairing as
+    city/country above; a street with no postal code (or vice versa) is
+    a worse geocoding hint than the plain "name, city, country" fallback,
+    so it stays with the shorter shape instead of a partial address.
     """
     if venue is None:
         return None
-    if venue.city and venue.country:
-        return f"{venue.name}, {venue.city}, {venue.country}"
-    return venue.name
+    if not (venue.city and venue.country):
+        return venue.name
+    if venue.street_address and venue.postal_code:
+        return (
+            f"{venue.name}, {venue.street_address}, "
+            f"{venue.postal_code} {venue.city}, {venue.country}"
+        )
+    return f"{venue.name}, {venue.city}, {venue.country}"
 
 
 def _venue_geo(venue: Venue | None) -> tuple[float, float] | None:
@@ -688,7 +805,9 @@ def log(
         if notes:
             entry = store.update_entry(entry.id, notes=notes)
 
-        entry = _finalize_entry(cfg, store, entry, fetch_metadata=not no_metadata, imdb_id=imdb_id)
+        entry = _finalize_entry(
+            cfg, store, entry, fetch_metadata=not no_metadata, importer="log", imdb_id=imdb_id
+        )
 
         typer.echo(f"Logged '{title}' as entry {entry.id}.")
     finally:
@@ -729,6 +848,26 @@ def list_entries(
             "as --chain."
         ),
     ] = None,
+    limit: Annotated[
+        int | None,
+        typer.Option(
+            "--limit",
+            min=1,
+            help="Only the N most recently-dated entries (applied after every other filter, "
+            "same order 'list' already shows - oldest of the N first). Omit to show "
+            "everything matching the other filters, same as today.",
+        ),
+    ] = None,
+    omdb_no_match: Annotated[
+        bool,
+        typer.Option(
+            "--omdb-no-match",
+            help="Only entries whose most recent OMDb lookup found no match - distinct from "
+            "an entry that was simply never looked up. Useful for finding titles OMDb can't "
+            "resolve (a typo, a format suffix, a title it genuinely doesn't have) so you can "
+            "fix them by hand.",
+        ),
+    ] = False,
 ) -> None:
     """List logged entries."""
     cfg = _cfg(ctx)
@@ -762,6 +901,10 @@ def list_entries(
             medium_id=medium_id,
             venue_ids=venue_ids,
         )
+        if omdb_no_match:
+            entries = [e for e in entries if e.omdb_last_no_match is not None]
+        if limit is not None:
+            entries = entries[-limit:]
         if not entries:
             typer.echo("No entries.")
             return
@@ -894,6 +1037,17 @@ def update(
     notes: Annotated[
         str | None, typer.Option(help="New notes. Omit to leave the current notes unchanged.")
     ] = None,
+    refresh_metadata: Annotated[
+        bool,
+        typer.Option(
+            "--refresh-metadata",
+            help="Re-fetch OMDb data for this entry alone, overwriting existing ratings/"
+            "poster/director/cast/genre/year/etc. - the single-entry equivalent of 'sync "
+            "refresh --force', without needing to know this entry's date or affect any other "
+            "entry that happens to share it. Ignored if --imdb-id is also given, since that "
+            "already re-fetches too.",
+        ),
+    ] = False,
 ) -> None:
     """Update an existing logged entry. Every option is optional and
     independent - give only the fields that are actually changing;
@@ -934,8 +1088,10 @@ def update(
 
         if imdb_id is not None:
             updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=imdb_id)
+        elif refresh_metadata:
+            updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=None)
 
-        _push_update_or_warn(cfg, store, updated)
+        _push_update_or_warn(cfg, store, updated, importer="update")
         typer.echo(f"Updated entry {entry_id}.")
     finally:
         store.close()
@@ -1104,12 +1260,14 @@ def venues_merge_aliases(
     ] = False,
 ) -> None:
     """Collapse venue rows that are really the same real-world venue,
-    just logged with a screen/format suffix baked into the name (e.g.
+    caught two ways: a screen/format suffix baked into the name (e.g.
     "De Munt 4DX" alongside "De Munt") - fixes rows created before
-    `log`/`import`/`add` started resolving these automatically.
-    Doesn't touch the calendar - a merged venue's already-pushed
-    events still show the old LOCATION string until `sync refresh
-    --force` re-pushes them.
+    `log`/`import`/`add` started resolving these automatically - and a
+    known venue's own LOCATION string baked whole into the venue name
+    (movie-planner-web#400), which `sync pull` could produce before a
+    calendar_pull.py bug was fixed alongside this. Doesn't touch the
+    calendar - a merged venue's already-pushed events still show the
+    old LOCATION string until `sync refresh --force` re-pushes them.
     """
     cfg = _cfg(ctx)
     store = _open_store(cfg)
@@ -1168,17 +1326,21 @@ def import_command(
     OMDb lookup for that row alone, regardless of --no-metadata.
     """
     cfg = _cfg(ctx)
+    source_label = str(path) if path is not None else "stdin"
     if path is None:
         rows = parse_json_text(sys.stdin.read())
-    elif path.suffix == ".csv":
-        rows = parse_csv(path)
-    elif path.suffix == ".json":
-        rows = parse_json(path)
+        importer = "import:json"  # stdin is always JSON, per parse_json_text above
     else:
-        typer.secho(
-            f"Unsupported file type '{path.suffix}' (expected .csv or .json).", fg=typer.colors.RED
-        )
-        raise typer.Exit(code=1)
+        fmt = IMPORT_FORMATS.get(path.suffix)
+        if fmt is None:
+            supported = ", ".join(sorted(IMPORT_FORMATS))
+            typer.secho(
+                f"Unsupported file type '{path.suffix}' (expected {supported}).",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(code=1)
+        rows = fmt.parse(path)
+        importer = f"import:{fmt.name}"
 
     store = _open_store(cfg)
     try:
@@ -1189,7 +1351,16 @@ def import_command(
                 store,
                 imported.entry,
                 fetch_metadata=not no_metadata and needs_omdb_fetch(imported.entry),
+                importer=importer,
             )
+        # Persisted (issue #254) so `import-failures list` can show them
+        # after this run's own output has scrolled away - run_import
+        # itself stays pure/ephemeral, this is the one place that writes.
+        for row in rows:
+            if row.error is not None:
+                store.record_import_failure(
+                    source=source_label, row_number=row.row_number, error=row.error
+                )
 
         typer.echo(
             f"{summary.imported} imported, {summary.skipped_duplicates} skipped, "
@@ -1199,6 +1370,82 @@ def import_command(
             typer.echo(f"  skipped: {detail}")
         for detail in summary.failed_details:
             typer.echo(f"  failed: {detail}")
+    finally:
+        store.close()
+
+
+@import_failures_app.command("list")
+def import_failures_list(ctx: typer.Context) -> None:
+    """Show every past import failure, most recent first - what
+    `movie-planner import` echoed at the time, still visible after that
+    run's own output has scrolled away.
+    """
+    cfg = _cfg(ctx)
+    store = _open_store(cfg)
+    try:
+        failures = store.list_import_failures()
+        if not failures:
+            typer.echo("No import failures recorded.")
+            return
+        for failure in failures:
+            when = failure.created_at.isoformat(timespec="seconds")
+            typer.echo(
+                f"[{failure.id}] {when} {failure.source} row {failure.row_number}: {failure.error}"
+            )
+    finally:
+        store.close()
+
+
+@import_failures_app.command("clear")
+def import_failures_clear(ctx: typer.Context) -> None:
+    """Delete every recorded import failure - once you've handled them
+    (fixed the source file, re-imported the rows by hand), there's no
+    reason for the list to keep growing.
+    """
+    cfg = _cfg(ctx)
+    store = _open_store(cfg)
+    try:
+        cleared = store.clear_import_failures()
+        failures_word = "failure" if cleared == 1 else "failures"
+        typer.echo(f"Cleared {cleared} import {failures_word}.")
+    finally:
+        store.close()
+
+
+# --- activity: issue #276 ---
+
+
+def _format_activity(activity: ActivityLogEntry) -> str:
+    when = activity.created_at.isoformat(timespec="seconds")
+    header = (
+        f"[{activity.id}] {when} {activity.action} #{activity.entry_id} '{activity.entry_title}'"
+    )
+    if not activity.changes:
+        return header
+    diff = ", ".join(
+        f"{field}: {before!r} -> {after!r}" for field, (before, after) in activity.changes.items()
+    )
+    return f"{header}: {diff}"
+
+
+@app.command()
+def activity(ctx: typer.Context) -> None:
+    """Show the CLI's own local activity log - every create/update/delete
+    it's made, most recent first, with which fields changed and their
+    before/after values for an update (issue #276). Local to this app
+    only, mirroring movie-planner-web's own log rather than sharing one
+    with it - a separate, bigger cross-repo design question that's been
+    deliberately punted on.
+    """
+    cfg = _cfg(ctx)
+    store = _open_store(cfg)
+    try:
+        activities = store.list_activity()
+        if not activities:
+            typer.echo("No activity recorded.")
+            return
+        for entry in activities:
+            typer.echo(_format_activity(entry))
     finally:
         store.close()
 
@@ -1344,6 +1591,7 @@ def from_pathe_email(
             store,
             entry,
             fetch_metadata=not no_metadata,
+            importer="from-pathe-email",
             screening_details=booking.screening_details,
         )
 
@@ -1358,13 +1606,16 @@ def from_pathe_email(
 
 @sync_app.command("retry")
 def sync_retry(ctx: typer.Context) -> None:
-    """Retry pushing any entry that's never been synced (its
+    """Retry pushing any entry that's never even attempted a sync (its
     caldav_uid is still unset) - cheap and safe to run any time, since
-    it never calls OMDb and only touches those entries. This is not
-    the same as recovering an entry whose caldav_uid points at an
-    event the calendar no longer has (an external wipe/rebuild) - that
-    recovery happens automatically inside a normal 'sync refresh' or
-    the next 'log'/'update' push for that specific entry, not here.
+    it never calls OMDb and only touches those entries. This is
+    narrower than "any entry with a failed sync": since issue #246, a
+    push that failed - for any reason, not just a crash - still
+    records the UID it attempted, so it's no longer picked up here.
+    Run 'sync refresh' instead to retry it - it pushes every entry
+    regardless of caldav_uid, and recovers a stale or
+    never-actually-created UID the same way it already recovers one
+    left by an external wipe/rebuild.
     """
     cfg = _cfg(ctx)
     store = _open_store(cfg)
@@ -1374,7 +1625,7 @@ def sync_retry(ctx: typer.Context) -> None:
             typer.echo("Nothing to retry.")
             return
         for entry in unsynced:
-            _finalize_entry(cfg, store, entry, fetch_metadata=False)
+            _finalize_entry(cfg, store, entry, fetch_metadata=False, importer="sync-retry")
         retried = sum(1 for e in unsynced if store.get_entry(e.id).caldav_uid is not None)
         typer.echo(f"Retried {len(unsynced)} entries, {retried} synced successfully.")
     finally:
@@ -1455,7 +1706,9 @@ def sync_refresh(
         fetched = 0
         for entry in entries:
             fetch_metadata = force or needs_omdb_fetch(entry)
-            refreshed = _finalize_entry(cfg, store, entry, fetch_metadata=fetch_metadata)
+            refreshed = _finalize_entry(
+                cfg, store, entry, fetch_metadata=fetch_metadata, importer="sync-refresh"
+            )
             if fetch_metadata and refreshed.imdb_rating is not None:
                 fetched += 1
 

@@ -65,9 +65,12 @@ bun run lint:mechanics     # ltex-cli-plus
 ```
 
 `mypy` runs in `strict` mode across both `src/` and `tests/`.
-`mutmut` is non-blocking everywhere it runs (`pre-push`, CI): a surviving
-mutant is a missing test case worth picking up, not a merge blocker for a
-suite that wasn't built mutation-clean from day one. It skips
+`mutmut` is still non-blocking everywhere it runs (`pre-push`, CI) — the
+dotfiles-wide rule now says a surviving mutant should always block a
+merge, but this repo has 891 pre-existing survivors out of 4477 mutants
+(checked 2026-09-08) and flipping the switch today would fail every PR
+over debt nobody touched. Tracked in #303: a surviving mutant in a PR's
+own diff is meant to block, the existing backlog isn't. It skips
 `test_e2e.py` — rerunning a real Baikal container per mutant would make a
 25-second check take hours.
 
@@ -79,6 +82,40 @@ tree: that shape earns its keep the day a second command needs its own
 file. Tests live in `tests/`, driven through `typer.testing.CliRunner` —
 Typer's wrapper over Click's own test runner, invoking the command
 in-process rather than shelling out.
+
+## Adding a new import format
+
+`movie-planner import` reads whatever `IMPORT_FORMATS` (in
+[`src/movie_planner/importers.py`](src/movie_planner/importers.py))
+has registered, keyed by file suffix - `cli.py` never branches on a
+specific format, only on whether the suffix is in that dict. The same
+shape `pathe-mail-import`'s own ["Adding a second cinema
+chain"](docs/pathe-mail-import.md#adding-a-second-cinema-chain) uses:
+a registry a new adapter plugs into, not a branch to edit.
+
+Adding a format (a Letterboxd export, XLSX, any other bulk source)
+means:
+
+1. Write a `parse(path: Path) -> list[ParsedRow]` function. `parse_csv`
+   and `parse_json` are the reference implementations - both end up
+   calling the shared `_row_from_dict` helper, worth reusing if your
+   format is also naturally row-shaped. A `ParsedRow` is either a
+   populated `ImportRow` (see its fields for what a row can carry) or a
+   populated `error` string - never both; `run_import` reports every failed
+   row back to the caller rather than aborting the whole file on one
+   bad line.
+2. Register it: `IMPORT_FORMATS[".xlsx"] = ImportFormat(name="xlsx",
+parse=parse_xlsx)`. The `name` is what shows up as the entry's
+   provenance later (issue #257) - keep it short and lowercase, same
+   style as `"csv"`/`"json"`.
+3. Nothing else changes. `movie-planner import <file>` picks up the
+   new suffix automatically; the "unsupported file type" error already
+   lists every registered format, not a hardcoded string.
+
+Test the parser the same way `tests/test_import.py` already tests
+`parse_csv`/`parse_json`: valid rows, a row missing a required field,
+a row with a bad value (a date that doesn't parse, for example) - each
+producing the right `ParsedRow`, not an unhandled exception.
 
 ## OMDb usage in issues
 
@@ -107,6 +144,17 @@ search - see `_fetch_trailer_or_warn` in `cli.py`. It's opportunistic
 throughout: no `tmdb.api_key` configured, no match, or no official
 YouTube trailer are all the same "no trailer" outcome, never an error
 that blocks the rest of the command.
+
+## Verifying a change against the real setup
+
+Before running a full `sync refresh` (or any other command that touches
+every entry) against the real database to confirm a change works, scope
+it to the 5 most recently logged entries first - `movie-planner list
+--limit 5` to find them, then `--from`/`--to`/`--date` to scope the
+verification run to just those. Cheap, fast, and it catches a broken
+change before it burns OMDb quota or pushes hundreds of malformed
+calendar updates. Only run the full, unscoped command once the small
+sample confirms the change does what it's supposed to.
 
 ## Commit messages
 

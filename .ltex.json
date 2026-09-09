@@ -79,7 +79,9 @@
       "pathe-translate",
       "VEVENT",
       "uv-managed",
-      "mbox-format"
+      "mbox-format",
+      "dotfiles-wide",
+      "unscoped"
     ]
   },
   "ltex.disabledRules": {

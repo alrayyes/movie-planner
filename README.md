@@ -9,9 +9,10 @@ A command-line tool that logs the movies you've watched — title, date,
 start/end time, where you watched it — and syncs each viewing to a Baikal
 (CalDAV) calendar. It replaces a hand-maintained org-mode log with a guided
 prompt, enriches entries with IMDb/Rotten Tomatoes/Metacritic ratings via
-OMDb, an optional TMDb-sourced trailer link, and a manually entered
-Letterboxd link, and catches accidental duplicate log entries with fuzzy
-title matching.
+OMDb and, optionally, TMDb's own cast list, trailer link, collection,
+content certification, homepage, keywords and budget/popularity, plus a
+manually entered Letterboxd link, and catches accidental duplicate log
+entries with fuzzy title matching.
 
 Prefer a browser to a terminal? [movie-planner-web](https://github.com/alrayyes/movie-planner-web)
 is a static web client for the same CalDAV calendar and OMDb setup — no
@@ -47,8 +48,11 @@ movie-planner-web, OMDb, the calendar, and the optional
 - **An [OMDb API key](https://www.omdbapi.com/apikey.aspx)**, for the
   IMDb/Rotten Tomatoes/Metacritic ratings fetched on each logged entry.
 - **Optional: a [TMDb API key](https://www.themoviedb.org/settings/api)**,
-  for looking up each entry's official YouTube trailer alongside the OMDb
-  fetch. Skipped entirely, no error, without one configured.
+  looked up alongside the OMDb fetch for a fuller cast list than OMDb's
+  own (which only ever returns a handful of top-billed names), the
+  official YouTube trailer, collection/franchise, content certification,
+  homepage, keywords, budget, and popularity. Skipped entirely, no
+  error, without one configured.
 
 ## Installation
 
@@ -107,12 +111,18 @@ Other commands:
 uv run movie-planner list --from 2026-01-01 --to 2026-01-31 --medium cinema
 uv run movie-planner list --chain Pathé
 uv run movie-planner list --city Amsterdam
+uv run movie-planner list --limit 5
+uv run movie-planner list --omdb-no-match
 uv run movie-planner show 3
 uv run movie-planner update 3 --title "Dune Part Two"
+uv run movie-planner update 3 --refresh-metadata
 uv run movie-planner delete 3
 uv run movie-planner locations media add cinema --physical
 uv run movie-planner locations venues add "Grand Vista Cinema"
 uv run movie-planner import movies.csv --force
+uv run movie-planner import-failures list
+uv run movie-planner import-failures clear
+uv run movie-planner activity
 uv run movie-planner sync retry
 uv run movie-planner sync refresh
 uv run movie-planner sync refresh --from 2026-01-01 --to 2026-01-31
@@ -120,6 +130,18 @@ uv run movie-planner sync refresh --date 2026-01-15
 uv run movie-planner sync refresh --force --date 2026-01-15
 uv run movie-planner sync pull
 ```
+
+`list --limit N` shows only the N most recently dated entries, applied
+after every other filter - combine it with `--chain`/`--city`/
+`--medium`/`--from`/`--to` to get "the last 5 at this chain" rather
+than the whole log. Omit it and `list` shows everything matching the
+other filters, same as always.
+
+`list --omdb-no-match` shows only entries whose most recent OMDb
+lookup found no match - a title with a typo, a format suffix the
+stripper missed, or one OMDb genuinely doesn't have - distinct from an
+entry that was simply never looked up. Fix the title by hand, then
+`update --refresh-metadata` (below) to try again.
 
 `show` prints one entry's full metadata — ratings, links, venue, times,
 and, where OMDb had them, director, cast, genre, and release year — in
@@ -139,9 +161,18 @@ independent Amsterdam venues) gets its chain, city, and country filled
 in automatically — a name that doesn't match gets none of that, never
 a guess. `list --chain`/`--city` filter on it; `show` displays it. Most
 of those same venues also carry known GPS coordinates, pushed to the
-calendar as the event's `GEO` property (see
+calendar as the event's `GEO` property, and most now also carry a
+verified street address and postal code, extending the calendar
+event's `LOCATION` from "venue, city, country" to a full address a
+calendar client can geocode to the actual building (see
 [`docs/calendar-schema.md`](docs/calendar-schema.md)) — again, only
-ever a verified value, never estimated.
+ever a verified value, never estimated. This backfills onto an
+existing database automatically the next time any command runs — a
+venue row created before its table entry had street-level data picks
+it up on the next store open, nothing to run by hand. `sync refresh`
+(plain, not `--force`) is what gets the refreshed data onto the
+calendar itself for entries synced before this existed, without
+re-fetching OMDb ratings for entries that already have them.
 
 `import` accepts a `.csv` or `.json` file with the same fields as
 `examples/`, and fetches OMDb ratings the same as `log` does - unless a
@@ -149,7 +180,11 @@ row already supplies every OMDb-derived field itself (ratings, poster,
 director, actors, genre, release year), in which case that row's OMDb
 lookup is skipped entirely, same as an already-enriched entry is on
 `sync refresh`. Useful for re-importing an export from somewhere that
-already ran its own OMDb lookup. `sync retry`
+already ran its own OMDb lookup. A row that fails to parse (a bad date,
+a missing required field) is recorded rather than only echoed at the
+time - `import-failures list` shows every past failure, most recent
+first, and `import-failures clear` empties the list once you've dealt
+with them. `sync retry`
 re-pushes any entry that failed to sync when it was logged or imported —
 cheap, and safe to run any time, since it never calls OMDb and only
 touches entries that were never synced. `sync refresh` is the heavier
@@ -165,7 +200,9 @@ the whole log; `--date` can't be
 combined with either. Pass `--force` to re-fetch ratings for entries
 that already have them too — useful after a wrong OMDb match, or when a
 rating's changed since — instead of the default of only fetching for
-entries still missing one.
+entries still missing one. `update --refresh-metadata` does the same
+thing for one specific entry, by ID - no need to work out its date or
+risk force-refreshing a sibling entry that happens to share it.
 
 Sync is otherwise push-only — movie-planner never reads the calendar
 back on its own. `sync pull` is the one exception: it fetches every
@@ -179,6 +216,22 @@ to create, edit, or delete an entry directly on the calendar. See
 [`docs/calendar-schema.md`](docs/calendar-schema.md) for exactly which
 fields it compares (only OMDb's/booking's own structured `X-*`
 properties — never the free-text description).
+
+`activity` shows a local log of every create/update/delete this tool
+has made to your entries, most recent first - for an update, which
+fields actually changed and their before/after values, not the whole
+entry. It's populated automatically by `log`, `update`, `delete`,
+`import`, `from-pathe-email`, and `sync refresh`/`sync pull`, since
+they all go through the same three store operations underneath. Local
+to this tool only - it's not a shared trail with
+[movie-planner-web](https://github.com/alrayyes/movie-planner-web),
+which keeps its own equivalent log of the actions it makes.
+
+`bug-report` prints a diagnostic summary safe to share with an AI
+session, in a GitHub issue, or with anyone helping debug — tool/Python
+version, config shape, and store counts. It never includes CalDAV
+credentials, API keys, entry titles/notes, or venue names (issue #256).
+Pass `--output <path>` to write it to a file instead of stdout.
 
 A large historical import (years of entries at once) can exceed OMDb's
 daily request limit before it finishes. Pass `--no-metadata` to `import`
@@ -267,6 +320,25 @@ config file for one invocation — flags win over environment variables, which
 win over the config file. The password stays config-file-only (via
 `password` or `password_command`) rather than risk landing in shell history
 or a process list.
+
+### Diagnosing a problem with `--verbose`
+
+`--verbose` (or `$MOVIE_PLANNER_VERBOSE`) works on every command and prints
+diagnostic detail to stderr as it runs: the exact OMDb/TMDb request made,
+the full calendar payload a push sends, and why a duplicate was or wasn't
+detected. Normal output is unchanged either way — this only adds detail
+alongside it, so it's safe to leave on while tracking down a problem:
+
+```console
+$ movie-planner --verbose log --title "Dune" --date 2026-01-01 --medium cinema
+no duplicate found for 'Dune' on 2026-01-01
+OMDb request: {'t': 'Dune', 'type': 'movie'}
+OMDb response: Dune matched imdb_id=tt1160419
+Calendar push (create, uid=...):
+BEGIN:VCALENDAR
+...
+Logged 'Dune' and synced it to the calendar.
+```
 
 ## Import examples
 

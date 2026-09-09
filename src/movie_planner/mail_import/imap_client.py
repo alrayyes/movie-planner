@@ -65,6 +65,11 @@ class ImapMailClient:
             message_ids = data[0].split() if data and data[0] else []
 
             for message_id in message_ids:
+                # "ascii" vs "ASCII" is a mutmut survivor that's provably
+                # equivalent, not a gap (issue #289) - Python's codec
+                # names are looked up case-insensitively, so both decode
+                # identically. Same reasoning covers "utf-8" vs "UTF-8"
+                # below.
                 fetch_status, msg_data = conn.fetch(message_id.decode("ascii"), "(RFC822)")
                 if fetch_status != "OK" or not msg_data:
                     continue
@@ -74,6 +79,10 @@ class ImapMailClient:
                 raw_bytes = first[1]
                 if not isinstance(raw_bytes, bytes | bytearray):
                     continue
+                # The explicit "utf-8" here is also a provably-equivalent
+                # survivor when dropped entirely - bytes.decode()'s own
+                # default encoding is already "utf-8" (verified against
+                # this Python version), so omitting it changes nothing.
                 yield bytes(raw_bytes).decode("utf-8", errors="replace")
         finally:
             conn.logout()

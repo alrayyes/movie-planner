@@ -1,5 +1,203 @@
 # Changelog
 
+## [1.26.7](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.6...movie-planner-v1.26.7) (2026-09-09)
+
+
+### Bug Fixes
+
+* **display:** close display.py mutmut gaps ([#347](https://github.com/alrayyes/movie-planner/issues/347)) ([96792a5](https://github.com/alrayyes/movie-planner/commit/96792a5c26e0add992ebc908d03c44f2757db417)), closes [#297](https://github.com/alrayyes/movie-planner/issues/297)
+
+## [1.26.6](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.5...movie-planner-v1.26.6) (2026-09-09)
+
+
+### Bug Fixes
+
+* **calendar-pull:** close calendar_pull.py mutmut gaps ([#345](https://github.com/alrayyes/movie-planner/issues/345)) ([2ceb359](https://github.com/alrayyes/movie-planner/commit/2ceb359f733aad16c3951f79427193fcaa509e90)), closes [#294](https://github.com/alrayyes/movie-planner/issues/294)
+* **calendar-sync:** close calendar_sync.py mutmut gaps ([#343](https://github.com/alrayyes/movie-planner/issues/343)) ([69af02a](https://github.com/alrayyes/movie-planner/commit/69af02a34480d7bb5c2edc115e016e42c2ee3999)), closes [#292](https://github.com/alrayyes/movie-planner/issues/292)
+* **omdb:** close omdb.py mutmut gaps ([#342](https://github.com/alrayyes/movie-planner/issues/342)) ([e952acf](https://github.com/alrayyes/movie-planner/commit/e952acf8d34565866869a238fc316ea7d2e09859)), closes [#293](https://github.com/alrayyes/movie-planner/issues/293)
+* **venue-locations:** close venue_locations.py mutmut gaps ([#346](https://github.com/alrayyes/movie-planner/issues/346)) ([82a2b87](https://github.com/alrayyes/movie-planner/commit/82a2b8737c7529499dc5401ef3322572b2714353)), closes [#300](https://github.com/alrayyes/movie-planner/issues/300)
+
+## [1.26.5](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.4...movie-planner-v1.26.5) (2026-09-09)
+
+
+### Bug Fixes
+
+* **store:** close store.py mutmut gaps ([#340](https://github.com/alrayyes/movie-planner/issues/340)) ([cdda2d3](https://github.com/alrayyes/movie-planner/commit/cdda2d3c8baa1f46faa0ea39ae682dbc55b82cde)), closes [#291](https://github.com/alrayyes/movie-planner/issues/291)
+
+## [1.26.4](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.3...movie-planner-v1.26.4) (2026-09-09)
+
+
+### Bug Fixes
+
+* **pathe:** close pathe.py mutmut gaps ([#337](https://github.com/alrayyes/movie-planner/issues/337)) ([2ac587c](https://github.com/alrayyes/movie-planner/commit/2ac587c20be051f3c17e39aa9cbc0d82680f8e77)), closes [#298](https://github.com/alrayyes/movie-planner/issues/298)
+
+## [1.26.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.2...movie-planner-v1.26.3) (2026-09-09)
+
+
+### Bug Fixes
+
+* **tmdb:** close tmdb.py mutmut gaps ([#334](https://github.com/alrayyes/movie-planner/issues/334)) ([cc4f18d](https://github.com/alrayyes/movie-planner/commit/cc4f18d7f90c7e8305c5554c42f33f3e32f7775f)), closes [#296](https://github.com/alrayyes/movie-planner/issues/296)
+
+## [1.26.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.1...movie-planner-v1.26.2) (2026-09-09)
+
+
+### Bug Fixes
+
+* **config-file:** close config_file.py mutmut gaps ([#327](https://github.com/alrayyes/movie-planner/issues/327)) ([be66825](https://github.com/alrayyes/movie-planner/commit/be668259fc2b487528fc3a888be27072a2755c2f)), closes [#302](https://github.com/alrayyes/movie-planner/issues/302)
+* **importers:** close importers.py mutmut gaps ([#332](https://github.com/alrayyes/movie-planner/issues/332)) ([36c4bd6](https://github.com/alrayyes/movie-planner/commit/36c4bd655c9e0e892ee6fba5645390ad03803b24)), closes [#295](https://github.com/alrayyes/movie-planner/issues/295)
+
+## [1.26.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.0...movie-planner-v1.26.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **config:** close config.py mutmut gaps ([#328](https://github.com/alrayyes/movie-planner/issues/328)) ([55d576e](https://github.com/alrayyes/movie-planner/commit/55d576ee9e589dc811f212348c3d6decc3f94102)), closes [#301](https://github.com/alrayyes/movie-planner/issues/301)
+
+## [1.26.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.25.4...movie-planner-v1.26.0) (2026-09-09)
+
+
+### Features
+
+* **cli:** add bug-report command with PII stripped ([#325](https://github.com/alrayyes/movie-planner/issues/325)) ([ff35b6c](https://github.com/alrayyes/movie-planner/commit/ff35b6c4b0e90ade57f16b1dbf09d4a858b723fb)), closes [#256](https://github.com/alrayyes/movie-planner/issues/256)
+
+## [1.25.4](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.25.3...movie-planner-v1.25.4) (2026-09-08)
+
+
+### Bug Fixes
+
+* **mail-import:** close mail_import/cli.py mutmut gaps ([#323](https://github.com/alrayyes/movie-planner/issues/323)) ([df489c3](https://github.com/alrayyes/movie-planner/commit/df489c35072bdc6fa013d550201f4b2e959e13a6))
+
+## [1.25.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.25.2...movie-planner-v1.25.3) (2026-09-08)
+
+
+### Bug Fixes
+
+* **mail-import:** close config.py mutmut gaps ([#322](https://github.com/alrayyes/movie-planner/issues/322)) ([425d080](https://github.com/alrayyes/movie-planner/commit/425d080ee50e91d70fd46d53410b447b327c42d7))
+* **mail-import:** close maildir_client.py mutmut gaps ([#320](https://github.com/alrayyes/movie-planner/issues/320)) ([4488e29](https://github.com/alrayyes/movie-planner/commit/4488e29285a092cbd260ed38e3fa88f3cacdbb9b))
+
+## [1.25.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.25.1...movie-planner-v1.25.2) (2026-09-08)
+
+
+### Bug Fixes
+
+* **mail-import:** close imap_client.py mutmut gaps ([#318](https://github.com/alrayyes/movie-planner/issues/318)) ([be25019](https://github.com/alrayyes/movie-planner/commit/be250199b37881706e8dddcdddc1ba495fb4d862))
+
+## [1.25.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.25.0...movie-planner-v1.25.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* **mail-import:** close mbox_client.py mutmut gaps ([#316](https://github.com/alrayyes/movie-planner/issues/316)) ([04fab14](https://github.com/alrayyes/movie-planner/commit/04fab14a83a25c27f7849222cc98d05a2c76870d))
+
+## [1.25.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.24.3...movie-planner-v1.25.0) (2026-09-08)
+
+
+### Features
+
+* **tmdb:** enrich entries with full cast and other TMDb metadata ([#312](https://github.com/alrayyes/movie-planner/issues/312)) ([c040956](https://github.com/alrayyes/movie-planner/commit/c0409568cb9d18cc58a8782df703a6d28cf99193)), closes [#311](https://github.com/alrayyes/movie-planner/issues/311)
+
+
+### Bug Fixes
+
+* **sync-pull:** correctly parse venue name from a full-address LOCATION ([#315](https://github.com/alrayyes/movie-planner/issues/315)) ([189bb46](https://github.com/alrayyes/movie-planner/commit/189bb468867eddfa25f6492c14bef48856818030)), closes [#314](https://github.com/alrayyes/movie-planner/issues/314)
+
+## [1.24.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.24.2...movie-planner-v1.24.3) (2026-09-08)
+
+
+### Bug Fixes
+
+* **mail-import:** close envelope.py and dispatch.py mutmut gaps ([#309](https://github.com/alrayyes/movie-planner/issues/309)) ([ddca0ef](https://github.com/alrayyes/movie-planner/commit/ddca0efdd44ef2a38998d98df242785585b19ff1))
+
+## [1.24.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.24.1...movie-planner-v1.24.2) (2026-09-08)
+
+
+### Documentation
+
+* **testing:** correct the mutmut non-blocking rationale, track [#303](https://github.com/alrayyes/movie-planner/issues/303) ([#307](https://github.com/alrayyes/movie-planner/issues/307)) ([c06b3c9](https://github.com/alrayyes/movie-planner/commit/c06b3c900af5ee6645fd485dca051db4bdd412f6))
+
+## [1.24.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.24.0...movie-planner-v1.24.1) (2026-09-08)
+
+
+### Documentation
+
+* **contributing:** scope real-setup verification to a small sample first ([#288](https://github.com/alrayyes/movie-planner/issues/288)) ([1b9a17b](https://github.com/alrayyes/movie-planner/commit/1b9a17b4152ff458a1d1df9a8f856e585da7bfdb))
+
+## [1.24.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.23.1...movie-planner-v1.24.0) (2026-09-08)
+
+
+### Features
+
+* **calendar:** extend LOCATION to a full street address ([#284](https://github.com/alrayyes/movie-planner/issues/284)) ([bac1498](https://github.com/alrayyes/movie-planner/commit/bac14986909cd2dd1eabfd672ac7eec762c6ad76))
+
+## [1.23.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.23.0...movie-planner-v1.23.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **sync:** make push_new crash-safe against calendar-create/local-save interruption ([#246](https://github.com/alrayyes/movie-planner/issues/246)) ([#280](https://github.com/alrayyes/movie-planner/issues/280)) ([1ab7fe5](https://github.com/alrayyes/movie-planner/commit/1ab7fe54995670bf8d9fbcce099de005d53a6469))
+
+## [1.23.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.22.0...movie-planner-v1.23.0) (2026-09-07)
+
+
+### Features
+
+* **store:** add a local activity log of the CLI's own actions ([#276](https://github.com/alrayyes/movie-planner/issues/276)) ([#278](https://github.com/alrayyes/movie-planner/issues/278)) ([6137dba](https://github.com/alrayyes/movie-planner/commit/6137dba05a7f0afb32d742826ec26b1e89b2dcbe))
+
+## [1.22.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.21.0...movie-planner-v1.22.0) (2026-09-07)
+
+
+### Features
+
+* **cli:** add a global --verbose flag for debugging ([#275](https://github.com/alrayyes/movie-planner/issues/275)) ([47231ea](https://github.com/alrayyes/movie-planner/commit/47231ea4d63f0850284d4c11a1b02b5b6a8c0904))
+
+## [1.21.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.20.0...movie-planner-v1.21.0) (2026-09-07)
+
+
+### Features
+
+* **calendar:** stamp X-IMPORTER and X-IMPORTER-VERSION for debugging ([#257](https://github.com/alrayyes/movie-planner/issues/257)) ([#272](https://github.com/alrayyes/movie-planner/issues/272)) ([9250fab](https://github.com/alrayyes/movie-planner/commit/9250fabd3177e3c7423ef4fe82d33bff70f77fda))
+
+## [1.20.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.19.0...movie-planner-v1.20.0) (2026-09-07)
+
+
+### Features
+
+* **omdb:** track and list entries with no OMDb match ([#255](https://github.com/alrayyes/movie-planner/issues/255)) ([#271](https://github.com/alrayyes/movie-planner/issues/271)) ([c642a61](https://github.com/alrayyes/movie-planner/commit/c642a61c23b46d89e036d7db64a8f9fe6d187ee4))
+
+## [1.19.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.18.0...movie-planner-v1.19.0) (2026-09-07)
+
+
+### Features
+
+* **cli:** add update --refresh-metadata for one entry by ID ([#260](https://github.com/alrayyes/movie-planner/issues/260)) ([#268](https://github.com/alrayyes/movie-planner/issues/268)) ([b88d14d](https://github.com/alrayyes/movie-planner/commit/b88d14d544be290968294a2b6a8413ec92a139ca))
+
+## [1.18.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.17.1...movie-planner-v1.18.0) (2026-09-07)
+
+
+### Features
+
+* **cli:** add list --limit for the N most recent entries ([#259](https://github.com/alrayyes/movie-planner/issues/259)) ([#267](https://github.com/alrayyes/movie-planner/issues/267)) ([4c55830](https://github.com/alrayyes/movie-planner/commit/4c558303550337b8a5d7231e861ef478fb50a2fa))
+
+## [1.17.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.17.0...movie-planner-v1.17.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **sync:** stale-UID recovery no longer drops X-CITY/X-COUNTRY ([#262](https://github.com/alrayyes/movie-planner/issues/262)) ([#264](https://github.com/alrayyes/movie-planner/issues/264)) ([0313fc1](https://github.com/alrayyes/movie-planner/commit/0313fc1475ef10dee76d932e20f5a1071413c424))
+
+## [1.17.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.16.0...movie-planner-v1.17.0) (2026-09-07)
+
+
+### Features
+
+* **import:** a real extension point for bulk-import formats ([#261](https://github.com/alrayyes/movie-planner/issues/261)) ([78b41ba](https://github.com/alrayyes/movie-planner/commit/78b41bae768d11340824ded8d8720ffa76948c9a))
+* **import:** record and list import failures ([#254](https://github.com/alrayyes/movie-planner/issues/254)) ([#263](https://github.com/alrayyes/movie-planner/issues/263)) ([770e62a](https://github.com/alrayyes/movie-planner/commit/770e62a7ef797734f8c0e29160a65b29f525fd8b))
+
+
+### Bug Fixes
+
+* **deps:** bump the python-dependencies group with 5 updates ([#250](https://github.com/alrayyes/movie-planner/issues/250)) ([0b1e10e](https://github.com/alrayyes/movie-planner/commit/0b1e10e7551e64e2c37c0e508b80a088506c732a))
+
 ## [1.16.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.15.0...movie-planner-v1.16.0) (2026-09-06)
 
 

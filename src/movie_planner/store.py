@@ -4,12 +4,13 @@ synced mirror, never read back from.
 """
 
 import datetime
+import json
 import sqlite3
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS
+from movie_planner.venue_locations import KNOWN_VENUE_LOCATIONS, VenueLocation
 
 _UNSET: Any = object()
 
@@ -52,7 +53,29 @@ CREATE TABLE IF NOT EXISTS entries (
     actors TEXT,
     genre TEXT,
     release_year INTEGER,
-    source TEXT
+    source TEXT,
+    collection TEXT,
+    certification TEXT,
+    keywords TEXT,
+    budget INTEGER,
+    popularity REAL
+);
+
+CREATE TABLE IF NOT EXISTS import_failures (
+    id INTEGER PRIMARY KEY,
+    source TEXT NOT NULL,
+    row_number INTEGER NOT NULL,
+    error TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS activity_log (
+    id INTEGER PRIMARY KEY,
+    action TEXT NOT NULL,
+    entry_id INTEGER NOT NULL,
+    entry_title TEXT NOT NULL,
+    changes TEXT,
+    created_at TEXT NOT NULL
 );
 """
 
@@ -97,6 +120,23 @@ _MIGRATED_COLUMNS: tuple[tuple[str, str], ...] = (
     # looked up separately by imdb_id once OMDb has matched a title. Same
     # "never on create_entry" convention as the OMDb-derived fields above.
     ("trailer_url", "TEXT"),
+    # The date of the most recent OMDb lookup that found no match for
+    # this entry (issue #255) - distinct from "never looked up", which
+    # is every OMDb-derived field staying None. Cleared (set back to
+    # None) the moment a later lookup does find a match, so this is
+    # always "the last attempt's outcome", never a permanent scar.
+    ("omdb_last_no_match", "TEXT"),
+    # TMDb-derived fields (issue #311) - looked up in the same call as
+    # trailer_url above, once OMDb has matched a title. `actors` and
+    # `website` are existing OMDb-derived columns TMDb overrides in
+    # place when it has richer data (a fuller cast, a real homepage
+    # instead of OMDb's usual N/A) - these four are the ones with no
+    # OMDb equivalent to override.
+    ("collection", "TEXT"),
+    ("certification", "TEXT"),
+    ("keywords", "TEXT"),
+    ("budget", "INTEGER"),
+    ("popularity", "REAL"),
 )
 
 _MIGRATED_VENUE_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -105,6 +145,10 @@ _MIGRATED_VENUE_COLUMNS: tuple[tuple[str, str], ...] = (
     ("country", "TEXT"),
     ("latitude", "REAL"),
     ("longitude", "REAL"),
+    # Street address/postal code (issue #283) - same verified-only,
+    # independently-set rule as every other field here.
+    ("street_address", "TEXT"),
+    ("postal_code", "TEXT"),
 )
 
 
@@ -131,6 +175,8 @@ class Venue:
     country: str | None = None
     latitude: float | None = None
     longitude: float | None = None
+    street_address: str | None = None
+    postal_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -146,6 +192,42 @@ class VenueMerge:
     # apply=True would create it, but a dry run never does.
     canonical_venue_id: int | None
     entries_moved: int
+
+
+@dataclass(frozen=True)
+class ImportFailure:
+    """One row `run_import` (issue #254) couldn't parse - persisted so
+    `movie-planner import-failures list` can show it after the run that
+    produced it has scrolled away, not just at the moment it happened.
+    """
+
+    id: int
+    source: str
+    row_number: int
+    error: str
+    created_at: datetime.datetime
+
+
+@dataclass(frozen=True)
+class ActivityLogEntry:
+    """One create/update/delete `create_entry`/`update_entry`/`delete_entry`
+    made (issue #276) - the CLI's own local activity log, mirroring
+    movie-planner-web#349's, but not a shared trail between the two apps.
+    `entry_title` is a snapshot taken at the time of the action (the
+    post-update title for an update, since that's what a person would
+    recognize the entry by afterwards) rather than a live join to
+    `entries`, so a `delete` still has something to display once the row
+    it refers to is gone. `changes` is only set for `action == "update"` -
+    field name to a (before, after) pair, and only for fields whose value
+    actually changed, not every field `update_entry` was called with.
+    """
+
+    id: int
+    action: str
+    entry_id: int
+    entry_title: str
+    changes: dict[str, tuple[object, object]] | None
+    created_at: datetime.datetime
 
 
 @dataclass(frozen=True)
@@ -196,6 +278,18 @@ class Entry:
     # omdb.py; this one comes from tmdb.py instead, looked up by imdb_id
     # once OMDb has matched a title.
     trailer_url: str | None = None
+    # The date of the most recent OMDb lookup that found no match for
+    # this entry (issue #255) - see _MIGRATED_COLUMNS above for why this
+    # is distinct from "never looked up" and always reflects only the
+    # latest attempt.
+    omdb_last_no_match: datetime.date | None = None
+    # TMDb-derived fields (issue #311) - see _MIGRATED_COLUMNS above for
+    # why `actors`/`website` aren't duplicated here too.
+    collection: str | None = None
+    certification: str | None = None
+    keywords: str | None = None
+    budget: int | None = None
+    popularity: float | None = None
 
 
 _ENTRY_COLUMNS = (
@@ -238,6 +332,12 @@ _ENTRY_COLUMNS = (
     "production",
     "website",
     "trailer_url",
+    "omdb_last_no_match",
+    "collection",
+    "certification",
+    "keywords",
+    "budget",
+    "popularity",
 )
 
 
@@ -288,15 +388,65 @@ def _row_to_entry(row: tuple[Any, ...]) -> Entry:
         production=values["production"],
         website=values["website"],
         trailer_url=values["trailer_url"],
+        omdb_last_no_match=datetime.date.fromisoformat(values["omdb_last_no_match"])
+        if values["omdb_last_no_match"]
+        else None,
+        collection=values["collection"],
+        certification=values["certification"],
+        keywords=values["keywords"],
+        budget=values["budget"],
+        popularity=values["popularity"],
     )
 
 
 def _serialize_entry_field(name: str, value: object) -> object:
-    if name == "date" and isinstance(value, datetime.date):
+    if name in ("date", "omdb_last_no_match") and isinstance(value, datetime.date):
         return value.isoformat()
     if name in ("start_time", "end_time"):
         return value.isoformat() if isinstance(value, datetime.time) else None
     return value
+
+
+def _baked_address_location(venue_name: str) -> VenueLocation | None:
+    """A venue row's name matching some known venue's full LOCATION
+    string, rather than just its own name - the shape a calendar_pull.py
+    bug (fixed alongside this, movie-planner-web#400) produced: `sync
+    pull` misreading its own richer "name, street, postal city, country"
+    LOCATION (issue #283) and using the whole thing as the venue name
+    instead of stripping back to just the venue. Returns the
+    VenueLocation to reconcile against, or None when venue_name doesn't
+    match any known venue's LOCATION shape - the same two shapes
+    cli.py's `_venue_location` can produce, tried in the same order
+    (fuller shape first, since it's the more specific match).
+    """
+    seen: set[str] = set()
+    for location in KNOWN_VENUE_LOCATIONS.values():
+        if location.canonical_name in seen:
+            continue
+        seen.add(location.canonical_name)
+        if location.street_address and location.postal_code:
+            full = (
+                f"{location.canonical_name}, {location.street_address}, "
+                f"{location.postal_code} {location.city}, {location.country}"
+            )
+            if venue_name == full:
+                return location
+        short = f"{location.canonical_name}, {location.city}, {location.country}"
+        if venue_name == short:
+            return location
+    return None
+
+
+def _reconcilable_location(venue_name: str) -> VenueLocation | None:
+    """A venue row that predates proper canonicalization, either
+    shape: a known alias (issue #196), or a known venue's LOCATION
+    string baked into the name by the calendar_pull.py bug above. None
+    when venue_name is already canonical or matches neither shape.
+    """
+    location = KNOWN_VENUE_LOCATIONS.get(venue_name)
+    if location is not None and location.canonical_name != venue_name:
+        return location
+    return _baked_address_location(venue_name)
 
 
 class Store:
@@ -343,9 +493,20 @@ class Store:
                 "city = COALESCE(city, ?), "
                 "country = COALESCE(country, ?), "
                 "latitude = COALESCE(latitude, ?), "
-                "longitude = COALESCE(longitude, ?) "
+                "longitude = COALESCE(longitude, ?), "
+                "street_address = COALESCE(street_address, ?), "
+                "postal_code = COALESCE(postal_code, ?) "
                 "WHERE name = ?",
-                (location.chain, location.city, location.country, latitude, longitude, name),
+                (
+                    location.chain,
+                    location.city,
+                    location.country,
+                    latitude,
+                    longitude,
+                    location.street_address,
+                    location.postal_code,
+                    name,
+                ),
             )
 
     def close(self) -> None:
@@ -401,11 +562,13 @@ class Store:
         city = location.city if location else None
         country = location.country if location else None
         latitude, longitude = (location.coordinates or (None, None)) if location else (None, None)
+        street_address = location.street_address if location else None
+        postal_code = location.postal_code if location else None
         try:
             cur = self._conn.execute(
-                "INSERT INTO venues (name, chain, city, country, latitude, longitude) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (name, chain, city, country, latitude, longitude),
+                "INSERT INTO venues (name, chain, city, country, latitude, longitude, "
+                "street_address, postal_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (name, chain, city, country, latitude, longitude, street_address, postal_code),
             )
         except sqlite3.IntegrityError as e:
             raise StoreError(f"venue '{name}' already exists") from e
@@ -420,11 +583,14 @@ class Store:
             country=country,
             latitude=latitude,
             longitude=longitude,
+            street_address=street_address,
+            postal_code=postal_code,
         )
 
     def list_venues(self) -> list[Venue]:
         rows = self._conn.execute(
-            "SELECT id, name, chain, city, country, latitude, longitude FROM venues ORDER BY name"
+            "SELECT id, name, chain, city, country, latitude, longitude, "
+            "street_address, postal_code FROM venues ORDER BY name"
         )
         return [
             Venue(
@@ -435,6 +601,8 @@ class Store:
                 country=r[4],
                 latitude=r[5],
                 longitude=r[6],
+                street_address=r[7],
+                postal_code=r[8],
             )
             for r in rows
         ]
@@ -464,22 +632,25 @@ class Store:
         self._conn.commit()
 
     def merge_venue_aliases(self, *, apply: bool = False) -> list[VenueMerge]:
-        """Finds every venue row already in the database whose name is
-        a known alias (a screen/format-suffixed name like "De Munt
-        4DX") of another venue's canonical name - data that predates
-        add_venue/get_or_create_venue's own alias resolution above
-        (issue #196). `apply=False` (the default) only reports what
-        would merge; `apply=True` actually reassigns the alias's
-        entries to the canonical venue (creating it first if it
-        doesn't exist yet) and removes the now-orphaned alias row, all
-        in one transaction - either every merge in this call succeeds,
-        or none of them are applied.
+        """Finds every venue row already in the database that predates
+        proper canonicalization, either of two ways: a known alias (a
+        screen/format-suffixed name like "De Munt 4DX", issue #196), or
+        a known venue's own LOCATION string baked whole into the venue
+        name (movie-planner-web#400) by a now-fixed calendar_pull.py bug
+        - `sync pull` misreading its own richer LOCATION shape (issue
+        #283) and using the whole thing as the venue name instead of
+        stripping back to just the venue. `apply=False` (the default)
+        only reports what would merge; `apply=True` actually reassigns
+        the alias's entries to the canonical venue (creating it first if
+        it doesn't exist yet) and removes the now-orphaned alias row,
+        all in one transaction - either every merge in this call
+        succeeds, or none of them are applied.
         """
         merges = []
         for venue in sorted(self.list_venues(), key=lambda v: v.name):
-            location = KNOWN_VENUE_LOCATIONS.get(venue.name)
-            if location is None or location.canonical_name == venue.name:
-                continue  # not a known alias - already canonical, or unknown entirely
+            location = _reconcilable_location(venue.name)
+            if location is None:
+                continue  # not a known alias, and not a baked-address name either
 
             (entries_moved,) = self._conn.execute(
                 "SELECT COUNT(*) FROM entries WHERE venue_id = ?", (venue.id,)
@@ -494,14 +665,14 @@ class Store:
                     # Not self.add_venue() - that commits immediately,
                     # which would break this method's own all-or-
                     # nothing guarantee for a later alias in the same
-                    # call. location's chain/city/country/coordinates
-                    # already apply to the canonical name too - _add()
-                    # gives every alias in a group the same
-                    # VenueLocation object.
+                    # call. location's chain/city/country/coordinates/
+                    # street address/postal code already apply to the
+                    # canonical name too - _add() gives every alias in a
+                    # group the same VenueLocation object.
                     latitude, longitude = location.coordinates or (None, None)
                     cur = self._conn.execute(
-                        "INSERT INTO venues (name, chain, city, country, latitude, longitude) "
-                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO venues (name, chain, city, country, latitude, longitude, "
+                        "street_address, postal_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         (
                             location.canonical_name,
                             location.chain,
@@ -509,6 +680,8 @@ class Store:
                             location.country,
                             latitude,
                             longitude,
+                            location.street_address,
+                            location.postal_code,
                         ),
                     )
                     assert cur.lastrowid is not None  # nosec B101
@@ -561,9 +734,12 @@ class Store:
                 seat,
             ),
         )
-        self._conn.commit()
         # Invariant: sqlite always sets lastrowid on a successful INSERT.
         assert cur.lastrowid is not None  # nosec B101
+        self._record_activity(
+            action="create", entry_id=cur.lastrowid, entry_title=title, changes=None
+        )
+        self._conn.commit()
         return self.get_entry(cur.lastrowid)
 
     def get_entry(self, entry_id: int) -> Entry:
@@ -648,6 +824,12 @@ class Store:
         production: str | None = _UNSET,
         website: str | None = _UNSET,
         trailer_url: str | None = _UNSET,
+        omdb_last_no_match: datetime.date | None = _UNSET,
+        collection: str | None = _UNSET,
+        certification: str | None = _UNSET,
+        keywords: str | None = _UNSET,
+        budget: int | None = _UNSET,
+        popularity: float | None = _UNSET,
     ) -> Entry:
         current = self.get_entry(entry_id)
         changes = {
@@ -689,6 +871,12 @@ class Store:
             "production": production,
             "website": website,
             "trailer_url": trailer_url,
+            "omdb_last_no_match": omdb_last_no_match,
+            "collection": collection,
+            "certification": certification,
+            "keywords": keywords,
+            "budget": budget,
+            "popularity": popularity,
         }
         # changes is a heterogeneous dict by design (the _UNSET-sentinel
         # pattern needs one dict covering every field) - mypy can't verify
@@ -706,6 +894,27 @@ class Store:
             f"UPDATE entries SET {set_clause} WHERE id=?",  # nosec B608
             (*values, entry_id),
         )
+        # Only fields whose serialized value actually differs - a caller
+        # passing the same value it already had (update_entry(id,
+        # title="Dune") on an entry already titled "Dune") isn't a real
+        # change, and shouldn't read as one in the activity log.
+        field_diff = {
+            field: (
+                _serialize_entry_field(field, getattr(current, field)),
+                _serialize_entry_field(field, getattr(updated, field)),
+            )
+            for field, passed in changes.items()
+            if passed is not _UNSET
+            and _serialize_entry_field(field, getattr(current, field))
+            != _serialize_entry_field(field, getattr(updated, field))
+        }
+        if field_diff:
+            self._record_activity(
+                action="update",
+                entry_id=entry_id,
+                entry_title=updated.title,
+                changes=field_diff,
+            )
         self._conn.commit()
         return self.get_entry(entry_id)
 
@@ -718,7 +927,89 @@ class Store:
         return _row_to_entry(row) if row else None
 
     def delete_entry(self, entry_id: int) -> None:
-        cur = self._conn.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
+        # Fetched first so there's still a title to record once the row is
+        # gone (issue #276) - also gives the "no entry with id" error for
+        # a nonexistent id, same message as before, just raised before
+        # the now-unnecessary DELETE rather than after it.
+        entry = self.get_entry(entry_id)
+        self._conn.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
+        self._record_activity(
+            action="delete", entry_id=entry_id, entry_title=entry.title, changes=None
+        )
         self._conn.commit()
-        if cur.rowcount == 0:
-            raise StoreError(f"no entry with id {entry_id}")
+
+    def _record_activity(
+        self,
+        *,
+        action: str,
+        entry_id: int,
+        entry_title: str,
+        changes: dict[str, tuple[object, object]] | None,
+    ) -> None:
+        self._conn.execute(
+            "INSERT INTO activity_log (action, entry_id, entry_title, changes, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                action,
+                entry_id,
+                entry_title,
+                json.dumps(changes) if changes is not None else None,
+                datetime.datetime.now(datetime.UTC).isoformat(),
+            ),
+        )
+
+    def list_activity(self) -> list[ActivityLogEntry]:
+        rows = self._conn.execute(
+            "SELECT id, action, entry_id, entry_title, changes, created_at FROM activity_log "
+            "ORDER BY created_at DESC, id DESC"
+        )
+        return [
+            ActivityLogEntry(
+                id=r[0],
+                action=r[1],
+                entry_id=r[2],
+                entry_title=r[3],
+                changes={k: tuple(v) for k, v in json.loads(r[4]).items()} if r[4] else None,
+                created_at=datetime.datetime.fromisoformat(r[5]),
+            )
+            for r in rows
+        ]
+
+    def record_import_failure(self, *, source: str, row_number: int, error: str) -> ImportFailure:
+        created_at = datetime.datetime.now(datetime.UTC).isoformat()
+        cur = self._conn.execute(
+            "INSERT INTO import_failures (source, row_number, error, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (source, row_number, error, created_at),
+        )
+        self._conn.commit()
+        # Invariant: sqlite always sets lastrowid on a successful INSERT.
+        assert cur.lastrowid is not None  # nosec B101
+        return ImportFailure(
+            id=cur.lastrowid,
+            source=source,
+            row_number=row_number,
+            error=error,
+            created_at=datetime.datetime.fromisoformat(created_at),
+        )
+
+    def list_import_failures(self) -> list[ImportFailure]:
+        rows = self._conn.execute(
+            "SELECT id, source, row_number, error, created_at FROM import_failures "
+            "ORDER BY created_at DESC"
+        )
+        return [
+            ImportFailure(
+                id=r[0],
+                source=r[1],
+                row_number=r[2],
+                error=r[3],
+                created_at=datetime.datetime.fromisoformat(r[4]),
+            )
+            for r in rows
+        ]
+
+    def clear_import_failures(self) -> int:
+        cur = self._conn.execute("DELETE FROM import_failures")
+        self._conn.commit()
+        return cur.rowcount

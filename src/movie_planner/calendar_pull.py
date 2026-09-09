@@ -61,18 +61,37 @@ def _canonical_venue_name(name: str) -> str:
 
 def _resolve_venue_name(vevent: icalendar.Event) -> str | None:
     """design.md's "Venue resolution: exact-match strip, not a guess" -
-    strips a trailing ", <city>, <country>" from LOCATION only when it
-    exactly matches the event's own X-CITY/X-COUNTRY; otherwise LOCATION
-    is used verbatim, since a manually-typed-via-web LOCATION might not
-    follow that shape at all.
+    strips a trailing address suffix from LOCATION only when it exactly
+    matches the event's own X-* properties; otherwise LOCATION is used
+    verbatim, since a manually-typed-via-web LOCATION might not follow
+    either shape at all.
+
+    Two suffix shapes to try, mirroring cli.py's `_venue_location`
+    exactly (issue #283's mutmut-testing-coverage regression, movie-
+    planner-web#400's report of an entire history's venues collapsing
+    into "Other locations"): a venue with a verified street address
+    *and* postal code gets the fuller ", street, postal city, country"
+    suffix, tried first since it's the more specific shape; every other
+    venue only ever gets the plain ", city, country" one. Trying the
+    plain suffix alone against the fuller LOCATION never matches - the
+    postal code sits between the comma and the city - which is exactly
+    what let the whole street/postal/city/country tail get treated as
+    part of the venue name instead of stripped.
     """
     location = _text(vevent, "LOCATION")
     if location is None:
         return None
     city = _text(vevent, "X-CITY")
     country = _text(vevent, "X-COUNTRY")
-    if city and country:
-        suffix = f", {city}, {country}"
+    if not (city and country):
+        return _canonical_venue_name(location)
+    street_address = _text(vevent, "X-STREET-ADDRESS")
+    postal_code = _text(vevent, "X-POSTAL-CODE")
+    suffixes = []
+    if street_address and postal_code:
+        suffixes.append(f", {street_address}, {postal_code} {city}, {country}")
+    suffixes.append(f", {city}, {country}")
+    for suffix in suffixes:
         if location.endswith(suffix):
             return _canonical_venue_name(location[: -len(suffix)])
     return _canonical_venue_name(location)

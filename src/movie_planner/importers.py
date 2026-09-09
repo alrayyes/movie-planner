@@ -6,6 +6,7 @@ duplicate-detection rules used by interactive logging.
 import csv
 import datetime
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -141,6 +142,30 @@ def parse_json_text(text: str) -> list[ParsedRow]:
 
 def parse_json(path: Path) -> list[ParsedRow]:
     return parse_json_text(path.read_text(encoding="utf-8"))
+
+
+@dataclass(frozen=True)
+class ImportFormat:
+    """One bulk-import format `movie-planner import` can read - a name
+    (also the source movie-planner#257 will eventually stamp on the
+    calendar as provenance) and a parser from a file path to rows.
+
+    Adding a new format (issue #252) means writing one function
+    matching `parse`'s shape and registering it in IMPORT_FORMATS below
+    - see CONTRIBUTING.md's "Adding a new import format". `cli.py`
+    never branches on a specific format; it only ever consults this
+    registry, the same way `mail_import`'s IMAP/mbox/Maildir sources
+    are adapters behind `MailClient` rather than hardcoded branches.
+    """
+
+    name: str
+    parse: Callable[[Path], list[ParsedRow]]
+
+
+IMPORT_FORMATS: dict[str, ImportFormat] = {
+    ".csv": ImportFormat(name="csv", parse=parse_csv),
+    ".json": ImportFormat(name="json", parse=parse_json),
+}
 
 
 def run_import(
