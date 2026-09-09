@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.4](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.3...movie-planner-v1.26.4) (2026-09-09)
+
+
+### Bug Fixes
+
+* **pathe:** close pathe.py mutmut gaps ([#337](https://github.com/alrayyes/movie-planner/issues/337)) ([2ac587c](https://github.com/alrayyes/movie-planner/commit/2ac587c20be051f3c17e39aa9cbc0d82680f8e77)), closes [#298](https://github.com/alrayyes/movie-planner/issues/298)
+
 ## [1.26.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.2...movie-planner-v1.26.3) (2026-09-09)
 
 
