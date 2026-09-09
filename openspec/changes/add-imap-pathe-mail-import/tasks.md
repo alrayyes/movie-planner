@@ -144,14 +144,20 @@
   calendar, movie-planner-web, OMDb, and this mail tool all relate -
   data flow, not implementation detail; linked from the main
   `README.md`
-- [ ] 7.5 (scope check, not yet decided - see below) If the main
-  `README.md` has grown too large by this point, split the heavier
-  `## Usage` subsections out into `docs/` pages (per `rules/docs.md`'s
-  "anything that outgrows the README moves into docs/"), leaving the
-  README as a concise entry point; this is a general documentation-
-  quality task, not specific to Pathé mail import, so may land as its
-  own separate PR/issue rather than folded into #140 - confirm with the
-  user before doing the split
+- [x] 7.5 If the main `README.md` has grown too large by this point,
+  split the heavier `## Usage` subsections out into `docs/` pages (per
+  `rules/docs.md`'s "anything that outgrows the README moves into
+  docs/"), leaving the README as a concise entry point
+
+  Confirmed with the user to do this in the same change. Moved the
+  per-command detail (`list` filtering, `show`, venue auto-fill,
+  `import`, sync/`sync pull`, `activity`, bulk historical imports)
+  into a new `docs/usage.md`, leaving README's `## Usage` to the
+  `--help` screenshot, the `log`/`from-pathe-email` golden path, and
+  the one-line command reference, with a link out for the rest.
+  README went from 359 to well under that; also fixed an unrelated
+  duplicated paragraph found in the `## Configuration` section while
+  touching the file.
 
 ## 8. Piped composition (fetch | translate | import)
 
