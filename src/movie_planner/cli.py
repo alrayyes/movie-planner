@@ -19,6 +19,7 @@ import typer
 
 from movie_planner import config as config_module
 from movie_planner import config_file
+from movie_planner.bug_report import build_bug_report
 from movie_planner.calendar_pull import (
     Candidate,
     ChangedCandidate,
@@ -368,6 +369,36 @@ db_path = "~/.local/share/movie-planner/movies.db"
         f"Wrote a starter config to {config_path}. Edit in your CalDAV "
         "password before running any other command."
     )
+
+
+@app.command("bug-report")
+def bug_report(
+    ctx: typer.Context,
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            help="Write the report to this file instead of printing it to stdout.",
+        ),
+    ] = None,
+) -> None:
+    """Generates a diagnostic report safe to share - with an AI session, in
+    a GitHub issue, with anyone helping debug (issue #256). Never
+    includes CalDAV credentials, API keys, entry titles/notes, or venue
+    names - only tool/Python version, config shape, and store counts.
+    """
+    cfg = _cfg(ctx)
+    store = _open_store(cfg)
+    try:
+        report = build_bug_report(cfg, store)
+    finally:
+        store.close()
+
+    if output is not None:
+        output.write_text(report)
+        typer.echo(f"Wrote bug report to {output}")
+    else:
+        typer.echo(report)
 
 
 def _parse_date(value: str) -> date:
