@@ -14,6 +14,7 @@ from movie_planner.cli import app
 from movie_planner.omdb import MovieRatings, OmdbClient
 from movie_planner.store import Store
 from movie_planner.tmdb import TmdbClient, TmdbMovieDetails
+from movie_planner.user_agent import USER_AGENT_HEADER
 
 runner = CliRunner()
 
@@ -4466,7 +4467,11 @@ def test_fetch_poster_bytes_requests_with_redirects_and_a_ten_second_timeout(
     result = _fetch_poster_bytes("https://example.com/poster.jpg")
 
     assert calls["url"] == "https://example.com/poster.jpg"
-    assert calls["kwargs"] == {"follow_redirects": True, "timeout": 10}
+    assert calls["kwargs"] == {
+        "follow_redirects": True,
+        "timeout": 10,
+        "headers": USER_AGENT_HEADER,
+    }
     assert fake_response.raise_for_status_called is True
     assert result == b"poster-bytes"
 

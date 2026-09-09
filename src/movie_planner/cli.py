@@ -36,6 +36,7 @@ from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_f
 from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
 from movie_planner.store import ActivityLogEntry, Entry, Medium, Store, StoreError, Venue
 from movie_planner.tmdb import TmdbClient, TmdbMovieDetails
+from movie_planner.user_agent import USER_AGENT_HEADER
 
 app = typer.Typer(help="movie-planner: log watched movies and sync them to a calendar.")
 locations_app = typer.Typer(help="Manage the medium and venue lists.")
@@ -926,7 +927,7 @@ _IMDB_ID_RE = re.compile(r"(tt\d+)")
 
 
 def _fetch_poster_bytes(url: str) -> bytes:
-    response = httpx.get(url, follow_redirects=True, timeout=10)
+    response = httpx.get(url, follow_redirects=True, timeout=10, headers=USER_AGENT_HEADER)
     response.raise_for_status()
     return response.content
 

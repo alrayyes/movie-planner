@@ -5,6 +5,7 @@ import httpx
 import pytest
 
 from movie_planner.tmdb import TmdbClient, TmdbMovieDetails
+from movie_planner.user_agent import USER_AGENT_HEADER
 
 FIND_RESPONSE = {
     "movie_results": [{"id": 438631}],
@@ -462,3 +463,9 @@ def test_tmdb_client_defaults_to_the_real_tmdb_api_base_url() -> None:
     client = TmdbClient(api_key="test-key")
 
     assert str(client._http.base_url) == "https://api.themoviedb.org/3/"
+
+
+def test_tmdb_client_defaults_to_the_movie_planner_user_agent() -> None:
+    client = TmdbClient(api_key="test-key")
+
+    assert client._http.headers["User-Agent"] == USER_AGENT_HEADER["User-Agent"]
