@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.5](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.4...movie-planner-v1.26.5) (2026-09-09)
+
+
+### Bug Fixes
+
+* **store:** close store.py mutmut gaps ([#340](https://github.com/alrayyes/movie-planner/issues/340)) ([cdda2d3](https://github.com/alrayyes/movie-planner/commit/cdda2d3c8baa1f46faa0ea39ae682dbc55b82cde)), closes [#291](https://github.com/alrayyes/movie-planner/issues/291)
+
 ## [1.26.4](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.3...movie-planner-v1.26.4) (2026-09-09)
 
 
