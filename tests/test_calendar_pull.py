@@ -10,11 +10,13 @@ from movie_planner.calendar_pull import (
     NewCandidate,
     ParsedEvent,
     RemovedCandidate,
+    _diff_entry,
+    _venue_name_for_entry,
     detect_candidates,
     parse_event,
 )
 from movie_planner.calendar_sync import build_vevent
-from movie_planner.store import Store
+from movie_planner.store import Entry, Store
 
 # --- 2.1: SUMMARY/DTSTART/DTEND round-trip, all three time shapes ---
 
@@ -423,6 +425,158 @@ def test_detect_candidates_missing_x_property_diff_is_stored_value_to_none(store
     assert isinstance(candidate, ChangedCandidate)
     assert FieldDiff(field="row", stored="5", calendar=None) in candidate.diffs
     assert FieldDiff(field="seat", stored="17", calendar=None) in candidate.diffs
+
+
+# --- _venue_name_for_entry: id lookup, not name/order coincidence ---
+
+
+def test_venue_name_for_entry_looks_up_the_venue_matching_the_entrys_id(store: Store) -> None:
+    # Two venues, alphabetically ordered "Some Other Venue" < "Tuschinski"
+    # by store.list_venues()'s own ORDER BY name - entry.venue_id points
+    # at the second one, so a query that matched on anything other than
+    # an exact id (a flipped `==`, a dropped lookup entirely) would
+    # either return the wrong venue's name or None, not "Tuschinski".
+    store.add_venue("Some Other Venue")
+    venue = store.add_venue("Tuschinski")
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(
+        title="Dune", date=date(2026, 1, 1), medium_id=medium.id, venue_id=venue.id
+    )
+
+    assert _venue_name_for_entry(store, entry) == "Tuschinski"
+
+
+def test_venue_name_for_entry_none_when_entry_has_no_venue(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+
+    assert _venue_name_for_entry(store, entry) is None
+
+
+# --- _diff_entry: exact field-name label for every structured field ---
+
+
+def test_diff_entry_reports_the_exact_field_name_for_every_structured_field() -> None:
+    entry = Entry(
+        id=1,
+        title="Old Title",
+        date=date(2026, 1, 1),
+        medium_id=1,
+        start_time=time(18, 0),
+        end_time=time(20, 0),
+        director="Old Director",
+        actors="Old Actors",
+        genre="Old Genre",
+        release_year=2020,
+        poster_url="https://old.example.com/poster.jpg",
+    )
+    parsed = ParsedEvent(
+        uid="uid",
+        title="New Title",
+        date=date(2026, 1, 2),
+        start_time=time(19, 0),
+        end_time=time(21, 0),
+        venue_name="New Venue",
+        director="New Director",
+        actors="New Actors",
+        genre="New Genre",
+        release_year=2021,
+        poster_url="https://new.example.com/poster.jpg",
+        row=None,
+        seat=None,
+    )
+
+    diffs = _diff_entry(entry, parsed, "Old Venue")
+
+    assert {d.field for d in diffs} == {
+        "title",
+        "date",
+        "start_time",
+        "end_time",
+        "venue",
+        "director",
+        "actors",
+        "genre",
+        "release_year",
+        "poster_url",
+    }
+
+
+# --- detect_candidates: the loop keeps going past a skipped/removed entry ---
+
+
+def test_detect_candidates_continues_past_an_unsynced_entry_to_a_later_removed_one(
+    store: Store,
+) -> None:
+    # An entry with no caldav_uid yet is skipped via `continue`, not
+    # `break` - it must not stop the loop from reaching a later entry
+    # that *is* synced and should surface as removed.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    store.create_entry(title="Never Synced", date=date(2026, 1, 1), medium_id=medium.id)
+    removed_entry = store.create_entry(title="Dune", date=date(2026, 1, 2), medium_id=medium.id)
+    removed_entry = store.update_entry(removed_entry.id, caldav_uid="deleted-uid")
+
+    candidates = detect_candidates(store, [])
+
+    assert len(candidates) == 1
+    (candidate,) = candidates
+    assert isinstance(candidate, RemovedCandidate)
+    assert candidate.entry.id == removed_entry.id
+
+
+def test_detect_candidates_continues_past_a_removed_entry_to_a_later_changed_one(
+    store: Store,
+) -> None:
+    # Appending a RemovedCandidate is followed by `continue`, not `break`
+    # - a later entry in the same pass must still get its own diff.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    removed_entry = store.create_entry(
+        title="Removed Movie", date=date(2026, 1, 1), medium_id=medium.id
+    )
+    removed_entry = store.update_entry(removed_entry.id, caldav_uid="removed-uid")
+    changed_entry = store.create_entry(title="Dune", date=date(2026, 1, 2), medium_id=medium.id)
+    changed_entry = store.update_entry(changed_entry.id, caldav_uid="changed-uid")
+    ical = build_vevent(
+        uid="changed-uid",
+        title="Dune: Part Two",
+        entry_date=date(2026, 1, 2),
+        start_time=None,
+        end_time=None,
+        venue=None,
+    )
+
+    candidates = detect_candidates(store, [ical])
+
+    assert len(candidates) == 2
+    by_entry_id = {c.entry.id: c for c in candidates}  # type: ignore[union-attr]
+    assert isinstance(by_entry_id[removed_entry.id], RemovedCandidate)
+    assert isinstance(by_entry_id[changed_entry.id], ChangedCandidate)
+
+
+def test_detect_candidates_no_diff_when_the_stored_venue_matches_the_calendar_venue(
+    store: Store,
+) -> None:
+    # Exercises the real store lookup detect_candidates makes for each
+    # entry's venue name (not a stubbed-out None, not the wrong store) -
+    # a matched venue must not itself produce a spurious venue diff.
+    venue = store.add_venue("Tuschinski")
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(
+        title="Dune", date=date(2026, 1, 1), medium_id=medium.id, venue_id=venue.id
+    )
+    entry = store.update_entry(entry.id, caldav_uid="uid-venue-match")
+    ical = build_vevent(
+        uid="uid-venue-match",
+        title="Dune",
+        entry_date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue="Tuschinski",
+    )
+
+    candidates = detect_candidates(store, [ical])
+
+    assert candidates == []
 
 
 def test_parsed_event_is_a_frozen_dataclass() -> None:
