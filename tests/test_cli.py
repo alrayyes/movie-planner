@@ -149,6 +149,70 @@ def _store(config_path: Path) -> Store:
 # --- log: tasks 3.3, 7.1 ---
 
 
+# --- bug-report: issue #256 ---
+
+
+def test_bug_report_prints_to_stdout_with_no_secrets(
+    tmp_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    db_path = tmp_path / "movies.db"
+    distinctive_config_path = tmp_path / "config.toml"
+    distinctive_config_path.write_text(
+        f"""
+        [caldav]
+        url = "https://baikal.example.com/calendars/movies/"
+        username = "distinctive-username"
+        password = "distinctive-password"
+
+        [omdb]
+        api_key = "distinctive-omdb-key"
+
+        [storage]
+        db_path = "{db_path}"
+        """
+    )
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(distinctive_config_path),
+            "log",
+            "--title",
+            "A Personal Movie Title",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "A Very Specific Local Cinema",
+        ],
+    )
+
+    result = runner.invoke(app, ["--config", str(distinctive_config_path), "bug-report"])
+
+    assert result.exit_code == 0, result.output
+    assert "distinctive-password" not in result.stdout
+    assert "distinctive-username" not in result.stdout
+    assert "distinctive-omdb-key" not in result.stdout
+    assert "A Personal Movie Title" not in result.stdout
+    assert "A Very Specific Local Cinema" not in result.stdout
+    assert "entries: 1" in result.stdout
+
+
+def test_bug_report_writes_to_file_with_output_flag(
+    config_path: Path, calendar: FakeCalendar
+) -> None:
+    output_path = config_path.parent / "report.txt"
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "bug-report", "--output", str(output_path)]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert output_path.is_file()
+    assert "entries: 0" in output_path.read_text()
+
+
 def test_log_creates_entry_and_syncs_to_calendar(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None
 ) -> None:

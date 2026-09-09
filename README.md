@@ -227,6 +227,12 @@ to this tool only - it's not a shared trail with
 [movie-planner-web](https://github.com/alrayyes/movie-planner-web),
 which keeps its own equivalent log of the actions it makes.
 
+`bug-report` prints a diagnostic summary safe to share with an AI
+session, in a GitHub issue, or with anyone helping debug — tool/Python
+version, config shape, and store counts. It never includes CalDAV
+credentials, API keys, entry titles/notes, or venue names (issue #256).
+Pass `--output <path>` to write it to a file instead of stdout.
+
 A large historical import (years of entries at once) can exceed OMDb's
 daily request limit before it finishes. Pass `--no-metadata` to `import`
 to create every entry with no OMDb calls at all, then backfill ratings
