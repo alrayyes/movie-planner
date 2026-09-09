@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.25.4...movie-planner-v1.26.0) (2026-09-09)
+
+
+### Features
+
+* **cli:** add bug-report command with PII stripped ([#325](https://github.com/alrayyes/movie-planner/issues/325)) ([ff35b6c](https://github.com/alrayyes/movie-planner/commit/ff35b6c4b0e90ade57f16b1dbf09d4a858b723fb)), closes [#256](https://github.com/alrayyes/movie-planner/issues/256)
+
 ## [1.25.4](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.25.3...movie-planner-v1.25.4) (2026-09-08)
 
 
