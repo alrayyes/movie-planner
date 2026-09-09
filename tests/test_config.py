@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from movie_planner.config import ConfigError, load_config
+from movie_planner.config import ConfigError, default_config_path, load_config
 
 VALID_CONFIG = """
 [caldav]
@@ -147,15 +147,28 @@ def test_load_config_section_not_a_table_raises_clear_error(tmp_path: Path) -> N
         load_config(config_path)
 
 
-def test_load_config_missing_key_within_section_names_dotted_path(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("line_prefix", "dotted_path"),
+    [
+        ("url = ", "caldav.url"),
+        ("username = ", "caldav.username"),
+        ("api_key = ", "omdb.api_key"),
+        ("db_path = ", "storage.db_path"),
+    ],
+)
+def test_load_config_missing_key_within_section_names_dotted_path(
+    tmp_path: Path, line_prefix: str, dotted_path: str
+) -> None:
     filtered = "\n".join(
-        line for line in VALID_CONFIG.splitlines() if not line.startswith("url = ")
+        line for line in VALID_CONFIG.splitlines() if not line.startswith(line_prefix)
     )
     config_path = tmp_path / "config.toml"
     config_path.write_text(filtered)
 
-    with pytest.raises(ConfigError, match="caldav.url"):
+    with pytest.raises(ConfigError) as exc_info:
         load_config(config_path)
+
+    assert str(exc_info.value) == f"config is missing required key '{dotted_path}'"
 
 
 def test_load_config_default_path_uses_xdg_config_home(
@@ -170,6 +183,14 @@ def test_load_config_default_path_uses_xdg_config_home(
     config = load_config()
 
     assert config.omdb_api_key == "abc123"
+
+
+def test_default_config_path_falls_back_to_dot_config_when_xdg_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+    assert default_config_path() == Path("~/.config").expanduser() / "movie-planner" / "config.toml"
 
 
 PASSWORD_COMMAND_CONFIG = """
@@ -213,8 +234,12 @@ def test_load_config_rejects_both_password_and_password_command(tmp_path: Path) 
         )
     )
 
-    with pytest.raises(ConfigError, match="password.*password_command"):
+    with pytest.raises(ConfigError) as exc_info:
         load_config(config_path)
+
+    assert str(exc_info.value) == (
+        "config sets both 'caldav.password' and 'caldav.password_command' - use only one"
+    )
 
 
 def test_load_config_missing_password_names_both_options(tmp_path: Path) -> None:
@@ -224,8 +249,23 @@ def test_load_config_missing_password_names_both_options(tmp_path: Path) -> None
     config_path = tmp_path / "config.toml"
     config_path.write_text(filtered)
 
-    with pytest.raises(ConfigError, match="password.*password_command"):
+    with pytest.raises(ConfigError) as exc_info:
         load_config(config_path)
+
+    assert str(exc_info.value) == (
+        "config is missing required key 'caldav.password' (or 'caldav.password_command')"
+    )
+
+
+def test_load_config_password_command_with_no_output_resolves_to_empty_password(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(PASSWORD_COMMAND_CONFIG.replace('"printf hunter2"', '"true"'))
+
+    config = load_config(config_path)
+
+    assert config.caldav_password == ""
 
 
 def test_load_config_password_command_failure_raises_clear_error(tmp_path: Path) -> None:
