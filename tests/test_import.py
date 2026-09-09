@@ -1,4 +1,6 @@
+import locale
 from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date, time
 from pathlib import Path
 
@@ -21,6 +23,22 @@ def store(tmp_path: Path) -> Iterator[Store]:
     s = Store(tmp_path / "movies.db")
     yield s
     s.close()
+
+
+@contextmanager
+def _c_locale() -> Iterator[None]:
+    """Forces the POSIX "C" locale for the duration of the block - `open(...,
+    encoding=None)` resolves to plain ASCII there, unlike almost every real
+    deployment locale. Used to prove a read path pins `encoding="utf-8"`
+    explicitly rather than relying on whatever the process locale happens to
+    be, which would otherwise pass silently on any UTF-8-locale machine.
+    """
+    original = locale.setlocale(locale.LC_ALL)
+    try:
+        locale.setlocale(locale.LC_ALL, "C")
+        yield
+    finally:
+        locale.setlocale(locale.LC_ALL, original)
 
 
 # --- IMPORT_FORMATS: issue #252, the registry cli.py dispatches through
@@ -130,6 +148,46 @@ def test_parse_csv_full_row_with_omdb_derived_fields(tmp_path: Path) -> None:
     assert entry.letterboxd_rating == "4.5"
 
 
+def test_parse_csv_full_row_with_row_and_seat(tmp_path: Path) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium,row,seat\nDune,2026-01-01,cinema,5,17\n")
+
+    rows = parse_csv(csv_path)
+
+    entry = rows[0].entry
+    assert entry is not None
+    assert entry.row == "5"
+    assert entry.seat == "17"
+
+
+def test_parse_csv_preserves_a_crlf_embedded_inside_a_quoted_field(tmp_path: Path) -> None:
+    # parse_csv must open with newline="" - without it, universal-newline
+    # translation rewrites an embedded \r\n inside a quoted field to a bare
+    # \n before csv.DictReader ever sees it, silently changing the value.
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_bytes(
+        b'title,date,medium,notes\r\nDune,2024-03-15,cinema,"Line one\r\nLine two"\r\n'
+    )
+
+    rows = parse_csv(csv_path)
+
+    entry = rows[0].entry
+    assert entry is not None
+    assert entry.notes == "Line one\r\nLine two"
+
+
+def test_parse_csv_reads_as_utf8_regardless_of_the_process_locale(tmp_path: Path) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_bytes("title,date,medium\nCafé Society,2024-01-01,cinema\n".encode())
+
+    with _c_locale():
+        rows = parse_csv(csv_path)
+
+    entry = rows[0].entry
+    assert entry is not None
+    assert entry.title == "Café Society"
+
+
 def test_parse_csv_ignores_a_booking_ref_column(tmp_path: Path) -> None:
     csv_path = tmp_path / "movies.csv"
     csv_path.write_text(
@@ -153,6 +211,18 @@ def test_parse_csv_bad_release_year_is_a_failed_row(tmp_path: Path) -> None:
     assert rows[0].error is not None
 
 
+def test_parse_csv_blank_release_year_is_none_not_a_failed_row(tmp_path: Path) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium,release_year\nDune,2026-01-01,cinema,\n")
+
+    rows = parse_csv(csv_path)
+
+    assert rows[0].error is None
+    entry = rows[0].entry
+    assert entry is not None
+    assert entry.release_year is None
+
+
 def test_parse_csv_missing_title_is_a_failed_row(tmp_path: Path) -> None:
     csv_path = tmp_path / "movies.csv"
     csv_path.write_text("title,date,medium\n,2024-01-01,cinema\n")
@@ -160,8 +230,18 @@ def test_parse_csv_missing_title_is_a_failed_row(tmp_path: Path) -> None:
     rows = parse_csv(csv_path)
 
     assert rows[0].entry is None
-    assert rows[0].error is not None
+    assert rows[0].error == "title is required"
     assert rows[0].row_number == 2
+
+
+def test_parse_csv_missing_medium_is_a_failed_row(tmp_path: Path) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium\nDune,2024-01-01,\n")
+
+    rows = parse_csv(csv_path)
+
+    assert rows[0].entry is None
+    assert rows[0].error == "medium is required"
 
 
 def test_parse_csv_bad_date_is_a_failed_row(tmp_path: Path) -> None:
@@ -171,7 +251,7 @@ def test_parse_csv_bad_date_is_a_failed_row(tmp_path: Path) -> None:
     rows = parse_csv(csv_path)
 
     assert rows[0].entry is None
-    assert rows[0].error is not None
+    assert rows[0].error == "Invalid isoformat string: 'not-a-date'"
 
 
 # --- parse_json: task 6.2 ---
@@ -254,6 +334,20 @@ def test_parse_json_full_row_with_omdb_derived_fields(tmp_path: Path) -> None:
     assert entry.release_year == 2021
 
 
+def test_parse_json_reads_as_utf8_regardless_of_the_process_locale(tmp_path: Path) -> None:
+    json_path = tmp_path / "movies.json"
+    json_path.write_bytes(
+        '[{"title": "Café Society", "date": "2024-01-01", "medium": "cinema"}]'.encode()
+    )
+
+    with _c_locale():
+        rows = parse_json(json_path)
+
+    entry = rows[0].entry
+    assert entry is not None
+    assert entry.title == "Café Society"
+
+
 def test_parse_json_missing_medium_is_a_failed_row(tmp_path: Path) -> None:
     json_path = tmp_path / "movies.json"
     json_path.write_text('[{"title": "Solstice Run", "date": "2024-06-02"}]')
@@ -282,6 +376,32 @@ def test_parse_json_text_accepts_a_bare_object_as_one_row() -> None:
 
 
 # --- run_import: tasks 6.1, 6.4, duplicate handling and the summary ---
+
+
+def test_run_import_defaults_the_threshold_to_90(store: Store) -> None:
+    # A title pair scoring ~90.2 - a duplicate under the documented default
+    # of 90.0, but not under 91.0 or higher. Chosen this way, rather than
+    # inspecting the parameter's default directly, because that default
+    # only has to distinguish an actual call that omits `threshold` -
+    # mutmut's own test harness swaps in the mutated function body while
+    # leaving the importable wrapper's declared signature untouched, so
+    # asserting on `inspect.signature` never observes the mutation at all.
+    existing_title = "a very long and quite specific movie title used only for a threshold test"
+    candidate_title = existing_title[:-13]
+    medium = store.add_medium("cinema", is_physical_place=True)
+    store.create_entry(title=existing_title, date=date(2024, 6, 2), medium_id=medium.id)
+    rows = [
+        ParsedRow(
+            row_number=1,
+            entry=ImportRow(title=candidate_title, date=date(2024, 6, 2), medium="cinema"),
+            error=None,
+        )
+    ]
+
+    summary = run_import(store, rows)
+
+    assert summary.skipped_duplicates == 1
+    assert summary.imported == 0
 
 
 def test_run_import_creates_entries_and_resolves_medium_and_venue(store: Store) -> None:
@@ -334,6 +454,28 @@ def test_run_import_creates_and_links_the_venue(store: Store) -> None:
     (venue,) = store.list_venues()
     assert venue.name == "Grand Vista Cinema"
     assert imported.entry.venue_id == venue.id
+
+
+def test_run_import_stores_start_and_end_time_when_supplied(store: Store) -> None:
+    rows = [
+        ParsedRow(
+            row_number=1,
+            entry=ImportRow(
+                title="Dune",
+                date=date(2026, 1, 1),
+                medium="cinema",
+                start_time=time(19, 0),
+                end_time=time(21, 15),
+            ),
+            error=None,
+        )
+    ]
+
+    run_import(store, rows)
+
+    (entry,) = store.list_entries()
+    assert entry.start_time == time(19, 0)
+    assert entry.end_time == time(21, 15)
 
 
 def test_run_import_stores_omdb_derived_fields_when_supplied(store: Store) -> None:
@@ -606,3 +748,112 @@ def test_run_import_one_bad_row_does_not_stop_the_rest(store: Store) -> None:
 
     assert summary.failed == 1
     assert summary.imported == 1
+
+
+def test_run_import_counts_more_than_one_failed_row(store: Store) -> None:
+    rows = [
+        ParsedRow(row_number=1, entry=None, error="bad date"),
+        ParsedRow(row_number=2, entry=None, error="bad medium"),
+    ]
+
+    summary = run_import(store, rows)
+
+    assert summary.failed == 2
+
+
+def test_run_import_counts_more_than_one_skipped_duplicate(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    store.create_entry(title="Solstice Run", date=date(2024, 6, 2), medium_id=medium.id)
+    store.create_entry(title="Paper Constellations", date=date(2024, 1, 20), medium_id=medium.id)
+    rows = [
+        ParsedRow(
+            row_number=1,
+            entry=ImportRow(title="Solstice Run", date=date(2024, 6, 2), medium="cinema"),
+            error=None,
+        ),
+        ParsedRow(
+            row_number=2,
+            entry=ImportRow(title="Paper Constellations", date=date(2024, 1, 20), medium="cinema"),
+            error=None,
+        ),
+    ]
+
+    summary = run_import(store, rows)
+
+    assert summary.skipped_duplicates == 2
+
+
+def test_run_import_continues_past_a_duplicate_to_later_rows(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    store.create_entry(title="Solstice Run", date=date(2024, 6, 2), medium_id=medium.id)
+    rows = [
+        ParsedRow(
+            row_number=1,
+            entry=ImportRow(title="Solstice Run", date=date(2024, 6, 2), medium="cinema"),
+            error=None,
+        ),
+        ParsedRow(
+            row_number=2,
+            entry=ImportRow(
+                title="A Totally Different Film", date=date(2024, 1, 1), medium="cinema"
+            ),
+            error=None,
+        ),
+    ]
+
+    summary = run_import(store, rows)
+
+    assert summary.skipped_duplicates == 1
+    assert summary.imported == 1
+
+
+def test_run_import_forwards_end_time_to_the_duplicate_check(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    # A short existing screening that only the candidate's *end* time reaches.
+    store.create_entry(
+        title="A Short Trailer Screening",
+        date=date(2024, 6, 2),
+        medium_id=medium.id,
+        start_time=time(20, 0),
+        end_time=time(20, 5),
+    )
+    rows = [
+        ParsedRow(
+            row_number=1,
+            entry=ImportRow(
+                title="A Completely Different Film",
+                date=date(2024, 6, 2),
+                medium="cinema",
+                start_time=time(18, 0),
+                end_time=time(21, 0),
+            ),
+            error=None,
+        )
+    ]
+
+    summary = run_import(store, rows)
+
+    assert summary.imported == 0
+    assert summary.skipped_duplicates == 1
+
+
+def test_run_import_respects_a_custom_threshold(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    store.create_entry(title="Solstice Run", date=date(2024, 6, 2), medium_id=medium.id)
+    rows = [
+        ParsedRow(
+            row_number=1,
+            entry=ImportRow(title="Solstice Run", date=date(2024, 6, 2), medium="cinema"),
+            error=None,
+        )
+    ]
+
+    # An exact title match scores 100 - a threshold above that means no
+    # title-based match is possible, even though the module-level default
+    # (90.0, which happens to equal duplicates.DEFAULT_THRESHOLD) would flag
+    # it. Proves run_import actually forwards its own threshold rather than
+    # letting find_duplicate fall back to its own default.
+    summary = run_import(store, rows, threshold=101.0)
+
+    assert summary.imported == 1
+    assert summary.skipped_duplicates == 0
