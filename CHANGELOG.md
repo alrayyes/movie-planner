@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.10](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.9...movie-planner-v1.26.10) (2026-09-09)
+
+
+### Documentation
+
+* **readme:** split Usage command details into docs/usage.md ([#352](https://github.com/alrayyes/movie-planner/issues/352)) ([3136d52](https://github.com/alrayyes/movie-planner/commit/3136d5293aab55dee5b2a358f7b83c12b8dc6feb))
+
 ## [1.26.9](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.8...movie-planner-v1.26.9) (2026-09-09)
 
 
