@@ -65,14 +65,50 @@ bun run lint:mechanics     # ltex-cli-plus
 ```
 
 `mypy` runs in `strict` mode across both `src/` and `tests/`.
-`mutmut` is still non-blocking everywhere it runs (`pre-push`, CI) — the
-dotfiles-wide rule now says a surviving mutant should always block a
-merge, but this repo has 891 pre-existing survivors out of 4477 mutants
-(checked 2026-09-08) and flipping the switch today would fail every PR
-over debt nobody touched. Tracked in #303: a surviving mutant in a PR's
-own diff is meant to block, the existing backlog isn't. It skips
-`test_e2e.py` — rerunning a real Baikal container per mutant would make a
-25-second check take hours.
+`mutmut run` itself is still non-blocking on its own exit code — it skips
+`test_e2e.py` (rerunning a real Baikal container per mutant would make a
+25-second check take hours) and always exits 0 regardless of survivor
+count. The dotfiles-wide rule says a surviving mutant should always block
+a merge, but this repo has 817 pre-existing survivors (checked
+2026-09-09, after excluding the known-false-positive class below) and
+flipping that switch directly would fail every PR over debt nobody
+touched — that backlog is tracked module by module in milestone #5.
+
+**The actual gate is `scripts/check_mutmut_survivors.py`** (#303), run
+right after `mutmut run` in both `pre-push` and CI. It compares each file
+your branch touches against `.mutmut-baseline.json` — a survivor count
+per file — and fails only when a touched file has _more_ survivors now
+than the baseline allows. A file you never touched can carry any amount
+of pre-existing debt without blocking your PR; a file you did touch can't
+gain a new one.
+
+```sh
+uv run mutmut run
+uv run python scripts/check_mutmut_survivors.py check src/movie_planner/cli.py
+```
+
+If your change genuinely lowers a file's survivor count (you added a test
+that kills a mutant nobody had covered before), ratchet the baseline down
+in the same PR:
+
+```sh
+uv run python scripts/check_mutmut_survivors.py generate
+```
+
+The baseline only ever needs lowering, never raising — the script itself
+refuses to pass a file whose count went up, so there's no legitimate
+reason to hand-edit `.mutmut-baseline.json` upward. If you hit one, that's
+a sign the new code needs a test, not a bigger number.
+
+**Known false positive**: `movie_planner.venue_locations.x__add`'s
+mutants are permanently excluded from every file's count
+(`EXCLUDED_MUTANT_PREFIXES` in the script) — movie-planner#339 found that
+`mutmut`'s coverage-based test selection attributes any mutant on
+code that runs once at import (before any test starts) to whichever
+test happens to finish first in the whole suite, not one that actually
+exercises it. Its "survived" status doesn't reflect a real gap. Add a
+future exclusion there only with the same kind of investigated,
+documented justification — never to silence a real one.
 
 ## How it fits together
 

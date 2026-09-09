@@ -85,17 +85,23 @@ jobs:
   # Mutation testing: mutates src/ (excluding test_e2e.py's real-Baikal-
   # container coverage from the rerun set - ruinous to repeat per mutant,
   # see pyproject.toml's [tool.mutmut] comment) and reruns the rest of the
-  # suite against each mutant. Still non-blocking for now: `mutmut run`
-  # exits 0 regardless of survivor count, so this reports rather than
-  # gates. The dotfiles-wide rule says a surviving mutant should always
-  # block a merge, but this repo has 891 pre-existing survivors (#303) -
-  # gating on the full run today would fail every PR over debt nobody
-  # touched. #303 tracks scoping this to just the PR's own diff.
+  # suite against each mutant. `mutmut run` itself still exits 0 regardless
+  # of survivor count - flipping that on directly would fail every PR over
+  # the pre-existing backlog (817 survivors as of #303's gate landing,
+  # tracked module by module in milestone #5). scripts/check_mutmut_survivors.py
+  # is the actual gate: it fails the job when a file this diff touches has
+  # *more* survivors now than .mutmut-baseline.json allows it - a new
+  # survivor in the diff, not old debt nobody asked to fix. See
+  # CONTRIBUTING.md's mutmut section.
   mutmut:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Need the merge-base commit to diff against below, not just the
+          # tip - a shallow checkout can't compute which files changed.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.12.7"
@@ -110,6 +116,24 @@ jobs:
             uv run mutmut results
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: check for new survivors in this diff
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          # A force-push or a base branch mutmut has never seen (the
+          # "before" SHA is all-zeros on a branch's first push) leaves no
+          # merge base to diff against - fall back to checking every
+          # mutated file rather than skipping the gate.
+          if git cat-file -e "$base" 2>/dev/null; then
+            merge_base="$(git merge-base "$base" HEAD)"
+            changed_files="$(git diff --name-only "$merge_base" HEAD -- src)"
+          else
+            changed_files="$(git ls-files src)"
+          fi
+          uv run python scripts/check_mutmut_survivors.py check $changed_files
 
   build:
     runs-on: ubuntu-24.04
