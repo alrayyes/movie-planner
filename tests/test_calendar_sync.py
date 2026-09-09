@@ -98,6 +98,24 @@ def test_build_vevent_uid_and_title_carried_through() -> None:
     assert str(event["summary"]) == "Dune"
 
 
+def test_build_vevent_sets_the_correct_prodid_and_version() -> None:
+    # icalendar's Component is a caseless dict - the *property names* here
+    # ("prodid", "version") are re-serialized uppercase regardless of the
+    # case passed to add(), so only the literal *values* are worth pinning
+    # down; a case-only mutation of the name can never be observed.
+    ical_text = build_vevent(
+        uid="uid-prodid",
+        title="Dune",
+        entry_date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
+        venue=None,
+    )
+
+    assert "PRODID:-//movie-planner//EN" in ical_text
+    assert "VERSION:2.0" in ical_text
+
+
 def test_build_vevent_with_description() -> None:
     ical_text = build_vevent(
         uid="uid-4",
@@ -288,6 +306,22 @@ def test_build_description_includes_the_imdb_link_with_no_rating() -> None:
     assert description == "IMDb: https://www.imdb.com/title/tt1160419/"
 
 
+def test_build_description_letterboxd_link_with_no_rating_has_no_suffix() -> None:
+    entry = _entry(letterboxd_url="https://letterboxd.com/film/dune-2021/")
+
+    description = build_description(entry)
+
+    assert description == "Letterboxd: https://letterboxd.com/film/dune-2021/"
+
+
+def test_build_description_joins_multiple_lines_with_a_single_newline() -> None:
+    entry = _entry(imdb_rating="8.5/10", rotten_tomatoes_rating="91%")
+
+    description = build_description(entry)
+
+    assert description == "IMDb: 8.5/10\nRotten Tomatoes: 91%"
+
+
 # --- CalendarClient: task 4.1, wrapping a caldav.Calendar-like object ---
 
 
@@ -315,6 +349,7 @@ def test_calendar_client_connect_wires_up_the_dav_client(monkeypatch: pytest.Mon
 
     assert isinstance(client, CalendarClient)
     assert init_calls["username"] == "moviewatcher"
+    assert init_calls["password"] == "secret"
     assert calendar_urls == ["https://baikal.example.com/calendars/movies/"]
 
 
@@ -477,6 +512,26 @@ def test_push_new_generates_a_uuid7(store: Store) -> None:
     assert uuid.UUID(synced.caldav_uid).version == 7
 
 
+def test_push_new_maps_the_entrys_start_and_end_time_onto_the_event(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(
+        title="Dune",
+        date=date(2026, 1, 1),
+        medium_id=medium.id,
+        start_time=time(19, 30),
+        end_time=time(21, 45),
+    )
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+
+    synced = sync.push_new(entry, venue=None)
+
+    assert synced.caldav_uid is not None
+    event = _parse(calendar.events_by_uid[synced.caldav_uid].data)
+    assert _dt(event, "dtstart") == datetime(2026, 1, 1, 19, 30)
+    assert _dt(event, "dtend") == datetime(2026, 1, 1, 21, 45)
+
+
 # --- crash safety: issue #246 ---
 
 
@@ -576,7 +631,9 @@ def test_push_new_on_a_create_failure_leaves_the_uid_recorded_rather_than_rollin
     calendar = FakeCalendar(fail_next=True)
     sync = CalendarSync(store, CalendarClient(calendar))
 
-    with pytest.raises(CalendarSyncError):
+    with pytest.raises(
+        CalendarSyncError, match=f"could not sync '{entry.title}' to the calendar: "
+    ):
         sync.push_new(entry, venue=None)
 
     failed = store.get_entry(entry.id)
@@ -850,9 +907,14 @@ def test_push_new_logs_the_full_ical_payload_at_debug_level(
         synced = sync.push_new(entry, venue=None)
 
     assert synced.caldav_uid is not None
-    assert any(
-        "BEGIN:VCALENDAR" in r.message and synced.caldav_uid in r.message for r in caplog.records
-    )
+    # An exact match on the whole message, not just a substring check - the
+    # pushed ical_text itself always contains the entry's uid (in its own
+    # UID: line), so a substring check on caldav_uid alone can't tell a
+    # correctly-logged uid apart from one silently dropped from the
+    # "uid=%s" slot of the log line itself.
+    ical_text = calendar.events_by_uid[synced.caldav_uid].data
+    records = [r for r in caplog.records if r.name == "movie_planner.calendar_sync"]
+    assert records[-1].message == f"Calendar push (create, uid={synced.caldav_uid}):\n{ical_text}"
 
 
 def test_push_update_logs_the_full_ical_payload_at_debug_level(
@@ -867,7 +929,10 @@ def test_push_update_logs_the_full_ical_payload_at_debug_level(
     with caplog.at_level(logging.DEBUG, logger="movie_planner.calendar_sync"):
         sync.push_update(entry, venue=None)
 
-    assert any("BEGIN:VCALENDAR" in r.message for r in caplog.records)
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    records = [r for r in caplog.records if r.name == "movie_planner.calendar_sync"]
+    assert records[-1].message == f"Calendar push (update, uid={entry.caldav_uid}):\n{ical_text}"
 
 
 def test_push_new_omits_director_actors_genre_and_year_when_entry_has_none(store: Store) -> None:
@@ -1034,8 +1099,96 @@ def test_push_update_refreshes_city_and_country(store: Store) -> None:
 
     assert entry.caldav_uid is not None
     ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "LOCATION:Pathé De Munt" in ical_text
     assert "X-CITY:Amsterdam" in ical_text
     assert "X-COUNTRY:Netherlands" in ical_text
+
+
+def test_push_update_keeps_the_events_own_uid(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None)
+
+    sync.push_update(entry, venue=None)
+
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert f"UID:{entry.caldav_uid}" in ical_text
+
+
+def test_push_update_maps_the_entrys_start_and_end_time_onto_the_event(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None)
+    entry = store.update_entry(entry.id, start_time=time(19, 30), end_time=time(21, 45))
+
+    sync.push_update(entry, venue=None)
+
+    assert entry.caldav_uid is not None
+    event = _parse(calendar.events_by_uid[entry.caldav_uid].data)
+    assert _dt(event, "dtstart") == datetime(2026, 1, 1, 19, 30)
+    assert _dt(event, "dtend") == datetime(2026, 1, 1, 21, 45)
+
+
+def test_push_update_refreshes_geo(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None)
+
+    sync.push_update(entry, venue=None, geo=(52.3667, 4.8945))
+
+    assert entry.caldav_uid is not None
+    event = _parse(calendar.events_by_uid[entry.caldav_uid].data)
+    geo = event["geo"]
+    assert isinstance(geo, icalendar.vGeo)
+    assert (round(geo.latitude, 4), round(geo.longitude, 4)) == (52.3667, 4.8945)
+
+
+def test_push_update_refreshes_chain_in_the_description(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None)
+
+    sync.push_update(entry, venue="Tuschinski, Amsterdam, Netherlands", chain="Pathé")
+
+    assert entry.caldav_uid is not None
+    assert "Chain: Pathé" in calendar.events_by_uid[entry.caldav_uid].data
+
+
+def test_push_update_refreshes_screening_details_in_the_description(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None)
+
+    sync.push_update(entry, venue=None, screening_details="Auditorium 1 DOLBY - Row 5 Seat 17")
+
+    assert entry.caldav_uid is not None
+    assert "Auditorium 1 DOLBY - Row 5 Seat 17" in calendar.events_by_uid[entry.caldav_uid].data
+
+
+def test_push_update_refreshes_street_address_and_postal_code(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None)
+
+    sync.push_update(entry, venue=None, street_address="Vijzelstraat 15", postal_code="1017 HD")
+
+    assert entry.caldav_uid is not None
+    ical_text = calendar.events_by_uid[entry.caldav_uid].data
+    assert "X-STREET-ADDRESS:Vijzelstraat 15" in ical_text
+    assert "X-POSTAL-CODE:1017 HD" in ical_text
 
 
 def test_push_new_omits_poster_url_property_when_entry_has_none(store: Store) -> None:
@@ -1230,6 +1383,89 @@ def test_push_update_stale_uid_recovery_keeps_street_address(store: Store) -> No
     assert "X-POSTAL-CODE:1000 AA" in ical_text
 
 
+def test_push_update_stale_uid_recovery_keeps_venue(store: Store) -> None:
+    # Same class of bug as #262/#257/#283 - guards the recreated event's
+    # LOCATION (the venue itself, not just city/country) against the same
+    # "forwarded to push_new but forgotten" mistake.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue="Grand Vista Cinema")
+    stale_uid = entry.caldav_uid
+    assert stale_uid is not None
+    del calendar.events_by_uid[stale_uid]  # simulates an external wipe
+
+    sync.push_update(entry, venue="Grand Vista Cinema")
+
+    refreshed = store.get_entry(entry.id)
+    assert refreshed.caldav_uid is not None
+    ical_text = calendar.events_by_uid[refreshed.caldav_uid].data
+    assert "LOCATION:Grand Vista Cinema" in ical_text
+
+
+def test_push_update_stale_uid_recovery_keeps_chain(store: Store) -> None:
+    # Same class of bug as #262/#257/#283, guarding the chain line in the
+    # recreated event's DESCRIPTION.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue="Tuschinski, Amsterdam, Netherlands", chain="Pathé")
+    stale_uid = entry.caldav_uid
+    assert stale_uid is not None
+    del calendar.events_by_uid[stale_uid]  # simulates an external wipe
+
+    sync.push_update(entry, venue="Tuschinski, Amsterdam, Netherlands", chain="Pathé")
+
+    refreshed = store.get_entry(entry.id)
+    assert refreshed.caldav_uid is not None
+    ical_text = calendar.events_by_uid[refreshed.caldav_uid].data
+    assert "Chain: Pathé" in ical_text
+
+
+def test_push_update_stale_uid_recovery_keeps_screening_details(store: Store) -> None:
+    # Same class of bug as #262/#257/#283, guarding the free-text
+    # screening-details line in the recreated event's DESCRIPTION.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None, screening_details="Auditorium 1 DOLBY - Row 5 Seat 17")
+    stale_uid = entry.caldav_uid
+    assert stale_uid is not None
+    del calendar.events_by_uid[stale_uid]  # simulates an external wipe
+
+    sync.push_update(entry, venue=None, screening_details="Auditorium 1 DOLBY - Row 5 Seat 17")
+
+    refreshed = store.get_entry(entry.id)
+    assert refreshed.caldav_uid is not None
+    ical_text = calendar.events_by_uid[refreshed.caldav_uid].data
+    assert "Auditorium 1 DOLBY - Row 5 Seat 17" in ical_text
+
+
+def test_push_update_stale_uid_recovery_keeps_geo(store: Store) -> None:
+    # Same class of bug as #262/#257/#283, guarding GEO (issue #170) on the
+    # recreated event.
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    calendar = FakeCalendar()
+    sync = CalendarSync(store, CalendarClient(calendar))
+    entry = sync.push_new(entry, venue=None, geo=(52.3667, 4.8945))
+    stale_uid = entry.caldav_uid
+    assert stale_uid is not None
+    del calendar.events_by_uid[stale_uid]  # simulates an external wipe
+
+    sync.push_update(entry, venue=None, geo=(52.3667, 4.8945))
+
+    refreshed = store.get_entry(entry.id)
+    assert refreshed.caldav_uid is not None
+    event = _parse(calendar.events_by_uid[refreshed.caldav_uid].data)
+    geo = event["geo"]
+    assert isinstance(geo, icalendar.vGeo)
+    assert (round(geo.latitude, 4), round(geo.longitude, 4)) == (52.3667, 4.8945)
+
+
 def test_push_update_failure_is_wrapped_and_retryable(store: Store) -> None:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
@@ -1238,7 +1474,9 @@ def test_push_update_failure_is_wrapped_and_retryable(store: Store) -> None:
     entry = sync.push_new(entry, venue=None)
     calendar.fail_next = True
 
-    with pytest.raises(CalendarSyncError):
+    with pytest.raises(
+        CalendarSyncError, match=f"could not sync the update to '{entry.title}' to the calendar: "
+    ):
         sync.push_update(entry, venue=None)
 
     calendar.fail_next = False
@@ -1253,7 +1491,9 @@ def test_push_delete_failure_is_wrapped(store: Store) -> None:
     entry = sync.push_new(entry, venue=None)
     calendar.fail_next = True
 
-    with pytest.raises(CalendarSyncError):
+    with pytest.raises(
+        CalendarSyncError, match=f"could not remove '{entry.title}' from the calendar: "
+    ):
         sync.push_delete(entry)
 
 
