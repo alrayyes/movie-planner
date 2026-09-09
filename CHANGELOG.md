@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.11...movie-planner-v1.27.0) (2026-09-09)
+
+
+### Features
+
+* **http:** send a movie-planner/&lt;version&gt; User-Agent on every outgoing request ([#358](https://github.com/alrayyes/movie-planner/issues/358)) ([9c09f18](https://github.com/alrayyes/movie-planner/commit/9c09f1896374a8d27c61284ecb2b294509ac1d3e)), closes [#357](https://github.com/alrayyes/movie-planner/issues/357)
+
 ## [1.26.11](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.10...movie-planner-v1.26.11) (2026-09-09)
 
 
