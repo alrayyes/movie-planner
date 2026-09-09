@@ -4,7 +4,7 @@ from collections.abc import Callable
 import httpx
 import pytest
 
-from movie_planner.tmdb import TmdbClient
+from movie_planner.tmdb import TmdbClient, TmdbMovieDetails
 
 FIND_RESPONSE = {
     "movie_results": [{"id": 438631}],
@@ -60,6 +60,22 @@ def test_lookup_movie_details_no_movie_match_returns_none() -> None:
     assert client.lookup_movie_details(imdb_id="tt0000000") is None
 
 
+def test_lookup_movie_details_logs_the_exact_no_match_message(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"movie_results": [], "tv_results": []})
+
+    client = _client(handler)
+
+    with caplog.at_level(logging.DEBUG, logger="movie_planner.tmdb"):
+        client.lookup_movie_details(imdb_id="tt0000000")
+
+    messages = [r.message for r in caplog.records]
+    assert messages[0] == "TMDb find request: imdb_id=tt0000000"
+    assert messages[1] == "TMDb find response: no movie match for imdb_id=tt0000000"
+
+
 def test_lookup_movie_details_returns_the_official_youtube_trailer() -> None:
     details = _details(
         videos={
@@ -94,6 +110,26 @@ def test_lookup_movie_details_ignores_unofficial_and_non_trailer_videos() -> Non
 
     assert result is not None
     assert result.trailer_url is None
+
+
+def test_lookup_movie_details_treats_a_missing_order_as_billing_order_zero() -> None:
+    # No explicit "order" field is exactly as early-billed as an explicit
+    # order of 0 - a member missing it entirely keeps its original position
+    # relative to one that is explicitly first, rather than sorting last.
+    details = _details(
+        credits={
+            "cast": [
+                {"name": "No Order Field"},
+                {"name": "Explicit Zero", "order": 0},
+            ]
+        }
+    )
+    client = _client(_handler_for(details))
+
+    result = client.lookup_movie_details(imdb_id="tt1160419")
+
+    assert result is not None
+    assert result.actors == "No Order Field, Explicit Zero"
 
 
 def test_lookup_movie_details_returns_the_full_cast_in_billing_order() -> None:
@@ -152,6 +188,16 @@ def test_lookup_movie_details_reads_the_collection_name() -> None:
 
     assert result is not None
     assert result.collection == "Civil War Collection"
+
+
+def test_lookup_movie_details_treats_a_blank_collection_name_as_none() -> None:
+    details = _details(belongs_to_collection={"id": 1241, "name": ""})
+    client = _client(_handler_for(details))
+
+    result = client.lookup_movie_details(imdb_id="tt1160419")
+
+    assert result is not None
+    assert result.collection is None
 
 
 def test_lookup_movie_details_with_no_collection_is_none() -> None:
@@ -225,6 +271,27 @@ def test_lookup_movie_details_with_no_us_certification_is_none() -> None:
     assert result.certification is None
 
 
+def test_lookup_movie_details_skips_a_malformed_us_entry_and_checks_the_next_one() -> None:
+    # A real TMDb response has at most one "US" entry, but the loop makes
+    # no such assumption - a malformed entry (release_dates not a list)
+    # is skipped with `continue`, not treated as a reason to give up on
+    # the whole response, so a later, well-formed entry still gets read.
+    details = _details(
+        release_dates={
+            "results": [
+                {"iso_3166_1": "US", "release_dates": "not-a-list"},
+                {"iso_3166_1": "US", "release_dates": [{"certification": "PG-13", "type": 3}]},
+            ]
+        }
+    )
+    client = _client(_handler_for(details))
+
+    result = client.lookup_movie_details(imdb_id="tt1160419")
+
+    assert result is not None
+    assert result.certification == "PG-13"
+
+
 def test_lookup_movie_details_reads_the_homepage() -> None:
     details = _details(homepage="https://civilwar.movie")
     client = _client(_handler_for(details))
@@ -272,6 +339,15 @@ def test_lookup_movie_details_reads_a_positive_budget() -> None:
 
     assert result is not None
     assert result.budget == 50_000_000
+
+
+def test_lookup_movie_details_reads_a_budget_of_exactly_one_dollar() -> None:
+    client = _client(_handler_for(_details(budget=1)))
+
+    result = client.lookup_movie_details(imdb_id="tt1160419")
+
+    assert result is not None
+    assert result.budget == 1
 
 
 def test_lookup_movie_details_treats_a_zero_budget_as_unknown() -> None:
@@ -335,20 +411,54 @@ def test_lookup_movie_details_no_match_is_cached_too() -> None:
 
     client = _client(handler)
 
-    client.lookup_movie_details(imdb_id="tt0000000")
-    client.lookup_movie_details(imdb_id="tt0000000")
+    first = client.lookup_movie_details(imdb_id="tt0000000")
+    second = client.lookup_movie_details(imdb_id="tt0000000")
 
+    # The cached miss itself must be None, not just calls==1 - a cache
+    # entry that silently became some other falsy value would still keep
+    # calls at 1 while returning something a caller can't tell from a hit.
+    assert first is None
+    assert second is None
     assert calls == 1
 
 
-def test_lookup_movie_details_logs_both_requests_at_debug_level(
+def test_lookup_movie_details_with_a_response_missing_every_optional_key() -> None:
+    # A minimal/placeholder TMDb entry can omit "videos", "credits",
+    # "release_dates" and "keywords" entirely, not just send them empty -
+    # every one of those needs its own .get(..., default) to fall back to
+    # rather than raising on a missing key.
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/3/find/tt1160419":
+            return httpx.Response(200, json=FIND_RESPONSE)
+        assert request.url.path == "/3/movie/438631"
+        return httpx.Response(200, json={})
+
+    client = _client(handler)
+
+    result = client.lookup_movie_details(imdb_id="tt1160419")
+
+    assert result == TmdbMovieDetails()
+
+
+def test_lookup_movie_details_logs_the_exact_find_and_details_messages(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     client = _client(_handler_for(_details()))
 
     with caplog.at_level(logging.DEBUG, logger="movie_planner.tmdb"):
-        client.lookup_movie_details(imdb_id="tt1160419")
+        result = client.lookup_movie_details(imdb_id="tt1160419")
 
     messages = [r.message for r in caplog.records]
-    assert any("tt1160419" in m for m in messages)
-    assert any("438631" in m for m in messages)
+    assert messages[0] == "TMDb find request: imdb_id=tt1160419"
+    assert messages[1] == "TMDb find response: imdb_id=tt1160419 -> tmdb_id=438631"
+    assert messages[2] == "TMDb movie details request: tmdb_id=438631"
+    assert messages[3] == f"TMDb movie details response: tmdb_id=438631 -> {result}"
+
+
+def test_tmdb_client_defaults_to_the_real_tmdb_api_base_url() -> None:
+    # Every other test injects its own http_client, so the production
+    # default (used whenever the caller doesn't pass one) never otherwise
+    # gets exercised at all.
+    client = TmdbClient(api_key="test-key")
+
+    assert str(client._http.base_url) == "https://api.themoviedb.org/3/"
