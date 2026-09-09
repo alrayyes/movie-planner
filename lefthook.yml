@@ -132,14 +132,20 @@ pre-push:
 
     # A full run across src/ is ~25s (measured), well inside "can carry the
     # linter that takes twenty" above - cheap enough for pre-push, and CI
-    # runs the identical command. Non-blocking on its own exit code: a
-    # surviving mutant is a missing test case to pick up later, per
-    # python.md, not a merge-blocking failure for a codebase that wasn't
-    # built mutation-clean from day one - `mutmut run` already exits 0
-    # regardless of how many mutants survive, so this reports rather than
-    # gates. `results` prints what's left so it's visible in the log.
+    # runs the identical commands. `mutmut run` itself still exits 0
+    # regardless of survivor count - scripts/check_mutmut_survivors.py is
+    # the actual gate, failing only when a file this push's branch touches
+    # (relative to origin/main) has more survivors now than
+    # .mutmut-baseline.json allows. See CONTRIBUTING.md's mutmut section
+    # and movie-planner#303.
     - name: mutmut
-      run: uv run mutmut run && uv run mutmut results
+      run: |
+        uv run mutmut run
+        uv run mutmut results
+        git fetch origin main --quiet || true
+        merge_base="$(git merge-base origin/main HEAD 2>/dev/null || echo HEAD)"
+        changed_files="$(git diff --name-only "$merge_base" HEAD -- src)"
+        uv run python scripts/check_mutmut_survivors.py check $changed_files
 
     # These are `package.json` scripts rather than the commands spelled out,
     # because CI runs the same ones and a literal copied into two files drifts
