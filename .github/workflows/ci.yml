@@ -62,7 +62,7 @@ jobs:
           # not pytest's - a failing suite would still report green
           # (movie-planner#212).
           set -o pipefail
-          uv run pytest --cov=movie_planner --cov-report=term-missing --cov-report=xml | tee coverage.txt
+          uv run pytest --cov=movie_planner --cov-report=term-missing --cov-report=xml --junitxml=junit.xml | tee coverage.txt
           {
             echo '### Coverage'
             echo
@@ -81,6 +81,18 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+
+      # Codecov Test Analytics: per-test failure/flake detail, not just a
+      # coverage delta. !cancelled(), not always() - still runs when pytest
+      # above failed (junit.xml exists either way), but not if the whole run
+      # was cancelled out from under it. Same Dependabot-token gap as above.
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: junit.xml
+          report-type: test_results
 
   # Mutation testing: mutates src/ (excluding test_e2e.py's real-Baikal-
   # container coverage from the rerun set - ruinous to repeat per mutant,
