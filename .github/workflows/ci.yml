@@ -92,7 +92,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: junit.xml
-          report-type: test_results
+          report_type: test_results
 
   # Mutation testing: mutates src/ (excluding test_e2e.py's real-Baikal-
   # container coverage from the rerun set - ruinous to repeat per mutant,
