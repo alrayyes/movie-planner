@@ -15,15 +15,18 @@ build from scratch than wrapping bytes in an escape sequence.
 """
 
 import base64
+import dataclasses
 import os
+import re
 from typing import Literal
 
-from movie_planner.store import Entry, Venue
+from movie_planner.store import Entry, Venue, serialize_entry_field
 
 TerminalImageProtocol = Literal["iterm2", "kitty"]
 
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 _KITTY_CHUNK_SIZE = 4096
+_IMDB_ID_RE = re.compile(r"(tt\d+)")
 
 
 def detect_terminal_image_protocol() -> TerminalImageProtocol | None:
@@ -113,3 +116,25 @@ def format_entry(entry: Entry, *, medium_name: str, venue: Venue | None) -> str:
         lines.append(f"  Notes: {entry.notes}")
 
     return "\n".join(lines)
+
+
+def entry_to_json(entry: Entry, *, medium_name: str, venue: Venue | None) -> dict[str, object]:
+    """Every field movie-planner stores for `entry`, plus the medium/venue
+    names its foreign keys join to - the machine-readable counterpart to
+    `format_entry` (issue #363), for external tooling that wants the full
+    record rather than a scraped text layout. Every key is always present,
+    `null` rather than omitted when unset, so a consumer never has to guard
+    against a missing key.
+    """
+    data: dict[str, object] = {
+        field.name: serialize_entry_field(field.name, getattr(entry, field.name))
+        for field in dataclasses.fields(entry)
+    }
+    data["medium"] = medium_name
+    data["venue"] = venue.name if venue else None
+    data["venue_chain"] = venue.chain if venue else None
+    data["venue_city"] = venue.city if venue else None
+    data["venue_country"] = venue.country if venue else None
+    match = _IMDB_ID_RE.search(entry.imdb_url) if entry.imdb_url else None
+    data["imdb_id"] = match.group(1) if match else None
+    return data

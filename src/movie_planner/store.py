@@ -399,7 +399,7 @@ def _row_to_entry(row: tuple[Any, ...]) -> Entry:
     )
 
 
-def _serialize_entry_field(name: str, value: object) -> object:
+def serialize_entry_field(name: str, value: object) -> object:
     if name in ("date", "omdb_last_no_match") and isinstance(value, datetime.date):
         return value.isoformat()
     if name in ("start_time", "end_time"):
@@ -888,7 +888,7 @@ class Store:
         )
         columns = _ENTRY_COLUMNS[1:]  # everything but id
         set_clause = ", ".join(f"{column}=?" for column in columns)
-        values = [_serialize_entry_field(column, getattr(updated, column)) for column in columns]
+        values = [serialize_entry_field(column, getattr(updated, column)) for column in columns]
         self._conn.execute(
             # set_clause is built purely from _ENTRY_COLUMNS, never user input; every value is parameterized
             f"UPDATE entries SET {set_clause} WHERE id=?",  # nosec B608
@@ -900,13 +900,13 @@ class Store:
         # change, and shouldn't read as one in the activity log.
         field_diff = {
             field: (
-                _serialize_entry_field(field, getattr(current, field)),
-                _serialize_entry_field(field, getattr(updated, field)),
+                serialize_entry_field(field, getattr(current, field)),
+                serialize_entry_field(field, getattr(updated, field)),
             )
             for field, passed in changes.items()
             if passed is not _UNSET
-            and _serialize_entry_field(field, getattr(current, field))
-            != _serialize_entry_field(field, getattr(updated, field))
+            and serialize_entry_field(field, getattr(current, field))
+            != serialize_entry_field(field, getattr(updated, field))
         }
         if field_diff:
             self._record_activity(

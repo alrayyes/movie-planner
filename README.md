@@ -113,7 +113,9 @@ uv run movie-planner list --chain Pathé
 uv run movie-planner list --city Amsterdam
 uv run movie-planner list --limit 5
 uv run movie-planner list --omdb-no-match
+uv run movie-planner list --json
 uv run movie-planner show 3
+uv run movie-planner show 3 --json
 uv run movie-planner update 3 --title "Dune Part Two"
 uv run movie-planner update 3 --refresh-metadata
 uv run movie-planner delete 3
@@ -132,12 +134,13 @@ uv run movie-planner sync pull
 ```
 
 See [`docs/usage.md`](docs/usage.md) for what each of these does in
-detail: filtering and limiting `list`, `show`'s inline poster
-rendering, automatic venue chain/city/country/GPS fill-in, `import`'s
-skipped OMDb lookups and failure tracking, `sync`'s push-only design and
-`sync pull` reconciliation, the `activity` log, `bug-report`'s
-PII-stripped diagnostic summary, and how to import years of history
-without exceeding OMDb's daily request limit.
+detail: filtering and limiting `list`, `show`'s inline poster rendering,
+`--json` output on either for external tooling, automatic venue
+chain/city/country/GPS fill-in, `import`'s skipped OMDb lookups and
+failure tracking, `sync`'s push-only design and `sync pull`
+reconciliation, the `activity` log, `bug-report`'s PII-stripped
+diagnostic summary, and how to import years of history without
+exceeding OMDb's daily request limit.
 
 ## Configuration
 
