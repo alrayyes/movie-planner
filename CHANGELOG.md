@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.28.0...movie-planner-v1.28.1) (2026-09-12)
+
+
+### Bug Fixes
+
+* **tests:** stop mail-import fetch tests writing import.json to repo root ([#367](https://github.com/alrayyes/movie-planner/issues/367)) ([d9cbd20](https://github.com/alrayyes/movie-planner/commit/d9cbd20b87e49b8e83b4f39cd774893bcd131765)), closes [#364](https://github.com/alrayyes/movie-planner/issues/364)
+
 ## [1.28.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.27.0...movie-planner-v1.28.0) (2026-09-12)
 
 
