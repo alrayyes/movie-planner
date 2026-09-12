@@ -672,7 +672,10 @@ def test_fetch_since_relative_reaches_the_client(
     monkeypatch.setattr(MboxMailClient, "fetch", _spy_fetch(captured))
     config_path = _mbox_config(tmp_path, "irrelevant")
 
-    result = runner.invoke(app, ["fetch", "--config", str(config_path), "--since", "1 hour ago"])
+    result = runner.invoke(
+        app,
+        ["fetch", "--config", str(config_path), "--since", "1 hour ago", "--envelopes-only"],
+    )
 
     assert result.exit_code == 0, result.output
     assert captured["since"] == fixed_now - timedelta(hours=1)
@@ -688,7 +691,10 @@ def test_fetch_until_relative_reaches_the_client(
     monkeypatch.setattr(MboxMailClient, "fetch", _spy_fetch(captured))
     config_path = _mbox_config(tmp_path, "irrelevant")
 
-    result = runner.invoke(app, ["fetch", "--config", str(config_path), "--until", "2 weeks ago"])
+    result = runner.invoke(
+        app,
+        ["fetch", "--config", str(config_path), "--until", "2 weeks ago", "--envelopes-only"],
+    )
 
     assert result.exit_code == 0, result.output
     assert captured["until"] == fixed_now - timedelta(weeks=2)
@@ -699,7 +705,10 @@ def test_fetch_since_accepts_an_iso_date(tmp_path: Path, monkeypatch: pytest.Mon
     monkeypatch.setattr(MboxMailClient, "fetch", _spy_fetch(captured))
     config_path = _mbox_config(tmp_path, "irrelevant")
 
-    result = runner.invoke(app, ["fetch", "--config", str(config_path), "--since", "2026-08-01"])
+    result = runner.invoke(
+        app,
+        ["fetch", "--config", str(config_path), "--since", "2026-08-01", "--envelopes-only"],
+    )
 
     assert result.exit_code == 0, result.output
     assert captured["since"] == datetime(2026, 8, 1, tzinfo=UTC)
