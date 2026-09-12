@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.27.0...movie-planner-v1.28.0) (2026-09-12)
+
+
+### Features
+
+* **cli:** add --json output to list/show for external tooling ([#365](https://github.com/alrayyes/movie-planner/issues/365)) ([61da4ee](https://github.com/alrayyes/movie-planner/commit/61da4ee4357b1456a39867597649330d051e40de)), closes [#363](https://github.com/alrayyes/movie-planner/issues/363)
+
 ## [1.27.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.26.11...movie-planner-v1.27.0) (2026-09-09)
 
 
