@@ -1,10 +1,12 @@
 import base64
+import json
 from datetime import date, time
 
 import pytest
 
 from movie_planner.display import (
     detect_terminal_image_protocol,
+    entry_to_json,
     format_entry,
     render_poster,
 )
@@ -219,3 +221,68 @@ def test_format_entry_joins_lines_with_a_single_newline() -> None:
     text = format_entry(entry, medium_name="netflix", venue=None)
 
     assert text == "Dune (2026-01-01)\n  netflix"
+
+
+def test_entry_to_json_includes_every_stored_field_and_the_venue_join() -> None:
+    entry = _entry(
+        start_time=time(19, 0),
+        end_time=time(21, 15),
+        imdb_rating="8.5/10",
+        imdb_url="https://www.imdb.com/title/tt1160419/",
+        rotten_tomatoes_rating="91%",
+        metacritic_rating="80",
+        trailer_url="https://www.youtube.com/watch?v=8g18jFHCLXk",
+        letterboxd_url="https://letterboxd.com/film/dune-2021/",
+        letterboxd_rating="4.5",
+        notes="Enjoyed the soundtrack",
+        director="Denis Villeneuve",
+        writer="Jon Spaihts",
+        actors="Timothée Chalamet, Rebecca Ferguson, Zendaya",
+        genre="Action, Adventure, Drama",
+        release_year=2021,
+    )
+    venue = Venue(id=1, name="Tuschinski", chain="Pathé", city="Amsterdam", country="Netherlands")
+
+    data = entry_to_json(entry, medium_name="cinema", venue=venue)
+
+    assert data["id"] == 1
+    assert data["title"] == "Dune"
+    assert data["date"] == "2026-01-01"
+    assert data["start_time"] == "19:00:00"
+    assert data["end_time"] == "21:15:00"
+    assert data["medium"] == "cinema"
+    assert data["venue"] == "Tuschinski"
+    assert data["venue_chain"] == "Pathé"
+    assert data["venue_city"] == "Amsterdam"
+    assert data["venue_country"] == "Netherlands"
+    assert data["director"] == "Denis Villeneuve"
+    assert data["writer"] == "Jon Spaihts"
+    assert data["actors"] == "Timothée Chalamet, Rebecca Ferguson, Zendaya"
+    assert data["genre"] == "Action, Adventure, Drama"
+    assert data["release_year"] == 2021
+    assert data["imdb_rating"] == "8.5/10"
+    assert data["imdb_url"] == "https://www.imdb.com/title/tt1160419/"
+    assert data["imdb_id"] == "tt1160419"
+    assert data["rotten_tomatoes_rating"] == "91%"
+    assert data["metacritic_rating"] == "80"
+    assert data["trailer_url"] == "https://www.youtube.com/watch?v=8g18jFHCLXk"
+    assert data["letterboxd_url"] == "https://letterboxd.com/film/dune-2021/"
+    assert data["letterboxd_rating"] == "4.5"
+    assert data["notes"] == "Enjoyed the soundtrack"
+    json.dumps(data)  # every value must be JSON-serializable, not just present
+
+
+def test_entry_to_json_absent_fields_are_null_not_omitted() -> None:
+    entry = _entry()
+
+    data = entry_to_json(entry, medium_name="netflix", venue=None)
+
+    assert "director" in data
+    assert data["director"] is None
+    assert data["venue"] is None
+    assert data["venue_chain"] is None
+    assert data["venue_city"] is None
+    assert data["venue_country"] is None
+    assert data["imdb_id"] is None
+    assert data["start_time"] is None
+    assert data["end_time"] is None

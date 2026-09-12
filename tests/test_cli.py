@@ -1,3 +1,4 @@
+import json
 from datetime import date, time
 from pathlib import Path
 
@@ -1035,6 +1036,75 @@ def test_list_filtered_by_city_with_no_matching_venues_reports_no_entries(
     assert "no entries" in result.output.lower()
 
 
+# --- list --json: issue #363, a machine-readable dump for external tooling ---
+
+
+def test_list_json_returns_every_field_for_every_entry(
+    config_path: Path, calendar: FakeCalendar, omdb_match_with_imdb_id: None
+) -> None:
+    _log(config_path, "Dune", "2026-01-01", venue="Tuschinski")
+
+    result = runner.invoke(app, ["--config", str(config_path), "list", "--json"])
+
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["title"] == "Dune"
+    assert data[0]["medium"] == "cinema"
+    assert data[0]["venue"] == "Tuschinski"
+    assert data[0]["venue_chain"] == "Pathé"
+    assert data[0]["director"] == "Denis Villeneuve"
+    assert data[0]["imdb_id"] == "tt1160419"
+    assert data[0]["letterboxd_url"] is None
+
+
+def test_list_json_respects_existing_filters(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    _log(config_path, "Dune", "2026-01-01", venue="Tuschinski")
+    _log(config_path, "Solstice Run", "2026-01-02", venue="Eye")
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "list", "--chain", "Pathé", "--json"]
+    )
+
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert [row["title"] for row in data] == ["Dune"]
+
+
+def test_list_json_with_no_entries_is_an_empty_array_not_a_message(
+    config_path: Path,
+) -> None:
+    result = runner.invoke(app, ["--config", str(config_path), "list", "--json"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == []
+
+
+def test_list_json_with_no_matching_venues_is_an_empty_array(
+    config_path: Path,
+) -> None:
+    result = runner.invoke(
+        app, ["--config", str(config_path), "list", "--city", "Nowhere", "--json"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == []
+
+
+def test_list_without_json_flag_is_unchanged_plain_text(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    _log(config_path, "Dune", "2026-01-01")
+
+    result = runner.invoke(app, ["--config", str(config_path), "list"])
+
+    assert result.exit_code == 0, result.output
+    assert not result.output.lstrip().startswith("[")
+
+
 # --- show ---
 
 
@@ -1077,6 +1147,78 @@ def test_show_missing_entry_errors(config_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "no entry" in result.output.lower()
+
+
+def test_show_json_includes_every_field(
+    config_path: Path, calendar: FakeCalendar, omdb_match_with_imdb_id: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+            "--venue",
+            "Grand Vista Cinema",
+        ],
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "show", "1", "--json"])
+
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["id"] == 1
+    assert data["title"] == "Dune"
+    assert data["date"] == "2026-01-01"
+    assert data["medium"] == "cinema"
+    assert data["venue"] == "Grand Vista Cinema"
+    assert data["director"] == "Denis Villeneuve"
+    assert data["actors"] == "Timothée Chalamet, Rebecca Ferguson, Zendaya"
+    assert data["genre"] == "Action, Adventure, Drama"
+    assert data["release_year"] == 2021
+    assert data["imdb_rating"] == "8.5/10"
+    assert data["imdb_id"] == "tt1160419"
+    assert data["rotten_tomatoes_rating"] == "91%"
+    assert data["metacritic_rating"] == "80"
+    assert data["notes"] is None
+    assert data["letterboxd_url"] is None
+
+
+def test_show_json_missing_entry_still_errors(config_path: Path) -> None:
+    result = runner.invoke(app, ["--config", str(config_path), "show", "999", "--json"])
+
+    assert result.exit_code != 0
+    assert "no entry" in result.output.lower()
+
+
+def test_show_without_json_flag_is_unchanged_plain_text(
+    config_path: Path, calendar: FakeCalendar, omdb_match: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "show", "1"])
+
+    assert result.exit_code == 0, result.output
+    assert not result.output.lstrip().startswith("{")
 
 
 def test_show_with_no_terminal_protocol_skips_image(

@@ -32,6 +32,22 @@ else, or with no poster available, `show` just skips the image. Kitty
 only renders a poster that's already PNG — OMDb's usual JPEG posters
 render on iTerm2/WezTerm only. No Sixel support.
 
+## `--json` output
+
+`--json` on `list` or `show` prints every field movie-planner stores for
+the matching entry/entries as JSON instead of the preceding plain-text
+layouts — a full object per entry, including fields those layouts never
+show (the entry's own id, its start/end time, `poster_url`,
+`letterboxd_url`/`letterboxd_rating`, `notes`, `source`), plus the
+medium/venue names its foreign keys join to, along with an IMDb ID
+(`imdb_id`) pulled from `imdb_url`. Every key is always present —
+`null` rather than omitted when unset, so a consuming script never has
+to guard against a missing key — and `list --json` prints `[]` rather
+than the plain-text `No entries.` for a filter that matches nothing.
+Built for external tooling that wants the full record without scraping
+text or reaching into the SQLite file directly; combines with every
+preceding `list` filter.
+
 ## Automatic venue fill-in
 
 A venue created with a name matching a hardcoded table (Pathé's own

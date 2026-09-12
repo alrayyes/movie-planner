@@ -6,6 +6,7 @@ import dataclasses
 import email
 import email.policy
 import email.utils
+import json
 import logging
 import re
 import sys
@@ -29,7 +30,12 @@ from movie_planner.calendar_pull import (
     detect_candidates,
 )
 from movie_planner.calendar_sync import CalendarClient, CalendarSync
-from movie_planner.display import detect_terminal_image_protocol, format_entry, render_poster
+from movie_planner.display import (
+    detect_terminal_image_protocol,
+    entry_to_json,
+    format_entry,
+    render_poster,
+)
 from movie_planner.duplicates import find_duplicate
 from movie_planner.importers import IMPORT_FORMATS, parse_json_text, run_import
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
@@ -869,6 +875,16 @@ def list_entries(
             "fix them by hand.",
         ),
     ] = False,
+    as_json: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help="Print every stored field for every matching entry as a JSON array, instead "
+            "of the one-line-per-entry text summary - for external tooling. Absent fields are "
+            "'null' rather than omitted, so every object has the same key set. An empty result "
+            "is '[]', never the plain-text 'No entries.' message.",
+        ),
+    ] = False,
 ) -> None:
     """List logged entries."""
     cfg = _cfg(ctx)
@@ -880,7 +896,7 @@ def list_entries(
         if medium is not None:
             match = next((m for m in media_by_id.values() if m.name == medium), None)
             if match is None:
-                typer.echo("No entries.")
+                typer.echo("[]" if as_json else "No entries.")
                 return
             medium_id = match.id
 
@@ -892,7 +908,7 @@ def list_entries(
                 if (chain is None or v.chain == chain) and (city is None or v.city == city)
             ]
             if not matches:
-                typer.echo("No entries.")
+                typer.echo("[]" if as_json else "No entries.")
                 return
             venue_ids = [v.id for v in matches]
 
@@ -907,7 +923,22 @@ def list_entries(
         if limit is not None:
             entries = entries[-limit:]
         if not entries:
-            typer.echo("No entries.")
+            typer.echo("[]" if as_json else "No entries.")
+            return
+        if as_json:
+            typer.echo(
+                json.dumps(
+                    [
+                        entry_to_json(
+                            entry,
+                            medium_name=media_by_id[entry.medium_id].name,
+                            venue=venues_by_id.get(entry.venue_id) if entry.venue_id else None,
+                        )
+                        for entry in entries
+                    ],
+                    indent=2,
+                )
+            )
             return
         for entry in entries:
             medium_name = media_by_id[entry.medium_id].name
@@ -949,6 +980,16 @@ def _poster_url_for(cfg: config_module.Config, entry: Entry) -> str | None:
 def show(
     ctx: typer.Context,
     entry_id: Annotated[int, typer.Argument(help="ID of the entry to show.")],
+    as_json: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help="Print every stored field for this entry as a single JSON object, instead of "
+            "the labelled text layout - for external tooling. Absent fields are 'null' rather "
+            "than omitted, so the object always has the same key set. Skips the inline poster "
+            "render even where the terminal would otherwise support it.",
+        ),
+    ] = False,
 ) -> None:
     """Show one logged entry's full metadata, with the poster rendered
     inline where the terminal supports it (iTerm2/WezTerm or Kitty/Ghostty
@@ -967,6 +1008,13 @@ def show(
         venues_by_id = {v.id: v for v in store.list_venues()}
         medium_name = media_by_id[entry.medium_id].name
         venue = venues_by_id[entry.venue_id] if entry.venue_id else None
+
+        if as_json:
+            typer.echo(
+                json.dumps(entry_to_json(entry, medium_name=medium_name, venue=venue), indent=2)
+            )
+            return
+
         typer.echo(format_entry(entry, medium_name=medium_name, venue=venue))
 
         protocol = detect_terminal_image_protocol()
