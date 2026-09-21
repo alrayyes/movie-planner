@@ -141,17 +141,18 @@
             typer
           ];
 
-          # nixos-unstable's icalendar (7.2.2), typer (0.25.1), and
-          # tomlkit (0.15.0) all lag behind this project's own exact
-          # pins (icalendar==7.3, typer==0.27.1, tomlkit==0.15.1) —
-          # confirmed live: pythonRuntimeDepsCheckHook enforces the
-          # built wheel's own `==` metadata against what's actually
-          # resolved and fails outright otherwise ("icalendar==7.3 not
-          # satisfied by version 7.2.2", "tomlkit==0.15.1 not satisfied
-          # by version 0.15.0"). Relaxed rather than overridden to
-          # non-nixpkgs versions (the way uv-build is, above) — same
-          # "use nixpkgs' own versions" tradeoff the `dependencies` list
-          # just above already makes.
+          # nixos-unstable's caldav (3.3.0), icalendar (7.2.2), typer
+          # (0.25.1), and tomlkit (0.15.0) all lag behind this project's
+          # own exact pins (caldav==3.3.1, icalendar==7.3, typer==0.27.2,
+          # tomlkit==0.15.1) — confirmed live: pythonRuntimeDepsCheckHook
+          # enforces the built wheel's own `==` metadata against what's
+          # actually resolved and fails outright otherwise ("caldav==3.3.1
+          # not satisfied by version 3.3.0", "icalendar==7.3 not satisfied
+          # by version 7.2.2", "tomlkit==0.15.1 not satisfied by version
+          # 0.15.0"). Relaxed rather than overridden to non-nixpkgs
+          # versions (the way uv-build is, above) — same "use nixpkgs'
+          # own versions" tradeoff the `dependencies` list just above
+          # already makes.
           #
           # rapidfuzz (issue #330): a different case, not just lagging -
           # nixpkgs has never packaged 3.14.6 at all (its own commit
@@ -164,6 +165,7 @@
           # versions" tradeoff, and 3.14.5 -> 3.14.6 is a patch bump with
           # no behavior this project depends on.
           pythonRelaxDeps = [
+            "caldav"
             "icalendar"
             "rapidfuzz"
             "tomlkit"
