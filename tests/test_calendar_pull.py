@@ -1,4 +1,5 @@
-from collections.abc import Iterator
+import time as time_module
+from collections.abc import Callable, Iterator
 from datetime import date, time
 from pathlib import Path
 
@@ -17,6 +18,104 @@ from movie_planner.calendar_pull import (
 )
 from movie_planner.calendar_sync import build_vevent
 from movie_planner.store import Entry, Store
+
+# --- #391: a viewing's time is the wall-clock time the viewer logged ---
+#
+# This CLI writes floating times (DTSTART:20240315T190000, no Z, no TZID) and
+# reads them back untouched. The web app wrote UTC until
+# alrayyes/movie-planner-web#752, so a viewing logged at 00:30 in Amsterdam is
+# stored 23:30Z the day before. icalendar hands back an aware datetime for those,
+# and .date()/.time() used to drop the zone, which gave the wrong date and time.
+# Each test sets the machine zone itself, so none depends on where it runs.
+
+
+@pytest.fixture
+def machine_zone(monkeypatch: pytest.MonkeyPatch) -> Iterator[Callable[[str], None]]:
+    def use(zone: str) -> None:
+        monkeypatch.setenv("TZ", zone)
+        time_module.tzset()
+
+    yield use
+    monkeypatch.undo()
+    time_module.tzset()
+
+
+def _vevent(*lines: str) -> str:
+    return "\r\n".join(
+        [
+            "BEGIN:VCALENDAR",
+            "BEGIN:VEVENT",
+            "UID:u",
+            "SUMMARY:Dune",
+            *lines,
+            "END:VEVENT",
+            "END:VCALENDAR",
+        ]
+    )
+
+
+def test_parse_event_reads_a_utc_time_as_the_machine_zones_wall_clock(
+    machine_zone: Callable[[str], None],
+) -> None:
+    machine_zone("Europe/Amsterdam")
+
+    parsed = parse_event(_vevent("DTSTART:20240314T233000Z", "DTEND:20240315T011500Z"))
+
+    assert parsed.date == date(2024, 3, 15)
+    assert parsed.start_time == time(0, 30)
+    assert parsed.end_time == time(2, 15)
+
+
+def test_parse_event_reads_a_utc_time_in_a_zone_west_of_utc(
+    machine_zone: Callable[[str], None],
+) -> None:
+    machine_zone("America/New_York")
+
+    parsed = parse_event(_vevent("DTSTART:20240315T230000Z", "DTEND:20240316T013000Z"))
+
+    # 23:00Z is 19:00 in New York (EDT, UTC-4 from 10 March).
+    assert parsed.date == date(2024, 3, 15)
+    assert parsed.start_time == time(19, 0)
+    assert parsed.end_time == time(21, 30)
+
+
+def test_parse_event_leaves_a_floating_time_alone(machine_zone: Callable[[str], None]) -> None:
+    for zone in ("Europe/Amsterdam", "America/New_York", "Asia/Tokyo"):
+        machine_zone(zone)
+
+        parsed = parse_event(_vevent("DTSTART:20240315T190000", "DTEND:20240315T213000"))
+
+        assert parsed.date == date(2024, 3, 15), zone
+        assert parsed.start_time == time(19, 0), zone
+        assert parsed.end_time == time(21, 30), zone
+
+
+def test_parse_event_leaves_an_all_day_date_alone(machine_zone: Callable[[str], None]) -> None:
+    machine_zone("Asia/Tokyo")
+
+    parsed = parse_event(_vevent("DTSTART;VALUE=DATE:20240315"))
+
+    assert parsed.date == date(2024, 3, 15)
+    assert parsed.start_time is None
+
+
+def test_parse_event_converts_a_tzid_time_to_the_machine_zone(
+    machine_zone: Callable[[str], None],
+) -> None:
+    machine_zone("Europe/Amsterdam")
+
+    parsed = parse_event(
+        _vevent(
+            "DTSTART;TZID=America/New_York:20240315T190000",
+            "DTEND;TZID=America/New_York:20240315T213000",
+        )
+    )
+
+    # 19:00 in New York (UTC-4) is 23:00Z, which is 00:00 on the 16th in Amsterdam (UTC+1).
+    assert parsed.date == date(2024, 3, 16)
+    assert parsed.start_time == time(0, 0)
+    assert parsed.end_time == time(2, 30)
+
 
 # --- 2.1: SUMMARY/DTSTART/DTEND round-trip, all three time shapes ---
 
