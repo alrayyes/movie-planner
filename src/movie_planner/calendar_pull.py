@@ -107,6 +107,21 @@ def _dt(vevent: icalendar.Event, name: str) -> date | datetime:
     return value.dt
 
 
+def _wall_clock(value: datetime) -> datetime:
+    """A viewing's time as the viewer logged it: a wall-clock time.
+
+    This CLI writes floating times, which come back naive and are already that. A
+    time with a zone (a trailing Z, or a TZID) is what other clients write; the
+    web app wrote UTC until movie-planner-web#752, so a viewing logged at 00:30 in
+    Amsterdam is stored 23:30Z the day before. .date() and .time() on that would
+    drop the zone and read the wrong date and time (#391), so it's converted to
+    this machine's zone first.
+    """
+    if value.tzinfo is None:
+        return value
+    return value.astimezone().replace(tzinfo=None)
+
+
 def parse_event(ical_text: str) -> ParsedEvent:
     calendar = icalendar.Calendar.from_ical(ical_text)
     (vevent,) = [c for c in calendar.subcomponents if c.name == "VEVENT"]
@@ -114,6 +129,7 @@ def parse_event(ical_text: str) -> ParsedEvent:
 
     dtstart = _dt(vevent, "dtstart")
     if isinstance(dtstart, datetime):
+        dtstart = _wall_clock(dtstart)
         entry_date = dtstart.date()
         start_time: time | None = dtstart.time()
     else:
@@ -125,7 +141,7 @@ def parse_event(ical_text: str) -> ParsedEvent:
         dtend = _dt(vevent, "dtend")
         # build_vevent only ever sets DTEND as DATE-TIME - narrows a real-server invariant.
         assert isinstance(dtend, datetime)  # nosec B101
-        end_time = dtend.time()
+        end_time = _wall_clock(dtend).time()
 
     release_year_text = _text(vevent, "X-YEAR")
 
