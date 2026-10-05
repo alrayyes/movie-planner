@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.5](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.28.4...movie-planner-v1.28.5) (2026-10-05)
+
+
+### Bug Fixes
+
+* **ci:** stop a lockfile sync race skipping the publish jobs ([#389](https://github.com/alrayyes/movie-planner/issues/389)) ([7b8b6fe](https://github.com/alrayyes/movie-planner/commit/7b8b6fe77ce990fc0e57773b7921ea8216a3a2f8)), closes [#77](https://github.com/alrayyes/movie-planner/issues/77)
+
 ## [1.28.4](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.28.3...movie-planner-v1.28.4) (2026-10-05)
 
 
