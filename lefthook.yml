@@ -130,22 +130,31 @@ pre-push:
     - name: pip-audit
       run: uv run pip-audit
 
-    # A full run across src/ is ~25s (measured), well inside "can carry the
-    # linter that takes twenty" above - cheap enough for pre-push, and CI
+    # A full run across src/ is ~3 minutes on 16 cores (measured, #385); a
+    # push touching one file is seconds, cheap enough for pre-push, and CI
     # runs the identical commands. `mutmut run` itself still exits 0
     # regardless of survivor count - scripts/check_mutmut_survivors.py is
     # the actual gate, failing only when a file this push's branch touches
     # (relative to origin/main) has more survivors now than
     # .mutmut-baseline.json allows. See CONTRIBUTING.md's mutmut section
     # and movie-planner#303.
+    # Only the touched files' mutants are run (#385), as in CI; nothing
+    # touched means nothing to run.
     - name: mutmut
       run: |
-        uv run mutmut run
-        uv run mutmut results
         git fetch origin main --quiet || true
         merge_base="$(git merge-base origin/main HEAD 2>/dev/null || echo HEAD)"
-        changed_files="$(git diff --name-only "$merge_base" HEAD -- src)"
-        uv run python scripts/check_mutmut_survivors.py check $changed_files
+        files="$(git diff --name-only "$merge_base" HEAD -- src)"
+        [ -z "$files" ] && exit 0
+        globs="$(uv run python scripts/check_mutmut_survivors.py mutant-globs $files)"
+        [ -z "$globs" ] && exit 0
+        # Unquoted on purpose, one glob per word, with pathname expansion off
+        # so the shell leaves each * for mutmut.
+        set -f
+        uv run mutmut run $globs
+        set +f
+        uv run mutmut results
+        uv run python scripts/check_mutmut_survivors.py check $files
 
     # These are `package.json` scripts rather than the commands spelled out,
     # because CI runs the same ones and a literal copied into two files drifts

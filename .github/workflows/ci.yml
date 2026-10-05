@@ -94,10 +94,10 @@ jobs:
           files: junit.xml
           report_type: test_results
 
-  # Mutation testing: mutates src/ (excluding test_e2e.py's real-Baikal-
-  # container coverage from the rerun set - ruinous to repeat per mutant,
-  # see pyproject.toml's [tool.mutmut] comment) and reruns the rest of the
-  # suite against each mutant. `mutmut run` itself still exits 0 regardless
+  # Mutation testing: mutates the src/ files this diff touches (excluding
+  # test_e2e.py's real-Baikal-container coverage from the rerun set - ruinous
+  # to repeat per mutant, see pyproject.toml's [tool.mutmut] comment) and
+  # reruns the rest of the suite against each mutant. `mutmut run` itself still exits 0 regardless
   # of survivor count - flipping that on directly would fail every PR over
   # the pre-existing backlog (817 survivors as of #303's gate landing,
   # tracked module by module in milestone #5). scripts/check_mutmut_survivors.py
@@ -118,17 +118,10 @@ jobs:
         with:
           version: "0.12.7"
       - run: uv sync --frozen
-      - name: mutmut run
-        run: |
-          uv run mutmut run
-          {
-            echo '### Mutation testing'
-            echo
-            echo '```'
-            uv run mutmut results
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-      - name: check for new survivors in this diff
+      # #385: the gate below only reads the files this diff touches, so only
+      # those files' mutants are run. A full run is ~5100 mutants and 17 to 21
+      # minutes on a 4-core runner; one file's share is a few minutes.
+      - name: changed source files
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base="${{ github.event.pull_request.base.sha }}"
@@ -141,11 +134,32 @@ jobs:
           # mutated file rather than skipping the gate.
           if git cat-file -e "$base" 2>/dev/null; then
             merge_base="$(git merge-base "$base" HEAD)"
-            changed_files="$(git diff --name-only "$merge_base" HEAD -- src)"
+            git diff --name-only "$merge_base" HEAD -- src > "$RUNNER_TEMP/changed-src.txt"
           else
-            changed_files="$(git ls-files src)"
+            git ls-files src > "$RUNNER_TEMP/changed-src.txt"
           fi
-          uv run python scripts/check_mutmut_survivors.py check $changed_files
+          cat "$RUNNER_TEMP/changed-src.txt"
+      - name: mutmut run
+        run: |
+          mapfile -t files < "$RUNNER_TEMP/changed-src.txt"
+          mapfile -t globs < <(uv run python scripts/check_mutmut_survivors.py mutant-globs "${files[@]}")
+          if [ "${#globs[@]}" -eq 0 ]; then
+            echo "No source file changed, so there is nothing to mutate."
+            exit 0
+          fi
+          # Quoted so the shell leaves the * in each glob for mutmut.
+          uv run mutmut run "${globs[@]}"
+          {
+            echo '### Mutation testing'
+            echo
+            echo '```'
+            uv run mutmut results
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: check for new survivors in this diff
+        run: |
+          mapfile -t files < "$RUNNER_TEMP/changed-src.txt"
+          uv run python scripts/check_mutmut_survivors.py check "${files[@]}"
 
   build:
     runs-on: ubuntu-24.04

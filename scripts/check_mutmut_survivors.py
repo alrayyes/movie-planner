@@ -16,11 +16,11 @@ Two statuses are tracked per file, separately:
 - "no tests": mutmut found no test at all to run against the mutant - new
   code nothing touches yet, a stricter gap than "survived".
 
-Two subcommands:
+Three subcommands:
 
     uv run python scripts/check_mutmut_survivors.py generate
         Regenerate .mutmut-baseline.json from the current `mutmut` results
-        (run `uv run mutmut run` first). Run this after a PR that lowers a
+        (run `uv run mutmut run` in full first; refuses after a scoped run). Run this after a PR that lowers a
         file's counts, to ratchet the baseline down - the script itself never
         raises it, and the gate always allows a lower count than the baseline
         without asking for a baseline update.
@@ -30,6 +30,13 @@ Two subcommands:
         src/movie_planner/cli.py) against the baseline. Exits non-zero and
         lists the new gaps for any file whose current counts exceed its
         baseline.
+
+    uv run python scripts/check_mutmut_survivors.py mutant-globs <file> [<file> ...]
+        Print the `mutmut run` mutant-name globs for those files, one per
+        line, so CI can mutate only what a diff touches (#385) instead of
+        all of src/. Prints nothing when no file owns a mutant, and `*` when
+        an __init__.py is among them, since a package's glob can't be told
+        apart from its submodules'.
 """
 
 from __future__ import annotations
@@ -68,6 +75,23 @@ def module_to_path(module: str) -> str:
     return "src/" + module.replace(".", "/") + ".py"
 
 
+def mutant_globs(changed_files: list[str]) -> list[str]:
+    """src/movie_planner/cli.py -> movie_planner.cli.* (what `mutmut run` takes)."""
+    globs = []
+    for path in changed_files:
+        if not path.startswith("src/") or not path.endswith(".py"):
+            continue
+        if path.endswith("/__init__.py"):
+            return ["*"]
+        globs.append(path.removeprefix("src/").removesuffix(".py").replace("/", ".") + ".*")
+    return globs
+
+
+def has_unrun_mutants(results: str) -> bool:
+    """True when `mutmut results --all true` lists a mutant that was never run."""
+    return any(line.rpartition(": ")[2].strip() == "not checked" for line in results.splitlines())
+
+
 def current_mutants_by_file() -> dict[str, dict[str, list[str]]]:
     """Run `mutmut results`, return {source path: {status: [mutant keys]}}."""
     result = subprocess.run(
@@ -92,6 +116,18 @@ def current_mutants_by_file() -> dict[str, dict[str, list[str]]]:
 
 
 def cmd_generate() -> int:
+    everything = subprocess.run(
+        ["uv", "run", "mutmut", "results", "--all", "true"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    if has_unrun_mutants(everything.stdout):
+        # A run scoped to the diff (#385) leaves the rest unrun, and a baseline
+        # written from that would drop every file that wasn't.
+        print("error: some mutants were never run - run `uv run mutmut run` in full first.")
+        return 1
     by_file = current_mutants_by_file()
     baseline = {
         path: {status: len(keys) for status, keys in sorted(statuses.items())}
@@ -149,9 +185,15 @@ def cmd_check(changed_files: list[str]) -> int:
 
 
 def main() -> int:
-    if len(sys.argv) < 2 or sys.argv[1] not in ("generate", "check"):
+    if len(sys.argv) < 2 or sys.argv[1] not in ("generate", "check", "mutant-globs"):
         print(__doc__)
         return 2
+
+    if sys.argv[1] == "mutant-globs":
+        globs = mutant_globs(sys.argv[2:])
+        if globs:
+            print("\n".join(globs))
+        return 0
 
     if sys.argv[1] == "generate":
         return cmd_generate()

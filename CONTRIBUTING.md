@@ -83,13 +83,22 @@ of pre-existing debt without blocking your PR; a file you did touch can't
 gain a new one.
 
 ```sh
-uv run mutmut run
+uv run mutmut run "movie_planner.cli.*"
 uv run python scripts/check_mutmut_survivors.py check src/movie_planner/cli.py
 ```
 
+`pre-push` and CI run only the mutants of the files your branch touches
+(#385), because the gate reads nothing else: a full run is about 5,100
+mutants and took 17 to 21 minutes on CI. A change with no `src/` file
+skips the run. `scripts/check_mutmut_survivors.py mutant-globs <file>...`
+prints the glob each file maps to. If your branch has no merge base with
+`main`, or touches a package's `__init__.py`, the run covers everything.
+
 If your change genuinely lowers a file's survivor count (you added a test
 that kills a mutant nobody had covered before), ratchet the baseline down
-in the same PR:
+in the same PR. Run `uv run mutmut run` in full first: `generate` refuses
+when any mutant was never run, because a baseline written from a scoped run
+would drop every other file.
 
 ```sh
 uv run python scripts/check_mutmut_survivors.py generate
