@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.28.2...movie-planner-v1.28.3) (2026-10-05)
+
+
+### Bug Fixes
+
+* **lint:** keep full dependency versions in pyproject-fmt ([#384](https://github.com/alrayyes/movie-planner/issues/384)) ([aa11b6b](https://github.com/alrayyes/movie-planner/commit/aa11b6b144a2fe642225c037c7742ae0d0f842d1)), closes [#383](https://github.com/alrayyes/movie-planner/issues/383)
+
 ## [1.28.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.28.1...movie-planner-v1.28.2) (2026-10-05)
 
 
