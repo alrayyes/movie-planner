@@ -92,6 +92,8 @@ source_paths = [ "src" ]
 # test_check_mutmut_survivors.py: same sandbox gap - it loads scripts/
 # check_mutmut_survivors.py, and scripts/ isn't mirrored either. It never
 # imports movie_planner, so it has no mutation to catch.
+# test_sync_uv_lock.py: same sandbox gap again - it runs scripts/
+# sync_uv_lock.sh - and shells out to git, which has nothing to mutate here.
 # test_fetch_output_validates_against_movies_schema (in
 # test_mail_import_cli.py) reads examples/, same sandbox gap as
 # test_examples_schema.py above - deselected on its own rather than
@@ -101,6 +103,7 @@ pytest_add_cli_args_test_selection = [
   "--ignore=tests/test_e2e.py",
   "--ignore=tests/test_examples_schema.py",
   "--ignore=tests/test_check_mutmut_survivors.py",
+  "--ignore=tests/test_sync_uv_lock.py",
   "--ignore=tests/test_mail_import_imap_e2e.py",
   "--deselect=tests/test_mail_import_cli.py::test_fetch_output_validates_against_movies_schema",
 ]
