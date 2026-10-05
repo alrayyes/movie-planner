@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.28.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.28.1...movie-planner-v1.28.2) (2026-10-05)
+
+
+### Bug Fixes
+
+* **deps-dev:** bump ruff in the python-dependencies group ([#377](https://github.com/alrayyes/movie-planner/issues/377)) ([0c209cf](https://github.com/alrayyes/movie-planner/commit/0c209cfd96ea5f8a0173c09851c794d7b1a065a1))
+* **deps-dev:** bump the python-dependencies group with 2 updates ([#369](https://github.com/alrayyes/movie-planner/issues/369)) ([98dc6d0](https://github.com/alrayyes/movie-planner/commit/98dc6d00cea53b29d8b22b78d4b4a397ceaa17ea))
+* **deps:** bump the python-dependencies group with 4 updates ([#374](https://github.com/alrayyes/movie-planner/issues/374)) ([30ca707](https://github.com/alrayyes/movie-planner/commit/30ca707f18e32be7173d6b2e1319071123b24e65))
+* **deps:** bump urllib3 to 2.8.0 ([#381](https://github.com/alrayyes/movie-planner/issues/381)) ([78fa614](https://github.com/alrayyes/movie-planner/commit/78fa61469df34e8f55c62df2847d0d40ea6d142d)), closes [#380](https://github.com/alrayyes/movie-planner/issues/380)
+
 ## [1.28.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.28.0...movie-planner-v1.28.1) (2026-09-12)
 
 
