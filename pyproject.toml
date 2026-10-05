@@ -67,6 +67,9 @@ lint.ignore = [
   "E501", # line too long (handled by the formatter)
 ]
 
+[tool.pyproject-fmt]
+keep_full_version = true
+
 [tool.mypy]
 files = [ "src", "tests" ]
 python_version = "3.14"
