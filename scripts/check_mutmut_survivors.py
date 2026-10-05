@@ -20,7 +20,7 @@ Three subcommands:
 
     uv run python scripts/check_mutmut_survivors.py generate
         Regenerate .mutmut-baseline.json from the current `mutmut` results
-        (run `uv run mutmut run` first). Run this after a PR that lowers a
+        (run `uv run mutmut run` in full first; refuses after a scoped run). Run this after a PR that lowers a
         file's counts, to ratchet the baseline down - the script itself never
         raises it, and the gate always allows a lower count than the baseline
         without asking for a baseline update.
@@ -87,6 +87,11 @@ def mutant_globs(changed_files: list[str]) -> list[str]:
     return globs
 
 
+def has_unrun_mutants(results: str) -> bool:
+    """True when `mutmut results --all true` lists a mutant that was never run."""
+    return any(line.rpartition(": ")[2].strip() == "not checked" for line in results.splitlines())
+
+
 def current_mutants_by_file() -> dict[str, dict[str, list[str]]]:
     """Run `mutmut results`, return {source path: {status: [mutant keys]}}."""
     result = subprocess.run(
@@ -111,6 +116,18 @@ def current_mutants_by_file() -> dict[str, dict[str, list[str]]]:
 
 
 def cmd_generate() -> int:
+    everything = subprocess.run(
+        ["uv", "run", "mutmut", "results", "--all", "true"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    if has_unrun_mutants(everything.stdout):
+        # A run scoped to the diff (#385) leaves the rest unrun, and a baseline
+        # written from that would drop every file that wasn't.
+        print("error: some mutants were never run - run `uv run mutmut run` in full first.")
+        return 1
     by_file = current_mutants_by_file()
     baseline = {
         path: {status: len(keys) for status, keys in sorted(statuses.items())}

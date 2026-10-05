@@ -42,3 +42,17 @@ def test_a_package_init_falls_back_to_every_mutant() -> None:
     # and `movie_planner.*` every module, so an __init__.py can't be scoped.
     assert gate.mutant_globs(["src/movie_planner/mail_import/__init__.py"]) == ["*"]
     assert gate.mutant_globs(["src/movie_planner/cli.py", "src/movie_planner/__init__.py"]) == ["*"]
+
+
+def test_unrun_mutants_mean_the_results_are_partial() -> None:
+    # generate rewrites the baseline from these results, so after a scoped run
+    # it would drop every file that wasn't run.
+    partial = (
+        "movie_planner.cli.x_a__mutmut_1: killed\nmovie_planner.omdb.x_b__mutmut_1: not checked\n"
+    )
+    assert gate.has_unrun_mutants(partial)
+
+
+def test_a_full_run_has_no_unrun_mutants() -> None:
+    full = "movie_planner.cli.x_a__mutmut_1: killed\nmovie_planner.omdb.x_b__mutmut_1: survived\n"
+    assert not gate.has_unrun_mutants(full)
