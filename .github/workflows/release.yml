@@ -67,6 +67,11 @@ jobs:
       # release-please's own commit already is), regenerating uv.lock so
       # the two agree again. [skip ci] so this doesn't retrigger the
       # workflow's own push trigger - a real PAT push otherwise would.
+      #
+      # The logic lives in scripts/sync_uv_lock.sh, with a test (#77): the
+      # push can lose a race with a merge, and that used to fail this job
+      # and skip every publish job behind it (v1.28.2). The script retries
+      # from the latest main and never fails the job over a stale lockfile.
       - if: steps.release.outputs.release_created == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -78,15 +83,7 @@ jobs:
           version: "0.12.7"
       - if: steps.release.outputs.release_created == 'true'
         name: Sync uv.lock's recorded version
-        run: |
-          uv lock
-          if ! git diff --quiet -- uv.lock; then
-            git config user.name 'movie-planner release job'
-            git config user.email 'alrayyes@users.noreply.github.com'
-            git add uv.lock
-            git commit -m "chore(deps): sync uv.lock's recorded version [skip ci]"
-            git push origin HEAD:main
-          fi
+        run: scripts/sync_uv_lock.sh main
 
   docker-publish:
     needs: release-please
