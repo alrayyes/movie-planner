@@ -16,7 +16,7 @@ Two statuses are tracked per file, separately:
 - "no tests": mutmut found no test at all to run against the mutant - new
   code nothing touches yet, a stricter gap than "survived".
 
-Two subcommands:
+Three subcommands:
 
     uv run python scripts/check_mutmut_survivors.py generate
         Regenerate .mutmut-baseline.json from the current `mutmut` results
@@ -30,6 +30,13 @@ Two subcommands:
         src/movie_planner/cli.py) against the baseline. Exits non-zero and
         lists the new gaps for any file whose current counts exceed its
         baseline.
+
+    uv run python scripts/check_mutmut_survivors.py mutant-globs <file> [<file> ...]
+        Print the `mutmut run` mutant-name globs for those files, one per
+        line, so CI can mutate only what a diff touches (#385) instead of
+        all of src/. Prints nothing when no file owns a mutant, and `*` when
+        an __init__.py is among them, since a package's glob can't be told
+        apart from its submodules'.
 """
 
 from __future__ import annotations
@@ -66,6 +73,18 @@ def is_excluded(mutant_key: str) -> bool:
 def module_to_path(module: str) -> str:
     """movie_planner.mail_import.cli -> src/movie_planner/mail_import/cli.py"""
     return "src/" + module.replace(".", "/") + ".py"
+
+
+def mutant_globs(changed_files: list[str]) -> list[str]:
+    """src/movie_planner/cli.py -> movie_planner.cli.* (what `mutmut run` takes)."""
+    globs = []
+    for path in changed_files:
+        if not path.startswith("src/") or not path.endswith(".py"):
+            continue
+        if path.endswith("/__init__.py"):
+            return ["*"]
+        globs.append(path.removeprefix("src/").removesuffix(".py").replace("/", ".") + ".*")
+    return globs
 
 
 def current_mutants_by_file() -> dict[str, dict[str, list[str]]]:
@@ -149,9 +168,15 @@ def cmd_check(changed_files: list[str]) -> int:
 
 
 def main() -> int:
-    if len(sys.argv) < 2 or sys.argv[1] not in ("generate", "check"):
+    if len(sys.argv) < 2 or sys.argv[1] not in ("generate", "check", "mutant-globs"):
         print(__doc__)
         return 2
+
+    if sys.argv[1] == "mutant-globs":
+        globs = mutant_globs(sys.argv[2:])
+        if globs:
+            print("\n".join(globs))
+        return 0
 
     if sys.argv[1] == "generate":
         return cmd_generate()

@@ -89,6 +89,9 @@ source_paths = [ "src" ]
 # test_mail_import_imap_e2e.py: same reasoning as test_e2e.py - a real
 # GreenMail Docker container per module, ruinous rerun per mutant.
 # Covered against a fake connection in test_mail_import_imap_client.py.
+# test_check_mutmut_survivors.py: same sandbox gap - it loads scripts/
+# check_mutmut_survivors.py, and scripts/ isn't mirrored either. It never
+# imports movie_planner, so it has no mutation to catch.
 # test_fetch_output_validates_against_movies_schema (in
 # test_mail_import_cli.py) reads examples/, same sandbox gap as
 # test_examples_schema.py above - deselected on its own rather than
@@ -97,6 +100,7 @@ source_paths = [ "src" ]
 pytest_add_cli_args_test_selection = [
   "--ignore=tests/test_e2e.py",
   "--ignore=tests/test_examples_schema.py",
+  "--ignore=tests/test_check_mutmut_survivors.py",
   "--ignore=tests/test_mail_import_imap_e2e.py",
   "--deselect=tests/test_mail_import_cli.py::test_fetch_output_validates_against_movies_schema",
 ]
