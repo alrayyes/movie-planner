@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.6](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.28.5...movie-planner-v1.28.6) (2026-10-05)
+
+
+### Bug Fixes
+
+* **pull:** read a time with a zone as the machine zone's wall-clock time ([#392](https://github.com/alrayyes/movie-planner/issues/392)) ([8df5b5c](https://github.com/alrayyes/movie-planner/commit/8df5b5cad017f2c941478a45ad65d2ce8bed9545)), closes [#391](https://github.com/alrayyes/movie-planner/issues/391)
+
 ## [1.28.5](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.28.4...movie-planner-v1.28.5) (2026-10-05)
 
 
