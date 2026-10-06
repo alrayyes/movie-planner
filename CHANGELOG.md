@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.7](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.28.6...movie-planner-v1.28.7) (2026-10-06)
+
+
+### Documentation
+
+* say why in CONTRIBUTING instead of citing tickets ([#395](https://github.com/alrayyes/movie-planner/issues/395)) ([4d5ce13](https://github.com/alrayyes/movie-planner/commit/4d5ce1377c27d1b74d4049b3b72a3867aec2a922))
+
 ## [1.28.6](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.28.5...movie-planner-v1.28.6) (2026-10-05)
 
 
