@@ -72,9 +72,9 @@ count. The dotfiles-wide rule says a surviving mutant should always block
 a merge, but this repo has 817 pre-existing survivors (checked
 2026-09-09, after excluding the known-false-positive class below) and
 flipping that switch directly would fail every PR over debt nobody
-touched — that backlog is tracked module by module in milestone #5.
+touched — that backlog is worked down module by module.
 
-**The actual gate is `scripts/check_mutmut_survivors.py`** (#303), run
+**The actual gate is `scripts/check_mutmut_survivors.py`**, run
 right after `mutmut run` in both `pre-push` and CI. It compares each file
 your branch touches against `.mutmut-baseline.json` — a survivor count
 per file — and fails only when a touched file has _more_ survivors now
@@ -87,8 +87,8 @@ uv run mutmut run "movie_planner.cli.*"
 uv run python scripts/check_mutmut_survivors.py check src/movie_planner/cli.py
 ```
 
-`pre-push` and CI run only the mutants of the files your branch touches
-(#385), because the gate reads nothing else: a full run is about 5,100
+`pre-push` and CI run only the mutants of the files your branch touches,
+because the gate reads nothing else: a full run is about 5,100
 mutants and took 17 to 21 minutes on CI. A change with no `src/` file
 skips the run. `scripts/check_mutmut_survivors.py mutant-globs <file>...`
 prints the glob each file maps to. If your branch has no merge base with
@@ -109,15 +109,14 @@ refuses to pass a file whose count went up, so there's no legitimate
 reason to hand-edit `.mutmut-baseline.json` upward. If you hit one, that's
 a sign the new code needs a test, not a bigger number.
 
-**Known false positive**: `movie_planner.venue_locations.x__add`'s
-mutants are permanently excluded from every file's count
-(`EXCLUDED_MUTANT_PREFIXES` in the script) — movie-planner#339 found that
-`mutmut`'s coverage-based test selection attributes any mutant on
-code that runs once at import (before any test starts) to whichever
-test happens to finish first in the whole suite, not one that actually
-exercises it. Its "survived" status doesn't reflect a real gap. Add a
-future exclusion there only with the same kind of investigated,
-documented justification — never to silence a real one.
+**Known false positive**: `movie_planner.venue_locations.x__add`'s mutants are
+permanently excluded from every file's count (`EXCLUDED_MUTANT_PREFIXES` in the
+script). `mutmut`'s coverage-based test selection attributes any mutant on code
+that runs once at import (before any test starts) to whichever test happens to
+finish first in the whole suite, not one that actually exercises it. Its
+"survived" status doesn't reflect a real gap. Add a future exclusion there only
+with the same kind of investigated, documented justification — never to silence
+a real one.
 
 ## How it fits together
 
@@ -151,7 +150,7 @@ means:
    bad line.
 2. Register it: `IMPORT_FORMATS[".xlsx"] = ImportFormat(name="xlsx",
 parse=parse_xlsx)`. The `name` is what shows up as the entry's
-   provenance later (issue #257) - keep it short and lowercase, same
+   provenance later - keep it short and lowercase, same
    style as `"csv"`/`"json"`.
 3. Nothing else changes. `movie-planner import <file>` picks up the
    new suffix automatically; the "unsupported file type" error already
