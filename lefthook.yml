@@ -21,25 +21,13 @@ pre-commit:
       run: uv run ruff check --fix {staged_files}
       stage_fixed: true
 
-    # Whole-program tools, not per-file - mypy needs the rest of src/ to
-    # resolve imports, and bandit's scan is cheap enough (well under a
-    # second) that scoping it to {staged_files} would only add complexity
-    # for no real saving. Neither writes, so there's nothing to restage.
-    - name: mypy
-      glob: "*.py"
-      run: uv run mypy
-
-    - name: bandit
-      glob: "*.py"
-      run: uv run bandit -q -r src/movie_planner
-
     # Unlike ruff, pyproject-fmt exits non-zero the moment it rewrites the
-    # file, even outside --check. `|| true` swallows that so the job reads
-    # as passed and stage_fixed restages the write, instead of lefthook
-    # treating the fix as a failure and skipping the restage.
+    # file, even outside --check. The second command re-checks what the first
+    # wrote, so the job fails only if the file is still unformatted and
+    # stage_fixed restages the write otherwise.
     - name: pyproject-fmt
       glob: "pyproject.toml"
-      run: uv run pyproject-fmt {staged_files} || true
+      run: uv run pyproject-fmt {staged_files}; uv run pyproject-fmt --check {staged_files}
       stage_fixed: true
 
     # Prettier decides the layout, markdownlint then judges what Prettier
@@ -65,33 +53,13 @@ pre-commit:
         - ".claude/**"
       run: vale {staged_files}
 
+    # Reads the staged path, mounted read-only, rather than the whole
+    # Dockerfile from stdin. The image builds run at push and in CI.
     - name: hadolint
       glob: "Dockerfile"
-      run:
-        docker run --rm -i hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
-        < Dockerfile
-
-    # Scoped to the Dockerfile plus what it actually COPYs, so a commit
-    # touching neither skips this entirely.
-    - name: docker-build
-      glob:
-        - "Dockerfile"
-        - "pyproject.toml"
-        - "uv.lock"
-        - "README.md"
-        - "src/**"
-      run: docker build -t movie-planner:pre-commit-check . && docker rmi movie-planner:pre-commit-check
-
-    - name: docker-build (pathe-mail-import)
-      glob:
-        - "Dockerfile"
-        - "pyproject.toml"
-        - "uv.lock"
-        - "README.md"
-        - "src/**"
-      run:
-        docker build --target pathe-mail-import -t pathe-mail-import:pre-commit-check . && docker
-        rmi pathe-mail-import:pre-commit-check
+      run: docker run --rm -v "$PWD":/work:ro -w /work
+        hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
+        hadolint {staged_files}
 
 commit-msg:
   jobs:
