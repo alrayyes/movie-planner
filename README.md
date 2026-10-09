@@ -235,6 +235,20 @@ confirmations, and emits a JSON file this `import` command accepts -
 `movie-planner` itself never has to know what Pathé's emails look
 like, or what IMAP is.
 
+## Reports
+
+Every green push to `main` publishes its test and coverage reports:
+
+- [Index][reports]
+- [Test results][tests] (JUnit XML)
+- [Coverage][coverage] (HTML)
+- [`coverage.xml`][cobertura] (Cobertura)
+
+[reports]: https://apis.ryankes.eu/movie-planner/reports/
+[tests]: https://apis.ryankes.eu/movie-planner/reports/tests/unit.xml
+[coverage]: https://apis.ryankes.eu/movie-planner/reports/coverage/
+[cobertura]: https://apis.ryankes.eu/movie-planner/reports/coverage/coverage.xml
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the toolchain, the hooks, and

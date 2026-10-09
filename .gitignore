@@ -20,6 +20,9 @@ __pycache__/
 .coverage
 coverage.txt
 htmlcov/
+site/
+unit.xml
+coverage.xml
 
 # mutmut's mutated copy of the tree and its result cache.
 /mutants/
