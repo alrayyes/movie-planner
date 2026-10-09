@@ -62,7 +62,7 @@ jobs:
           # not pytest's - a failing suite would still report green
           # (movie-planner#212).
           set -o pipefail
-          uv run pytest --cov=movie_planner --cov-report=term-missing --cov-report=xml --junitxml=junit.xml | tee coverage.txt
+          uv run pytest --cov=movie_planner --cov-report=term-missing --cov-report=xml --cov-report=html:htmlcov --junitxml=unit.xml | tee coverage.txt
           {
             echo '### Coverage'
             echo
@@ -84,15 +84,50 @@ jobs:
 
       # Codecov Test Analytics: per-test failure/flake detail, not just a
       # coverage delta. !cancelled(), not always() - still runs when pytest
-      # above failed (junit.xml exists either way), but not if the whole run
+      # above failed (unit.xml exists either way), but not if the whole run
       # was cancelled out from under it. Same Dependabot-token gap as above.
       - name: Upload test results to Codecov
         if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: junit.xml
+          files: unit.xml
           report_type: test_results
+
+      # Assembled on pull requests too, so a broken step fails before the
+      # merge. Only the upload below is limited to the default branch.
+      - name: assemble the reports
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          mkdir -p site/reports/tests site/reports/coverage
+          cp unit.xml site/reports/tests/unit.xml
+          cp -r htmlcov/. site/reports/coverage/
+          cp coverage.xml site/reports/coverage/coverage.xml
+          # .coverage is a dotfile, which neither upload action carries.
+          cp .coverage site/reports/coverage/coverage.sqlite
+          {
+            echo '<!doctype html>'
+            echo '<html lang="en"><head><meta charset="utf-8">'
+            echo '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            echo '<title>movie-planner reports</title></head><body>'
+            echo '<h1>movie-planner reports</h1>'
+            echo "<p>Commit <code>${SHA::7}</code>, built $(date -u +%Y-%m-%d) UTC.</p>"
+            echo '<ul>'
+            echo '<li><a href="tests/unit.xml">Test results (JUnit XML)</a></li>'
+            echo '<li><a href="coverage/">Coverage (HTML)</a></li>'
+            echo '<li><a href="coverage/coverage.xml">Coverage (Cobertura XML)</a></li>'
+            echo '<li><a href="coverage/coverage.sqlite">Coverage data (coverage.py)</a></li>'
+            echo '</ul></body></html>'
+          } > site/reports/index.html
+      - name: Upload the reports
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reports
+          path: site/reports/
+          if-no-files-found: error
+          retention-days: 1
 
   # Mutation testing: mutates the src/ files this diff touches (excluding
   # test_e2e.py's real-Baikal-container coverage from the rerun set - ruinous
@@ -361,3 +396,53 @@ jobs:
             --from "${{ github.event.pull_request.base.sha }}" \
             --to "${{ github.event.pull_request.head.sha }}" \
             --verbose
+
+  # Publishes the reports at apis.ryankes.eu/movie-planner/reports/. A repo has
+  # one Pages deployment, so this is the only job that deploys. It needs every
+  # other job, so a red commit on main ships nothing. A skipped gate (commits
+  # is pull-request only) would skip this job too, so always() lets it through
+  # and the two contains() checks still stop a failed or cancelled one.
+  pages:
+    needs: [lint, test, mutmut, build, docker, nix, package-linux, aur, prose]
+    if: >-
+      always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && !contains(needs.*.result, 'failure')
+      && !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    # A newer push must not cancel a deploy that's already publishing, so this
+    # job opts out of the workflow's cancel-in-progress.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: reports
+          path: site/reports
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      - name: check the reports are served
+        # The deploy succeeds even when a path is wrong, so fetch the real
+        # files. Retries cover the CDN catching up to the new version.
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          curl --fail --silent --show-error --location \
+            --retry 6 --retry-delay 10 --retry-all-errors \
+            --output coverage.xml "${PAGE_URL%/}/reports/coverage/coverage.xml"
+          grep -q '<coverage ' coverage.xml
+          curl --fail --silent --show-error --location \
+            --retry 6 --retry-delay 10 --retry-all-errors \
+            --output unit.xml "${PAGE_URL%/}/reports/tests/unit.xml"
+          grep -q '<testsuite' unit.xml
