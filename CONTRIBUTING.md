@@ -29,8 +29,8 @@
   on first use.
 
 - **[Docker](https://docs.docker.com/engine/install/)**, running locally,
-  for the hooks that lint and build `Dockerfile` (hadolint, then a plain
-  `docker build`).
+  for the hooks that lint and build `Dockerfile`: hadolint at commit, the
+  plain `docker build` at push.
 
 Two commands install the linters and the git hooks:
 
