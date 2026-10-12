@@ -120,6 +120,15 @@ to create, edit, or delete an entry directly on the calendar. See
 fields it compares (only OMDb's/booking's own structured `X-*`
 properties — never the free-text description).
 
+## `purge`
+
+`purge` deletes every event from the calendar and can't be undone. It leaves
+the local database alone, so your entries stay and a later `sync` or edit can
+put them back on the calendar. It asks you to type `DELETE` first. `--yes`
+skips the prompt for scripts, and without `--yes` it refuses to run when
+there's no terminal. If some events fail to delete, it says how many and exits
+non-zero; run it again.
+
 ## `activity`
 
 `activity` shows a local log of every create/update/delete this tool

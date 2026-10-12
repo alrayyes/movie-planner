@@ -6,6 +6,7 @@ decisions. Nothing here ever reads the calendar back into the store.
 import logging
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date, datetime, time
 from importlib.metadata import version
 from typing import Protocol, cast
@@ -150,6 +151,12 @@ class _CalDAVCalendar(Protocol):
     def event_by_uid(self, uid: str) -> _CalDAVEvent: ...
 
 
+@dataclass(frozen=True)
+class PurgeResult:
+    deleted: int
+    failed: int
+
+
 class CalendarClient:
     def __init__(self, calendar: _CalDAVCalendar) -> None:
         self._calendar = calendar
@@ -184,6 +191,19 @@ class CalendarClient:
     def delete_event(self, uid: str) -> None:
         event = self._calendar.event_by_uid(uid)
         event.delete()
+
+    def delete_all_events(self) -> PurgeResult:
+        """Deletes every event on the calendar (issue #405). One event that
+        won't delete doesn't stop the rest; the counts say how it went.
+        """
+        deleted = failed = 0
+        for event in self._calendar.events():
+            try:
+                cast(_CalDAVEvent, event).delete()
+                deleted += 1
+            except Exception:  # noqa: BLE001
+                failed += 1
+        return PurgeResult(deleted=deleted, failed=failed)
 
 
 def _extra_properties(
