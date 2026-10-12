@@ -18,7 +18,7 @@
         pkgs = import nixpkgs { inherit system; };
         # nixos-unstable's python3 is already 3.14, but its uv-build
         # (0.11.28 as of writing) is older than this project's own
-        # `[build-system] requires = ["uv-build>=0.12.5,<0.13"]` —
+        # `[build-system] requires = ["uv-build>=0.12.5,<0.14"]` —
         # confirmed live: `buildPythonApplication`'s pypa build hook
         # enforces that range and refuses the older one outright
         # ("Unmet dependencies ... found: 0.11.28"). Overridden here
