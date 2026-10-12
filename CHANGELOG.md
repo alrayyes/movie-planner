@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.29.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.28.7...movie-planner-v1.29.0) (2026-10-12)
+
+
+### Features
+
+* add a purge command that deletes every calendar event ([#406](https://github.com/alrayyes/movie-planner/issues/406)) ([9196c96](https://github.com/alrayyes/movie-planner/commit/9196c962f1ea8e1ef2fcbcc4bdec0bcb8613aca6)), closes [#405](https://github.com/alrayyes/movie-planner/issues/405)
+
+
+### Bug Fixes
+
+* **build:** allow uv-build 0.13 ([#408](https://github.com/alrayyes/movie-planner/issues/408)) ([c4df382](https://github.com/alrayyes/movie-planner/commit/c4df382bc9cdfa38c7e1a364ebe6a8a9d5ca435b)), closes [#407](https://github.com/alrayyes/movie-planner/issues/407)
+* **deps-dev:** bump types-jsonschema ([#403](https://github.com/alrayyes/movie-planner/issues/403)) ([053acf5](https://github.com/alrayyes/movie-planner/commit/053acf5121ab689d1bc815948a6631dc3249d2f7))
+* **deps:** bump the python-dependencies group across 1 directory with 3 updates ([#402](https://github.com/alrayyes/movie-planner/issues/402)) ([d805381](https://github.com/alrayyes/movie-planner/commit/d805381dba7b12de6820b97a6385c722c46209aa))
+
 ## [1.28.7](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.28.6...movie-planner-v1.28.7) (2026-10-06)
 
 
