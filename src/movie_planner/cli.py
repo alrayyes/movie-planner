@@ -1170,6 +1170,47 @@ def delete(
         store.close()
 
 
+PURGE_CONFIRM_WORD = "DELETE"
+
+
+@app.command()
+def purge(
+    ctx: typer.Context,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", help=f"Skip the {PURGE_CONFIRM_WORD} prompt, for scripts."),
+    ] = False,
+) -> None:
+    """Delete every event from the calendar. Local entries are kept.
+
+    Cannot be undone. Export first if you might want the events back.
+    """
+    cfg = _cfg(ctx)
+    if not yes:
+        if not _is_interactive():
+            typer.secho(
+                "Not running interactively; pass --yes to purge the calendar.",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(code=1)
+        answer = str(
+            typer.prompt(
+                f"This deletes every event on the calendar and cannot be undone. "
+                f"Type {PURGE_CONFIRM_WORD} to continue"
+            )
+        )
+        if answer.strip() != PURGE_CONFIRM_WORD:
+            typer.secho("Cancelled. Nothing was deleted.", fg=typer.colors.YELLOW)
+            raise typer.Exit(code=1)
+
+    result = _connect_calendar(cfg).delete_all_events()
+    noun = "event" if result.deleted == 1 else "events"
+    typer.echo(f"Deleted {result.deleted} {noun}.")
+    if result.failed:
+        typer.secho(f"{result.failed} failed to delete; run it again.", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+
 # --- locations: requirement "User-editable medium and venue lists" ---
 
 

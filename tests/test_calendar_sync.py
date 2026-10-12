@@ -1522,3 +1522,39 @@ def test_push_new_failure_leaves_the_local_entry_persisted_and_is_retryable(
 
     refreshed = store.get_entry(entry.id)
     assert refreshed.caldav_uid is not None
+
+
+# --- delete_all_events: issue #405 ---
+
+
+class _FailingEvent(FakeEvent):
+    def delete(self) -> None:
+        raise ConnectionError("locked")
+
+
+def test_delete_all_events_deletes_every_event_and_counts_them() -> None:
+    first, second = FakeEvent(data="a"), FakeEvent(data="b")
+    calendar = FakeCalendar(events_by_uid={"a": first, "b": second})
+
+    result = CalendarClient(calendar).delete_all_events()
+
+    assert (result.deleted, result.failed) == (2, 0)
+    assert first.deleted and second.deleted
+
+
+def test_delete_all_events_keeps_going_past_a_failure() -> None:
+    ok = FakeEvent(data="ok")
+    calendar = FakeCalendar(
+        events_by_uid={"bad": _FailingEvent(data="bad"), "ok": ok},
+    )
+
+    result = CalendarClient(calendar).delete_all_events()
+
+    assert (result.deleted, result.failed) == (1, 1)
+    assert ok.deleted
+
+
+def test_delete_all_events_on_an_empty_calendar_deletes_nothing() -> None:
+    result = CalendarClient(FakeCalendar()).delete_all_events()
+
+    assert (result.deleted, result.failed) == (0, 0)

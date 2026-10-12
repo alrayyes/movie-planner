@@ -4828,3 +4828,106 @@ def test_fetch_tmdb_details_or_warn_skips_without_a_tmdb_api_key(
     assert result == entry
     assert constructed["called"] is False
     store.close()
+
+
+# --- purge: issue #405 ---
+
+
+def _calendar_with_events(calendar: FakeCalendar, *uids: str) -> None:
+    from fakes import FakeEvent
+
+    for uid in uids:
+        calendar.events_by_uid[uid] = FakeEvent(data=uid)
+
+
+def _purge(config_path: Path, *args: str, input: str | None = None):  # type: ignore[no-untyped-def]
+    return runner.invoke(app, ["--config", str(config_path), "purge", *args], input=input)
+
+
+def test_purge_with_yes_deletes_every_event(config_path: Path, calendar: FakeCalendar) -> None:
+    _calendar_with_events(calendar, "a", "b")
+
+    result = _purge(config_path, "--yes")
+
+    assert result.exit_code == 0, result.output
+    assert all(e.deleted for e in calendar.events_by_uid.values())
+    assert "Deleted 2 events" in result.output
+
+
+def test_purge_asks_for_the_word_and_deletes_when_it_is_typed(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("movie_planner.cli._is_interactive", lambda: True)
+    _calendar_with_events(calendar, "a")
+
+    result = _purge(config_path, input="DELETE\n")
+
+    assert result.exit_code == 0, result.output
+    assert calendar.events_by_uid["a"].deleted
+
+
+@pytest.mark.parametrize("answer", ["delete\n", "yes\n", "\n", "nope\n"])
+def test_purge_deletes_nothing_for_any_other_answer(
+    config_path: Path,
+    calendar: FakeCalendar,
+    monkeypatch: pytest.MonkeyPatch,
+    answer: str,
+) -> None:
+    monkeypatch.setattr("movie_planner.cli._is_interactive", lambda: True)
+    _calendar_with_events(calendar, "a")
+
+    result = _purge(config_path, input=answer)
+
+    assert result.exit_code != 0
+    assert not calendar.events_by_uid["a"].deleted
+
+
+def test_purge_refuses_without_a_terminal_or_yes(config_path: Path, calendar: FakeCalendar) -> None:
+    _calendar_with_events(calendar, "a")
+
+    result = _purge(config_path)
+
+    assert result.exit_code != 0
+    assert "--yes" in result.output
+    assert not calendar.events_by_uid["a"].deleted
+
+
+def test_purge_exits_non_zero_when_some_events_fail(
+    config_path: Path, calendar: FakeCalendar
+) -> None:
+    from test_calendar_sync import _FailingEvent
+
+    _calendar_with_events(calendar, "ok")
+    calendar.events_by_uid["bad"] = _FailingEvent(data="bad")
+
+    result = _purge(config_path, "--yes")
+
+    assert result.exit_code != 0
+    assert "Deleted 1 event" in result.output
+    assert "1 failed" in result.output
+    assert calendar.events_by_uid["ok"].deleted
+
+
+def test_purge_leaves_local_entries_alone(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None
+) -> None:
+    runner.invoke(
+        app,
+        [
+            "--config",
+            str(config_path),
+            "log",
+            "--title",
+            "Dune",
+            "--date",
+            "2026-01-01",
+            "--medium",
+            "cinema",
+        ],
+    )
+
+    _purge(config_path, "--yes")
+
+    store = _store(config_path)
+    assert len(store.list_entries()) == 1
+    store.close()
