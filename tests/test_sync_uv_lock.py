@@ -113,7 +113,7 @@ def hook_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
             "-m",
             "leak",
         ],
-        ["tag", "-a", "-m", "leak", "leak-tag"],
+        ["-c", "user.name=x", "-c", "user.email=x@x", "tag", "-a", "-m", "leak", "leak-tag"],
         ["branch", "leak-branch"],
         ["config", "leak.key", "value"],
     ],
