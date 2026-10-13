@@ -173,7 +173,7 @@ _IMDB_NOT_FILM = {
     "tvepisode": "a TV episode",
     "videogame": "a video game",
     "podcastseries": "a podcast",
-    "podcastepisode": "a podcast",
+    "podcastepisode": "a podcast episode",
     "musicvideo": "a music video",
 }
 

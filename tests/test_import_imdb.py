@@ -69,7 +69,7 @@ def test_a_row_without_a_personal_rating_has_no_note(tmp_path: Path) -> None:
         ("tvEpisode", "a TV episode"),
         ("videoGame", "a video game"),
         ("podcast-series", "a podcast"),
-        ("PODCAST_EPISODE", "a podcast"),
+        ("PODCAST_EPISODE", "a podcast episode"),
         ("musicVideo", "a music video"),
     ],
 )

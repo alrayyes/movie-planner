@@ -1473,9 +1473,9 @@ def import_command(
     medium: Annotated[
         str | None,
         typer.Option(
-            help="The medium to give every row of a Letterboxd diary.csv, which doesn't record "
-            "where you watched (for example netflix). Required for a diary; ignored by "
-            "other files."
+            help="The medium to give every row of a Letterboxd diary.csv or IMDb ratings.csv, "
+            "which don't record where you watched (for example netflix). Required for those "
+            "two; ignored by other files."
         ),
     ] = None,
     no_metadata: Annotated[
