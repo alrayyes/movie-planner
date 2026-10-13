@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.32.0...movie-planner-v1.33.0) (2026-10-13)
+
+
+### Features
+
+* **import:** read an IMDb ratings.csv with --medium ([#430](https://github.com/alrayyes/movie-planner/issues/430)) ([d53394f](https://github.com/alrayyes/movie-planner/commit/d53394f6d5bead707e3142fef40f0ccb082f7770))
+
 ## [1.32.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.31.0...movie-planner-v1.32.0) (2026-10-13)
 
 
