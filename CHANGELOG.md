@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.29.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.29.1...movie-planner-v1.29.2) (2026-10-13)
+
+
+### Bug Fixes
+
+* **deps-dev:** bump the python-dependencies group with 2 updates ([#422](https://github.com/alrayyes/movie-planner/issues/422)) ([18f48dc](https://github.com/alrayyes/movie-planner/commit/18f48dcb997dc0b8cb7ade4643f060f6b72e20ba))
+* **import:** skip a blank-medium row with a uid as a duplicate, not a failure ([#423](https://github.com/alrayyes/movie-planner/issues/423)) ([a01951c](https://github.com/alrayyes/movie-planner/commit/a01951cb167bc1410dd65cb936ae9063e5ab3888)), closes [#410](https://github.com/alrayyes/movie-planner/issues/410)
+
 ## [1.29.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.29.0...movie-planner-v1.29.1) (2026-10-13)
 
 
