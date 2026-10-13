@@ -110,6 +110,19 @@ def test_diary_header_names_are_compared_trimmed(tmp_path: Path) -> None:
     rows = parse_csv(path, "netflix")
 
     assert rows[0].entry is not None
+    assert rows[0].entry.letterboxd_url == "https://boxd.it/a"
+
+
+def test_a_blank_medium_counts_as_missing(tmp_path: Path) -> None:
+    with pytest.raises(MediumRequiredError):
+        parse_csv(_diary(tmp_path), "   ")
+
+
+def test_the_medium_is_trimmed(tmp_path: Path) -> None:
+    rows = parse_csv(_diary(tmp_path), "  netflix ")
+
+    assert rows[0].entry is not None
+    assert rows[0].entry.medium == "netflix"
 
 
 def test_a_header_missing_one_diary_column_is_a_native_csv(tmp_path: Path) -> None:
