@@ -1,0 +1,109 @@
+"""IMAP adapter - the same client works against a local Proton Mail
+Bridge instance or a Gmail account with no chain-specific logic, config-
+only difference (host/port/username/password). See design.md's "One
+MailClient port, two adapters" decision.
+"""
+
+import imaplib
+from collections.abc import Callable, Iterable, Sequence
+from datetime import datetime
+from typing import Any, Protocol
+
+from movie_planner.mail_import.envelope import MailFetchError
+
+
+class _ImapConnection(Protocol):
+    def login(self, user: str, password: str) -> tuple[str, Any]: ...
+    def select(self, mailbox: str, readonly: bool) -> tuple[str, Any]: ...
+    def search(self, charset: str | None, *criteria: str) -> tuple[str, Any]: ...
+    def fetch(self, message_set: str, message_parts: str) -> tuple[str, Any]: ...
+    def logout(self) -> tuple[str, Any]: ...
+
+
+def _default_connect(host: str, port: int) -> _ImapConnection:
+    return imaplib.IMAP4_SSL(host, port)
+
+
+class ImapMailClient:
+    def __init__(
+        self,
+        *,
+        host: str,
+        port: int,
+        username: str,
+        password: str,
+        connect: Callable[[str, int], _ImapConnection] = _default_connect,
+    ) -> None:
+        self._host = host
+        self._port = port
+        self._username = username
+        self._password = password
+        self._connect = connect
+
+    def fetch(
+        self,
+        sender_domains: Sequence[str],
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> Iterable[str]:
+        if not sender_domains:
+            raise ValueError("fetch needs at least one sender domain")
+
+        try:
+            conn = self._connect(self._host, self._port)
+            conn.login(self._username, self._password)
+            conn.select("INBOX", readonly=True)
+        except (OSError, imaplib.IMAP4.error) as e:
+            raise MailFetchError(f"could not connect to {self._host}: {e}") from e
+
+        try:
+            criteria = _search_criteria(sender_domains, since=since, until=until)
+            status, data = conn.search(None, criteria)
+            if status != "OK":
+                raise MailFetchError(f"IMAP search failed: {status}")
+            message_ids = data[0].split() if data and data[0] else []
+
+            for message_id in message_ids:
+                # "ascii" vs "ASCII" is a mutmut survivor that's provably
+                # equivalent, not a gap (issue #289) - Python's codec
+                # names are looked up case-insensitively, so both decode
+                # identically. Same reasoning covers "utf-8" vs "UTF-8"
+                # below.
+                fetch_status, msg_data = conn.fetch(message_id.decode("ascii"), "(RFC822)")
+                if fetch_status != "OK" or not msg_data:
+                    continue
+                first = msg_data[0]
+                if not isinstance(first, tuple) or len(first) < 2:
+                    continue
+                raw_bytes = first[1]
+                if not isinstance(raw_bytes, bytes | bytearray):
+                    continue
+                # The explicit "utf-8" here is also a provably-equivalent
+                # survivor when dropped entirely - bytes.decode()'s own
+                # default encoding is already "utf-8" (verified against
+                # this Python version), so omitting it changes nothing.
+                yield bytes(raw_bytes).decode("utf-8", errors="replace")
+        finally:
+            conn.logout()
+
+
+def _search_criteria(
+    sender_domains: Sequence[str], *, since: datetime | None, until: datetime | None
+) -> str:
+    # HEADER FROM, not the bare FROM search key: verified against a real
+    # server (GreenMail) that FROM's substring matching isn't reliable
+    # there - only an exact address matches. HEADER FROM is the same
+    # RFC 3501 substring semantics FROM promises, explicit about which
+    # header, and confirmed working there.
+    clauses = [f'HEADER FROM "{domain}"' for domain in sender_domains]
+    from_clause = clauses[0]
+    for clause in clauses[1:]:
+        from_clause = f"OR {from_clause} {clause}"
+
+    parts = [from_clause]
+    if since is not None:
+        parts.append(f'SINCE "{since.strftime("%d-%b-%Y")}"')
+    if until is not None:
+        parts.append(f'BEFORE "{until.strftime("%d-%b-%Y")}"')
+    return " ".join(parts)
