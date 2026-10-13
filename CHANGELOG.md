@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.31.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.30.0...movie-planner-v1.31.0) (2026-10-13)
+
+
+### Features
+
+* **list:** filter by title, venue, director, actor, genre, year and rated ([#426](https://github.com/alrayyes/movie-planner/issues/426)) ([c1a8d51](https://github.com/alrayyes/movie-planner/commit/c1a8d517090962321ccd9182b5f7b27ad3a66d16))
+
 ## [1.30.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.29.2...movie-planner-v1.30.0) (2026-10-13)
 
 
