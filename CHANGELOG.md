@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.33.1...movie-planner-v1.33.2) (2026-10-13)
+
+
+### Bug Fixes
+
+* **venues:** keep a field cleared on a known venue cleared ([#434](https://github.com/alrayyes/movie-planner/issues/434)) ([b010f5c](https://github.com/alrayyes/movie-planner/commit/b010f5c04d9aa63cb93bacd7c6ed1b39e0be8761))
+
 ## [1.33.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.33.0...movie-planner-v1.33.1) (2026-10-13)
 
 
