@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.32.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.31.0...movie-planner-v1.32.0) (2026-10-13)
+
+
+### Features
+
+* **import:** read a Letterboxd diary.csv with --medium ([#428](https://github.com/alrayyes/movie-planner/issues/428)) ([f012284](https://github.com/alrayyes/movie-planner/commit/f012284599a2352ec5c1bf8c70c9790a018c17ef))
+* **locations:** add venues edit for a venue's address, chain and coordinates ([#431](https://github.com/alrayyes/movie-planner/issues/431)) ([802b959](https://github.com/alrayyes/movie-planner/commit/802b9596722a6d863c7014c9e1a0f1b0aad7d3fc))
+
 ## [1.31.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.30.0...movie-planner-v1.31.0) (2026-10-13)
 
 
