@@ -1478,9 +1478,7 @@ def venues_list(ctx: typer.Context) -> None:
 @venues_app.command("edit")
 def venues_edit(
     ctx: typer.Context,
-    name: Annotated[
-        str, typer.Argument(help="The venue's exact name, as 'locations venues list' shows it.")
-    ],
+    name: Annotated[str, typer.Argument(help="The venue's exact name.")],
     street: Annotated[
         str | None, typer.Option(help="Street address. An empty value clears it.")
     ] = None,
