@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.33.0...movie-planner-v1.33.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* **venues:** update a venue's calendar events over one connection ([#437](https://github.com/alrayyes/movie-planner/issues/437)) ([3bce35a](https://github.com/alrayyes/movie-planner/commit/3bce35ad432d55853f2d4f5fc14574f678e057d2))
+
 ## [1.33.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.32.0...movie-planner-v1.33.0) (2026-10-13)
 
 
