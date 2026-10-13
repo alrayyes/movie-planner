@@ -128,13 +128,12 @@ def test_the_decoy_notices_a_leak(tmp_path: Path, leak: list[str]) -> None:
     assert repository_state(decoy, remote) != before
 
 
-def test_the_decoy_notices_a_push_to_its_remote(tmp_path: Path) -> None:
+def test_the_decoy_notices_a_change_on_its_remote(tmp_path: Path) -> None:
     decoy, remote = _make_decoy(tmp_path / "probe")
-    _run_git(decoy, "branch", "other")
     before = repository_state(decoy, remote)
-    # The local state is unchanged by a push of an existing ref, so only the
-    # remote's refs give it away.
-    _run_git(decoy, "push", "-q", "origin", "other")
+    # A ref created straight on the remote leaves the decoy's own HEAD, refs
+    # and config alone, so only the remote's refs give it away.
+    _run_git(remote, "update-ref", "refs/heads/other", _run_git(decoy, "rev-parse", "HEAD").strip())
 
     assert repository_state(decoy, remote) != before
 
