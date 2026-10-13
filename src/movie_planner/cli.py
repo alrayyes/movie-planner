@@ -37,6 +37,7 @@ from movie_planner.display import (
     render_poster,
 )
 from movie_planner.duplicates import find_duplicate
+from movie_planner.export import entry_to_export_row
 from movie_planner.importers import IMPORT_FORMATS, parse_json_text, run_import
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
 from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
@@ -950,6 +951,76 @@ def list_entries(
             typer.echo(line)
     finally:
         store.close()
+
+
+@app.command()
+def export(
+    ctx: typer.Context,
+    date_from: Annotated[
+        str | None,
+        typer.Option("--from", help="Only entries on or after this date (YYYY-MM-DD)."),
+    ] = None,
+    date_to: Annotated[
+        str | None,
+        typer.Option("--to", help="Only entries on or before this date (YYYY-MM-DD)."),
+    ] = None,
+    medium: Annotated[
+        str | None,
+        typer.Option(help="Only entries with this exact medium name (for example cinema)."),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Write the JSON to this file instead of printing it.",
+        ),
+    ] = None,
+) -> None:
+    """Write the entries as JSON that `import` and movie-planner-web both read.
+
+    The same rows the web app's "Export as JSON" writes: back them up, move
+    them to another machine, or edit them and import them again. Fields that
+    aren't set are left out.
+    """
+    cfg = _cfg(ctx)
+    store = _open_store(cfg)
+    try:
+        media_by_id = {m.id: m for m in store.list_media()}
+        venues_by_id = {v.id: v for v in store.list_venues()}
+        medium_id = None
+        if medium is not None:
+            found = next((m for m in media_by_id.values() if m.name == medium), None)
+            medium_id = found.id if found else None
+        entries = (
+            []
+            if medium is not None and medium_id is None
+            else store.list_entries(
+                date_from=_parse_date(date_from) if date_from else None,
+                date_to=_parse_date(date_to) if date_to else None,
+                medium_id=medium_id,
+            )
+        )
+        text = json.dumps(
+            [
+                entry_to_export_row(
+                    entry,
+                    medium_name=media_by_id[entry.medium_id].name,
+                    venue=venues_by_id.get(entry.venue_id) if entry.venue_id else None,
+                )
+                for entry in entries
+            ],
+            indent=2,
+            ensure_ascii=False,
+        )
+    finally:
+        store.close()
+    if output is None:
+        typer.echo(text)
+        return
+    output.write_text(text + "\n", encoding="utf-8")
+    noun = "entry" if len(entries) == 1 else "entries"
+    typer.echo(f"Wrote {len(entries)} {noun} to {output}.")
 
 
 # --- show: issue #106, structured single-entry output with an inline poster ---
