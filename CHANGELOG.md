@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.29.2...movie-planner-v1.30.0) (2026-10-13)
+
+
+### Features
+
+* **export:** add an export command that writes the web app's import-shaped JSON ([#424](https://github.com/alrayyes/movie-planner/issues/424)) ([73981b5](https://github.com/alrayyes/movie-planner/commit/73981b55344d924033d42716174fa357c5c57691))
+
 ## [1.29.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.29.1...movie-planner-v1.29.2) (2026-10-13)
 
 
