@@ -857,3 +857,110 @@ def test_run_import_respects_a_custom_threshold(store: Store) -> None:
 
     assert summary.imported == 1
     assert summary.skipped_duplicates == 0
+
+
+# --- #410: the web app's export writes a blank medium for a viewing with no
+# X-MEDIUM on the calendar (every one this CLI logged), with the viewing's uid.
+
+
+def _log_dune(store: Store) -> None:
+    medium = store.get_or_create_medium("cinema", is_physical_place=False)
+    store.create_entry(
+        title="Dune", date=date(2024, 3, 15), medium_id=medium.id, start_time=time(19, 0)
+    )
+
+
+def test_blank_medium_with_a_uid_that_matches_a_stored_entry_is_a_duplicate_skip(
+    store: Store,
+) -> None:
+    _log_dune(store)
+    rows = parse_json_text(
+        '[{"title": "Dune", "date": "2024-03-15", "start_time": "19:00",'
+        ' "medium": "", "uid": "abc@example.com"}]'
+    )
+
+    summary = run_import(store, rows)
+
+    assert (summary.imported, summary.skipped_duplicates, summary.failed) == (0, 1, 0)
+    assert len(store.list_entries()) == 1
+
+
+def test_blank_medium_with_a_uid_that_matches_nothing_still_fails(store: Store) -> None:
+    rows = parse_json_text(
+        '[{"title": "Dune", "date": "2024-03-15", "medium": "", "uid": "abc@example.com"}]'
+    )
+
+    summary = run_import(store, rows)
+
+    assert (summary.imported, summary.skipped_duplicates, summary.failed) == (0, 0, 1)
+    assert summary.failed_details == ["row 1: medium is required"]
+    assert store.list_entries() == []
+
+
+def test_blank_medium_without_a_uid_fails_even_when_it_matches_a_stored_entry(
+    store: Store,
+) -> None:
+    _log_dune(store)
+    rows = parse_json_text(
+        '[{"title": "Dune", "date": "2024-03-15", "start_time": "19:00", "medium": ""}]'
+    )
+
+    summary = run_import(store, rows)
+
+    assert summary.failed_details == ["row 1: medium is required"]
+    assert summary.skipped_duplicates == 0
+
+
+def test_a_blank_uid_does_not_excuse_a_blank_medium(store: Store) -> None:
+    rows = parse_json_text('[{"title": "Dune", "date": "2024-03-15", "medium": "", "uid": ""}]')
+
+    assert run_import(store, rows).failed_details == ["row 1: medium is required"]
+
+
+def test_a_row_with_a_medium_and_a_uid_is_created_as_before(store: Store) -> None:
+    rows = parse_json_text(
+        '[{"title": "Dune", "date": "2024-03-15", "medium": "cinema", "uid": "abc@example.com"}]'
+    )
+
+    summary = run_import(store, rows)
+
+    assert summary.imported == 1
+    assert [e.title for e in store.list_entries()] == ["Dune"]
+
+
+def test_a_row_with_a_uid_keeps_it(store: Store) -> None:
+    (parsed,) = parse_json_text(
+        '[{"title": "Dune", "date": "2024-03-15", "medium": "", "uid": "abc@example.com"}]'
+    )
+
+    assert parsed.entry is not None
+    assert parsed.entry.uid == "abc@example.com"
+    assert parsed.entry.medium == ""
+
+
+def test_a_run_time_failure_is_numbered_by_its_own_row_and_returned_for_recording(
+    store: Store,
+) -> None:
+    rows = parse_json_text(
+        '[{"title": "Heat", "date": "2024-03-14", "medium": "cinema"},'
+        ' {"title": "Dune", "date": "2024-03-15", "medium": "", "uid": "abc@example.com"}]'
+    )
+
+    summary = run_import(store, rows)
+
+    assert summary.imported == 1
+    assert summary.failed_details == ["row 2: medium is required"]
+    assert summary.run_failures == [(2, "medium is required")]
+
+
+def test_force_does_not_create_a_blank_medium_row_it_would_have_skipped(store: Store) -> None:
+    _log_dune(store)
+    rows = parse_json_text(
+        '[{"title": "Dune", "date": "2024-03-15", "start_time": "19:00",'
+        ' "medium": "", "uid": "abc@example.com"}]'
+    )
+
+    summary = run_import(store, rows, force=True)
+
+    assert (summary.imported, summary.skipped_duplicates, summary.failed) == (0, 0, 1)
+    assert len(store.list_entries()) == 1
