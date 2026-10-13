@@ -116,6 +116,8 @@ uv run movie-planner list --director "Denis Villeneuve" --year 2024
 uv run movie-planner list --title dune --venue Tuschinski --genre Sci-Fi --rated PG-13
 uv run movie-planner list --omdb-no-match
 uv run movie-planner list --json
+uv run movie-planner export > movies.json
+uv run movie-planner export --from 2026-01-01 --medium cinema -o 2026.json
 uv run movie-planner show 3
 uv run movie-planner show 3 --json
 uv run movie-planner update 3 --title "Dune Part Two"
@@ -142,7 +144,7 @@ detail: filtering and limiting `list`, `show`'s inline poster rendering,
 `--json` output on either for external tooling, automatic venue
 chain/city/country/GPS fill-in, `import`'s skipped OMDb lookups and
 failure tracking, `sync`'s push-only design and `sync pull`
-reconciliation, `purge`, the `activity` log, `bug-report`'s PII-stripped
+reconciliation, `export`, `purge`, the `activity` log, `bug-report`'s PII-stripped
 diagnostic summary, and how to import years of history without
 exceeding OMDb's daily request limit.
 

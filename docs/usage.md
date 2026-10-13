@@ -128,6 +128,24 @@ to create, edit, or delete an entry directly on the calendar. See
 fields it compares (only OMDb's/booking's own structured `X-*`
 properties — never the free-text description).
 
+## `export`
+
+`export` writes your entries as the JSON array `import` reads, the same rows
+movie-planner-web's "Export as JSON" writes. Use it to back up the log, move
+it to another machine, or edit it and import it again. It validates against
+[`examples/movies.schema.json`](../examples/movies.schema.json).
+
+```sh
+movie-planner export > movies.json
+movie-planner export --from 2026-01-01 --to 2026-01-31 --medium cinema -o january.json
+```
+
+`--from`, `--to` and `--medium` filter as `list` does. `--output`/`-o` writes
+a file and prints a one-line count instead of the JSON. A field that isn't set
+is left out of its row rather than written as `null`, and `booking_ref` is
+never written, since only `from-pathe-email` understands it. This differs from
+`list --json`, which keeps every key and uses movie-planner's own names.
+
 ## `purge`
 
 `purge` deletes every event from the calendar and can't be undone. It leaves
