@@ -13,7 +13,7 @@ import sys
 from dataclasses import dataclass
 from datetime import date, time
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import httpx
 import typer
@@ -1452,14 +1452,90 @@ def venues_add(
         store.close()
 
 
+def _format_venue(venue: Venue) -> str:
+    line = f"{venue.name} ({venue.chain})" if venue.chain else venue.name
+    city_line = " ".join(part for part in (venue.postal_code, venue.city) if part)
+    address = ", ".join(part for part in (venue.street_address, city_line, venue.country) if part)
+    if address:
+        line += f" - {address}"
+    if venue.latitude is not None and venue.longitude is not None:
+        line += f" [{venue.latitude}, {venue.longitude}]"
+    return line
+
+
 @venues_app.command("list")
 def venues_list(ctx: typer.Context) -> None:
-    """List every known venue name."""
+    """List every known venue with its chain, address and coordinates."""
     cfg = _cfg(ctx)
     store = _open_store(cfg)
     try:
         for venue in store.list_venues():
-            typer.echo(venue.name)
+            typer.echo(_format_venue(venue))
+    finally:
+        store.close()
+
+
+@venues_app.command("edit")
+def venues_edit(
+    ctx: typer.Context,
+    name: Annotated[
+        str, typer.Argument(help="The venue's exact name, as 'locations venues list' shows it.")
+    ],
+    street: Annotated[
+        str | None, typer.Option(help="Street address. An empty value clears it.")
+    ] = None,
+    postal_code: Annotated[
+        str | None, typer.Option(help="Postal code. An empty value clears it.")
+    ] = None,
+    city: Annotated[str | None, typer.Option(help="City. An empty value clears it.")] = None,
+    country: Annotated[str | None, typer.Option(help="Country. An empty value clears it.")] = None,
+    chain: Annotated[str | None, typer.Option(help="Chain. An empty value clears it.")] = None,
+    lat: Annotated[
+        float | None,
+        typer.Option(min=-90, max=90, help="Latitude, -90 to 90. Give --lon with it."),
+    ] = None,
+    lon: Annotated[
+        float | None,
+        typer.Option(min=-180, max=180, help="Longitude, -180 to 180. Give --lat with it."),
+    ] = None,
+) -> None:
+    """Change a venue's address, chain or coordinates. Fields you leave out
+    stay as they are. Calendar events at the venue are updated to match.
+    """
+    if (lat is None) != (lon is None):
+        typer.secho("Give --lat and --lon together.", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+    given: dict[str, Any] = {
+        "street_address": street,
+        "postal_code": postal_code,
+        "city": city,
+        "country": country,
+        "chain": chain,
+        "latitude": lat,
+        "longitude": lon,
+    }
+    changes: dict[str, Any] = {
+        column: (value or None) if isinstance(value, str) else value
+        for column, value in given.items()
+        if value is not None
+    }
+    if not changes:
+        typer.secho(
+            "Nothing to change. Pass at least one of --street, --postal-code, --city, "
+            "--country, --chain, or --lat with --lon.",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+    cfg = _cfg(ctx)
+    store = _open_store(cfg)
+    try:
+        venue = store.update_venue(name, **changes)
+        typer.echo(f"Updated venue: {_format_venue(venue)}")
+        for entry in store.list_entries(venue_ids=[venue.id]):
+            _push_update_or_warn(cfg, store, entry, importer="venues:edit")
+    except StoreError as e:
+        typer.secho(str(e), fg=typer.colors.RED)
+        raise typer.Exit(code=1) from e
     finally:
         store.close()
 

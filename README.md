@@ -127,6 +127,7 @@ uv run movie-planner purge
 uv run movie-planner purge --yes
 uv run movie-planner locations media add cinema --physical
 uv run movie-planner locations venues add "Grand Vista Cinema"
+uv run movie-planner locations venues edit "Grand Vista Cinema" --city Amsterdam --lat 52.37 --lon 4.89
 uv run movie-planner import movies.csv --force
 uv run movie-planner import-failures list
 uv run movie-planner import-failures clear
