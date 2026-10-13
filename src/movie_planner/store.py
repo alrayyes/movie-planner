@@ -149,6 +149,9 @@ _MIGRATED_VENUE_COLUMNS: tuple[tuple[str, str], ...] = (
     # independently-set rule as every other field here.
     ("street_address", "TEXT"),
     ("postal_code", "TEXT"),
+    # Comma-separated columns a user cleared on purpose, so the known-venue
+    # backfill doesn't fill them back in on the next open.
+    ("cleared_fields", "TEXT"),
 )
 
 
@@ -486,27 +489,28 @@ class Store:
         # "WHERE chain IS NULL AND city IS NULL AND country IS NULL"
         # check would skip entirely (movie-planner#185).
         for name, location in KNOWN_VENUE_LOCATIONS.items():
+            row = self._conn.execute(
+                "SELECT cleared_fields FROM venues WHERE name = ?", (name,)
+            ).fetchone()
+            if row is None:
+                continue
+            cleared = set((row[0] or "").split(","))
             latitude, longitude = location.coordinates or (None, None)
+            known = {
+                "chain": location.chain,
+                "city": location.city,
+                "country": location.country,
+                "latitude": latitude,
+                "longitude": longitude,
+                "street_address": location.street_address,
+                "postal_code": location.postal_code,
+            }
+            fills = {column: value for column, value in known.items() if column not in cleared}
+            # The column names come from the fixed dict above, never from input.
+            assignments = ", ".join(f"{column} = COALESCE({column}, ?)" for column in fills)
             self._conn.execute(
-                "UPDATE venues SET "
-                "chain = COALESCE(chain, ?), "
-                "city = COALESCE(city, ?), "
-                "country = COALESCE(country, ?), "
-                "latitude = COALESCE(latitude, ?), "
-                "longitude = COALESCE(longitude, ?), "
-                "street_address = COALESCE(street_address, ?), "
-                "postal_code = COALESCE(postal_code, ?) "
-                "WHERE name = ?",
-                (
-                    location.chain,
-                    location.city,
-                    location.country,
-                    latitude,
-                    longitude,
-                    location.street_address,
-                    location.postal_code,
-                    name,
-                ),
+                f"UPDATE venues SET {assignments} WHERE name = ?",  # nosec B608
+                (*fills.values(), name),
             )
 
     def close(self) -> None:
@@ -639,11 +643,17 @@ class Store:
             if value is not _UNSET
         }
         if changes:
+            (stored,) = self._conn.execute(
+                "SELECT cleared_fields FROM venues WHERE id = ?", (venue.id,)
+            ).fetchone()
+            cleared = set((stored or "").split(",")) - {""}
+            cleared |= {column for column, value in changes.items() if value is None}
+            cleared -= {column for column, value in changes.items() if value is not None}
             # The column names come from the fixed dict above, never from input.
             assignments = ", ".join(f"{column} = ?" for column in changes)
             self._conn.execute(
-                f"UPDATE venues SET {assignments} WHERE id = ?",  # nosec B608
-                (*changes.values(), venue.id),
+                f"UPDATE venues SET {assignments}, cleared_fields = ? WHERE id = ?",  # nosec B608
+                (*changes.values(), ",".join(sorted(cleared)) or None, venue.id),
             )
             self._conn.commit()
         return next(v for v in self.list_venues() if v.id == venue.id)
