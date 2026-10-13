@@ -7,7 +7,6 @@ from collections.abc import Iterator
 from datetime import date, time
 from pathlib import Path
 
-import jsonschema
 import pytest
 from fakes import FakeCalendar
 from typer.testing import CliRunner
@@ -18,9 +17,6 @@ from movie_planner.export import entry_to_export_row
 from movie_planner.store import Store
 
 runner = CliRunner()
-SCHEMA = json.loads(
-    (Path(__file__).parent.parent / "examples" / "movies.schema.json").read_text(encoding="utf-8")
-)
 
 
 @pytest.fixture
@@ -125,15 +121,71 @@ def test_a_row_never_carries_the_booking_reference(store: Store) -> None:
     assert "booking_ref" not in row
 
 
-def test_export_writes_every_entry_as_a_json_array_that_matches_the_schema(
-    config_path: Path, store: Store
-) -> None:
+def test_export_writes_every_entry_as_a_json_array(config_path: Path, store: Store) -> None:
     _seed(store)
 
     rows = json.loads(_export(config_path))
 
     assert [r["title"] for r in rows] == ["Dune", "Paddington"]
-    jsonschema.validate(rows, SCHEMA)
+
+
+def test_a_fully_populated_row_carries_every_field_under_its_import_name(store: Store) -> None:
+    medium = store.get_or_create_medium("cinema", is_physical_place=True)
+    venue = store.get_or_create_venue("Grand Vista Cinema")
+    entry = store.create_entry(
+        title="Dune",
+        date=date(2026, 2, 15),
+        medium_id=medium.id,
+        start_time=time(19, 30, 15),
+        end_time=time(22, 15),
+        venue_id=venue.id,
+    )
+    store.update_entry(
+        entry.id,
+        caldav_uid="abc@example.com",
+        imdb_url="https://www.imdb.com/title/tt1160419/",
+        imdb_rating="8.0",
+        rotten_tomatoes_rating="83%",
+        metacritic_rating="74",
+        poster_url="https://example.com/dune.jpg",
+        director="Denis Villeneuve",
+        actors="Timothée Chalamet",
+        genre="Sci-Fi",
+        release_year=2021,
+        letterboxd_url="https://letterboxd.com/film/dune-2021/",
+        letterboxd_rating="4.5",
+        notes="Loud",
+        source="pathe.nl",
+        row="12",
+        seat="7",
+    )
+
+    row = entry_to_export_row(store.list_entries()[0], medium_name="cinema", venue=venue)
+
+    assert row == {
+        "uid": "abc@example.com",
+        "title": "Dune",
+        "date": "2026-02-15",
+        "start_time": "19:30:15",
+        "end_time": "22:15",
+        "medium": "cinema",
+        "venue": "Grand Vista Cinema",
+        "director": "Denis Villeneuve",
+        "actors": "Timothée Chalamet",
+        "genre": "Sci-Fi",
+        "release_year": 2021,
+        "poster_url": "https://example.com/dune.jpg",
+        "imdb_rating": "8.0",
+        "rotten_tomatoes_rating": "83%",
+        "metacritic_rating": "74",
+        "imdb_url": "https://www.imdb.com/title/tt1160419/",
+        "letterboxd_url": "https://letterboxd.com/film/dune-2021/",
+        "letterboxd_rating": "4.5",
+        "notes": "Loud",
+        "source": "pathe.nl",
+        "row": "12",
+        "seat": "7",
+    }
 
 
 def test_export_filters_by_date_and_medium(config_path: Path, store: Store) -> None:
@@ -193,6 +245,10 @@ def test_an_export_imports_back_into_an_empty_store(
             time(22, 15),
         )
         assert dune.director == "Denis Villeneuve"
+        assert dune.imdb_rating == "8.0"
+        assert {m.id: m.name for m in other.list_media()}[dune.medium_id] == "cinema"
+        assert dune.venue_id is not None
+        assert {v.id: v.name for v in other.list_venues()}[dune.venue_id] == "Grand Vista Cinema"
         assert dune.release_year == 2021
         assert dune.notes == "Loud"
         assert dune.letterboxd_rating == "4.5"
