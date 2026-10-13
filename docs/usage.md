@@ -6,6 +6,14 @@ The full behaviour behind each `movie-planner` command — see the main
 
 ## Filtering and limiting `list`
 
+`list` also filters on what OMDb stored about each film: `--title`,
+`--director`, `--actor` and `--genre` match part of the text, ignoring case
+(`--actor zendaya` finds a film whose cast list includes her); `--venue`
+matches a venue's exact name, ignoring case; `--year` is the release year;
+`--rated` is the rating class, such as `PG-13`, ignoring case. Every filter
+you give must match, and they combine with `--from`, `--to`, `--medium`,
+`--chain` and `--city`. `--json` prints the filtered set.
+
 `list --limit N` shows only the N most recently dated entries, applied
 after every other filter - combine it with `--chain`/`--city`/
 `--medium`/`--from`/`--to` to get "the last 5 at this chain" rather
