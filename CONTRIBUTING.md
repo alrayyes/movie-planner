@@ -159,9 +159,11 @@ parse=parse_xlsx)`. The `name` is what shows up as the entry's
    new suffix automatically; the "unsupported file type" error already
    lists every registered format, not a hardcoded string.
 
-A second format with the same suffix, as a Letterboxd `diary.csv` shares
-`.csv` with a native file, is told apart inside the suffix's parser by its
-header, as `parse_csv` does.
+A second format with the same suffix, as a Letterboxd `diary.csv` or an IMDb
+`ratings.csv` shares `.csv` with a native file, is told apart inside the
+suffix's parser by its header, as `parse_csv` does. A row that parses fine but
+shouldn't be imported (an IMDb series) comes back as a `ParsedRow` with
+`skipped` set to the reason: `run_import` counts it as skipped, not failed.
 
 Test the parser the same way `tests/test_import.py` already tests
 `parse_csv`/`parse_json`: valid rows, a row missing a required field,

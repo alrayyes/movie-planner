@@ -6,6 +6,7 @@ duplicate-detection rules used by interactive logging.
 import csv
 import datetime
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -53,6 +54,9 @@ class ParsedRow:
     row_number: int
     entry: ImportRow | None
     error: str | None
+    # Why a row that parsed fine is left out on purpose (an IMDb series, say).
+    # It is reported as skipped, not failed, and `entry` and `error` are None.
+    skipped: str | None = None
 
 
 @dataclass(frozen=True)
@@ -147,10 +151,31 @@ class MediumRequiredError(ValueError):
 
 
 _LETTERBOXD_DIARY_HEADERS = frozenset({"Name", "Letterboxd URI", "Watched Date"})
+_IMDB_RATINGS_HEADERS = frozenset({"Const", "Title", "Your Rating", "Date Rated"})
 _DIARY_NEEDS_MEDIUM = (
     "This looks like a Letterboxd diary, which doesn't say where you watched. "
     "Pass --medium, for example --medium netflix."
 )
+_IMDB_NEEDS_MEDIUM = (
+    "This looks like an IMDb ratings export, which doesn't say where you watched. "
+    "Pass --medium, for example --medium cinema."
+)
+
+# IMDb's ratings.csv also lists series, episodes and games. It spells the
+# `Title Type` as a code ("tvMiniSeries") in some exports and as a display name
+# ("TV Mini Series") in others, so the type is compared lowercased with spaces,
+# dashes and underscores removed. Only these known non-films are skipped, per
+# row; any other type, or none, is read as a film, so an unfamiliar one never
+# blocks a whole file.
+_IMDB_NOT_FILM = {
+    "tvseries": "a TV series",
+    "tvminiseries": "a TV miniseries",
+    "tvepisode": "a TV episode",
+    "videogame": "a video game",
+    "podcastseries": "a podcast",
+    "podcastepisode": "a podcast episode",
+    "musicvideo": "a music video",
+}
 
 
 def _letterboxd_record(raw: dict[str, Any], medium: str) -> dict[str, Any]:
@@ -168,27 +193,64 @@ def _letterboxd_record(raw: dict[str, Any], medium: str) -> dict[str, Any]:
     }
 
 
+def _imdb_not_a_film(raw: dict[str, Any]) -> str | None:
+    kind = re.sub(r"[\s_-]", "", raw.get("Title Type") or "").lower()
+    name = _IMDB_NOT_FILM.get(kind)
+    if name is None:
+        return None
+    return f'"{(raw.get("Title") or "").strip()}" is {name} on IMDb, not a movie'
+
+
+def _imdb_record(raw: dict[str, Any], medium: str) -> dict[str, Any]:
+    # IMDb keeps no watched date; the day a title was rated is the closest.
+    rating = (raw.get("Your Rating") or "").strip()
+    return {
+        "title": raw.get("Title"),
+        "date": raw.get("Date Rated"),
+        "medium": medium,
+        "release_year": raw.get("Year"),
+        "genre": raw.get("Genres"),
+        "director": raw.get("Directors"),
+        "imdb_url": raw.get("URL"),
+        "imdb_rating": raw.get("IMDb Rating"),
+        "notes": f"Your IMDb rating: {rating}/10" if rating else None,
+    }
+
+
 def parse_csv(path: Path, medium: str | None = None) -> list[ParsedRow]:
-    """A native `movies.csv`, or a Letterboxd `diary.csv` (told apart by its
-    header). A diary names no medium, so `medium` is required for one and
-    ignored for a native file, which has its own column.
+    """A native `movies.csv`, a Letterboxd `diary.csv` or an IMDb
+    `ratings.csv`, told apart by their headers. The last two name no medium,
+    so `medium` is required for them and ignored for a native file, which has
+    its own column.
     """
     # utf-8-sig drops a byte-order mark so it can't hide the first header.
     with path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
-        # Trimmed, as the web app compares them, so a stray space can't hide a column.
         reader.fieldnames = [name.strip() for name in reader.fieldnames or []]
-        is_diary = set(reader.fieldnames) >= _LETTERBOXD_DIARY_HEADERS
+        headers = set(reader.fieldnames)
         wanted = (medium or "").strip()
         # Row 1 is the header, so the first data row is 2.
-        if not is_diary:
-            return [_row_from_dict(i, raw) for i, raw in enumerate(reader, start=2)]
-        if not wanted:
-            raise MediumRequiredError(_DIARY_NEEDS_MEDIUM)
-        return [
-            _row_from_dict(i, _letterboxd_record(raw, wanted))
-            for i, raw in enumerate(reader, start=2)
-        ]
+        if headers >= _LETTERBOXD_DIARY_HEADERS:
+            if not wanted:
+                raise MediumRequiredError(_DIARY_NEEDS_MEDIUM)
+            return [
+                _row_from_dict(i, _letterboxd_record(raw, wanted))
+                for i, raw in enumerate(reader, start=2)
+            ]
+        if headers >= _IMDB_RATINGS_HEADERS:
+            if not wanted:
+                raise MediumRequiredError(_IMDB_NEEDS_MEDIUM)
+            return [
+                _skipped_row(i, reason)
+                if (reason := _imdb_not_a_film(raw))
+                else _row_from_dict(i, _imdb_record(raw, wanted))
+                for i, raw in enumerate(reader, start=2)
+            ]
+        return [_row_from_dict(i, raw) for i, raw in enumerate(reader, start=2)]
+
+
+def _skipped_row(row_number: int, reason: str) -> ParsedRow:
+    return ParsedRow(row_number=row_number, entry=None, error=None, skipped=reason)
 
 
 def parse_json(path: Path, medium: str | None = None) -> list[ParsedRow]:
@@ -242,6 +304,10 @@ def run_import(
     imported_entries: list[ImportedEntry] = []
 
     for row in rows:
+        if row.skipped is not None:
+            skipped += 1
+            skipped_details.append(f"row {row.row_number}: {row.skipped}")
+            continue
         if row.error is not None:
             failed += 1
             failed_details.append(f"row {row.row_number}: {row.error}")
