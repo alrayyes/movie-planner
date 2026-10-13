@@ -7,7 +7,7 @@ import csv
 import datetime
 import json
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +38,11 @@ class ImportRow:
     source: str | None = None
     row: str | None = None
     seat: str | None = None
+    # The web app's export writes the calendar event's uid and, for a viewing
+    # the CLI logged, a blank medium (no X-MEDIUM was ever written). Such a row
+    # is a re-import of something already stored, so a blank medium is only
+    # an error once it turns out not to be a duplicate.
+    uid: str | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +74,9 @@ class ImportSummary:
     skipped_details: list[str]
     failed_details: list[str]
     imported_entries: list[ImportedEntry]
+    # (row number, error) for rows that parsed but still failed once checked
+    # against the store. The caller records these beside the parse-time ones.
+    run_failures: list[tuple[int, str]] = field(default_factory=list)
 
 
 def _parse_time(value: str | None) -> datetime.time | None:
@@ -91,13 +99,14 @@ def _row_from_dict(row_number: int, raw: dict[str, Any]) -> ParsedRow:
         title = raw.get("title") or None
         if not title:
             raise ValueError("title is required")
+        uid = raw.get("uid") or None
         medium = raw.get("medium") or None
-        if not medium:
+        if not medium and not uid:
             raise ValueError("medium is required")
         entry = ImportRow(
             title=title,
             date=datetime.date.fromisoformat(raw["date"]),
-            medium=medium,
+            medium=medium or "",
             start_time=_parse_time(raw.get("start_time")),
             end_time=_parse_time(raw.get("end_time")),
             venue=raw.get("venue") or None,
@@ -116,6 +125,7 @@ def _row_from_dict(row_number: int, raw: dict[str, Any]) -> ParsedRow:
             source=raw.get("source") or None,
             row=raw.get("row") or None,
             seat=raw.get("seat") or None,
+            uid=uid,
         )
     except (KeyError, ValueError) as e:
         return ParsedRow(row_number=row_number, entry=None, error=str(e))
@@ -181,6 +191,7 @@ def run_import(
     failed = 0
     skipped_details = []
     failed_details = []
+    run_failures: list[tuple[int, str]] = []
     imported_entries: list[ImportedEntry] = []
 
     for row in rows:
@@ -206,6 +217,12 @@ def run_import(
                 f"row {row.row_number}: '{r.title}' looks like a duplicate of "
                 f"'{duplicate.title}' logged {duplicate.date}"
             )
+            continue
+
+        if not r.medium:
+            failed += 1
+            failed_details.append(f"row {row.row_number}: medium is required")
+            run_failures.append((row.row_number, "medium is required"))
             continue
 
         medium = store.get_or_create_medium(r.medium, is_physical_place=r.venue is not None)
@@ -253,4 +270,5 @@ def run_import(
         skipped_details=skipped_details,
         failed_details=failed_details,
         imported_entries=imported_entries,
+        run_failures=run_failures,
     )
