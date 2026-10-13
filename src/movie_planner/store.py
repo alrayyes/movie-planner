@@ -494,7 +494,7 @@ class Store:
             ).fetchone()
             if row is None:
                 continue
-            cleared = set((row[0] or "").split(","))
+            cleared = set((row[0] or "").split(",")) - {""}
             latitude, longitude = location.coordinates or (None, None)
             known = {
                 "chain": location.chain,
@@ -506,6 +506,8 @@ class Store:
                 "postal_code": location.postal_code,
             }
             fills = {column: value for column, value in known.items() if column not in cleared}
+            if not fills:
+                continue  # every column was cleared on purpose: nothing to fill
             # The column names come from the fixed dict above, never from input.
             assignments = ", ".join(f"{column} = COALESCE({column}, ?)" for column in fills)
             self._conn.execute(
@@ -648,7 +650,6 @@ class Store:
             ).fetchone()
             cleared = set((stored or "").split(",")) - {""}
             cleared |= {column for column, value in changes.items() if value is None}
-            cleared -= {column for column, value in changes.items() if value is not None}
             # The column names come from the fixed dict above, never from input.
             assignments = ", ".join(f"{column} = ?" for column in changes)
             self._conn.execute(

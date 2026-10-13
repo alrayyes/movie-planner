@@ -552,3 +552,26 @@ def test_an_entry_with_no_calendar_uid_is_nothing_to_push(config_path: Path, sto
     entry = store.create_entry(title="Offline", date=date(2026, 1, 1), medium_id=cinema.id)
 
     assert _push_update_or_warn(cfg, store, entry, importer="test") is True
+
+
+def test_a_known_venue_with_every_field_cleared_still_opens(tmp_path: Path, store: Store) -> None:
+    store.add_venue("Tuschinski")
+    store.update_venue(
+        "Tuschinski",
+        chain=None,
+        city=None,
+        country=None,
+        latitude=None,
+        longitude=None,
+        street_address=None,
+        postal_code=None,
+    )
+
+    again = _reopen(tmp_path)
+    try:
+        venue = again.list_venues()[0]
+        assert (venue.chain, venue.city, venue.country) == (None, None, None)
+        assert (venue.latitude, venue.longitude) == (None, None)
+        assert (venue.street_address, venue.postal_code) == (None, None)
+    finally:
+        again.close()
