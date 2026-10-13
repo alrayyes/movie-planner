@@ -607,6 +607,47 @@ class Store:
             for r in rows
         ]
 
+    def update_venue(
+        self,
+        name: str,
+        *,
+        chain: str | None = _UNSET,
+        city: str | None = _UNSET,
+        country: str | None = _UNSET,
+        latitude: float | None = _UNSET,
+        longitude: float | None = _UNSET,
+        street_address: str | None = _UNSET,
+        postal_code: str | None = _UNSET,
+    ) -> Venue:
+        """Sets the given columns on the venue called `name` and leaves the rest
+        alone; `None` clears one. Raises StoreError for an unknown name.
+        """
+        venue = next((v for v in self.list_venues() if v.name == name), None)
+        if venue is None:
+            raise StoreError(f"venue '{name}' does not exist")
+        changes = {
+            column: value
+            for column, value in {
+                "chain": chain,
+                "city": city,
+                "country": country,
+                "latitude": latitude,
+                "longitude": longitude,
+                "street_address": street_address,
+                "postal_code": postal_code,
+            }.items()
+            if value is not _UNSET
+        }
+        if changes:
+            # The column names come from the fixed dict above, never from input.
+            assignments = ", ".join(f"{column} = ?" for column in changes)
+            self._conn.execute(
+                f"UPDATE venues SET {assignments} WHERE id = ?",  # nosec B608
+                (*changes.values(), venue.id),
+            )
+            self._conn.commit()
+        return next(v for v in self.list_venues() if v.id == venue.id)
+
     def get_or_create_venue(self, name: str) -> Venue:
         # Resolve a known alias before searching, so two different
         # aliases of the same real venue both find (or both create)
