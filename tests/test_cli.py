@@ -2185,6 +2185,21 @@ def test_import_csv_persists_rows_and_syncs_to_calendar(
     store.close()
 
 
+def test_import_records_a_blank_medium_row_that_matched_nothing(
+    config_path: Path, calendar: FakeCalendar, tmp_path: Path
+) -> None:
+    json_path = tmp_path / "export.json"
+    json_path.write_text(
+        '[{"title": "Dune", "date": "2026-01-01", "medium": "", "uid": "abc@example.com"}]'
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(json_path)])
+    listed = runner.invoke(app, ["--config", str(config_path), "import-failures", "list"])
+
+    assert "1 failed" in result.output
+    assert "row 1: medium is required" in listed.output
+
+
 def test_import_csv_persists_notes(
     config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
 ) -> None:

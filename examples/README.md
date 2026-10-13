@@ -26,6 +26,12 @@ known time at all.
   `description` covers the one difference (CSV values are always plain
   text). [`movie-planner-web`](https://github.com/alrayyes/movie-planner-web)
   reads this file's field names to stay compatible.
+  A row from the web app's JSON export may carry a `uid` and a blank
+  `medium`, which is how it writes a viewing this tool logged. Such a row is
+  skipped as a duplicate when it matches a stored entry, and fails with
+  "medium is required" when it doesn't, which is also what `--force` does to
+  a match, since there is no medium to create it with. The `uid` is read only
+  to tell the two apart and isn't stored.
 
 Try one:
 
