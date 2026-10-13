@@ -824,6 +824,13 @@ def log(
 # --- list: requirement "List logged entries" ---
 
 
+def _contains(value: str | None, needle: str | None) -> bool:
+    """True when no filter was given, else whether `value` holds `needle`
+    ignoring case (casefold, so non-ASCII letters match too).
+    """
+    return needle is None or needle.casefold() in (value or "").casefold()
+
+
 @app.command(name="list")
 def list_entries(
     ctx: typer.Context,
@@ -854,6 +861,34 @@ def list_entries(
             help="Only entries at a venue in this city - same known-venue-table limitation "
             "as --chain."
         ),
+    ] = None,
+    title: Annotated[
+        str | None,
+        typer.Option(help="Only entries whose title contains this text (case-insensitive)."),
+    ] = None,
+    venue: Annotated[
+        str | None,
+        typer.Option(help="Only entries at the venue with this exact name (case-insensitive)."),
+    ] = None,
+    director: Annotated[
+        str | None,
+        typer.Option(help="Only entries whose director contains this text (case-insensitive)."),
+    ] = None,
+    actor: Annotated[
+        str | None,
+        typer.Option(help="Only entries whose cast contains this name (case-insensitive)."),
+    ] = None,
+    genre: Annotated[
+        str | None,
+        typer.Option(help="Only entries whose genres contain this text (case-insensitive)."),
+    ] = None,
+    year: Annotated[
+        int | None,
+        typer.Option(help="Only entries released in this year."),
+    ] = None,
+    rated: Annotated[
+        str | None,
+        typer.Option(help="Only entries with this rating class (for example PG-13), any case."),
     ] = None,
     limit: Annotated[
         int | None,
@@ -920,6 +955,22 @@ def list_entries(
         )
         if omdb_no_match:
             entries = [e for e in entries if e.omdb_last_no_match is not None]
+        if venue is not None:
+            wanted = venue.casefold()
+            matching_venue_ids = {
+                v.id for v in venues_by_id.values() if v.name.casefold() == wanted
+            }
+            entries = [e for e in entries if e.venue_id in matching_venue_ids]
+        entries = [
+            e
+            for e in entries
+            if _contains(e.title, title)
+            and _contains(e.director, director)
+            and _contains(e.actors, actor)
+            and _contains(e.genre, genre)
+            and (year is None or e.release_year == year)
+            and (rated is None or (e.rated or "").casefold() == rated.casefold())
+        ]
         if limit is not None:
             entries = entries[-limit:]
         if not entries:
