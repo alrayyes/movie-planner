@@ -79,6 +79,16 @@ tags as a note (`Tags: sci-fi, imax`). A diary doesn't say where you watched,
 so `--medium` is required: `movie-planner import diary.csv --medium netflix`.
 Without it the command stops before writing anything.
 
+An IMDb `ratings.csv` imports the same way, recognised by its `Const`, `Title`,
+`Your Rating` and `Date Rated` columns (a list export without the rating
+columns isn't one). IMDb keeps no watched date, so each entry is dated the day
+you rated it, with the year, genres, director, IMDb link and score, and "Your
+IMDb rating: 9/10" as a note. `--medium` is required here too. The file also
+lists series, episodes, games, podcasts and music videos. Those are skipped
+and named in the run summary (`skipped: row 3: "Severance" is a TV series on
+IMDb, not a movie`), not recorded as failures, and nothing is written for them.
+Any other title type imports as a film.
+
 `import` accepts a `.csv` or `.json` file with the same fields as
 `examples/`, and fetches OMDb ratings the same as `log` does - unless a
 row already supplies every OMDb-derived field itself (ratings, poster,
