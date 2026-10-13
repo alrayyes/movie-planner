@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import stat
 import subprocess
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -34,8 +35,120 @@ fi
 """
 
 
+def _scrubbed() -> dict[str, str]:
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
+def _run_git(cwd: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=cwd, check=True, env=_scrubbed(), capture_output=True, text=True
+    ).stdout
+
+
+def repository_state(work: Path, remote: Path) -> str:
+    """Everything a stray test could change in a checkout: where HEAD is,
+    every ref (branches, tags), the local config, and the refs on its remote.
+    """
+    return "\n".join(
+        [
+            _run_git(work, "rev-parse", "HEAD"),
+            _run_git(work, "for-each-ref"),
+            _run_git(work, "config", "--local", "--list"),
+            _run_git(remote, "for-each-ref"),
+        ]
+    )
+
+
+def _make_decoy(root: Path) -> tuple[Path, Path]:
+    root.mkdir()
+    remote = root / "decoy-remote.git"
+    decoy = root / "decoy"
+    _run_git(root, "init", "-q", "--bare", "-b", "main", str(remote))
+    _run_git(root, "clone", "-q", str(remote), str(decoy))
+    _run_git(
+        decoy,
+        "-c",
+        "user.name=x",
+        "-c",
+        "user.email=x@x",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "decoy",
+    )
+    _run_git(decoy, "push", "-q", "origin", "HEAD:main")
+    return decoy, remote
+
+
+@pytest.fixture(autouse=True)
+def hook_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Git exports an absolute GIT_DIR to a hook run from a worktree, and a
+    test that builds its own repositories must not inherit it: the commits and
+    the push below would land in the checkout the hook is running from. This
+    stands in for that checkout with a decoy that has a remote of its own, and
+    fails the test if its HEAD, refs, config or remote change.
+    """
+    decoy, remote = _make_decoy(tmp_path / "hook")
+    before = repository_state(decoy, remote)
+    monkeypatch.setenv("GIT_DIR", str(decoy / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(decoy))
+    yield
+    assert repository_state(decoy, remote) == before, (
+        "a test changed the repository the hook runs from"
+    )
+
+
+@pytest.mark.parametrize(
+    "leak",
+    [
+        [
+            "-c",
+            "user.name=x",
+            "-c",
+            "user.email=x@x",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "leak",
+        ],
+        ["-c", "user.name=x", "-c", "user.email=x@x", "tag", "-a", "-m", "leak", "leak-tag"],
+        ["branch", "leak-branch"],
+        ["config", "leak.key", "value"],
+    ],
+    ids=["commit", "annotated-tag", "branch", "config"],
+)
+def test_the_decoy_notices_a_leak(tmp_path: Path, leak: list[str]) -> None:
+    decoy, remote = _make_decoy(tmp_path / "probe")
+    before = repository_state(decoy, remote)
+
+    _run_git(decoy, *leak)
+
+    assert repository_state(decoy, remote) != before
+
+
+def test_the_decoy_notices_a_change_on_its_remote(tmp_path: Path) -> None:
+    decoy, remote = _make_decoy(tmp_path / "probe")
+    before = repository_state(decoy, remote)
+    # A ref created straight on the remote leaves the decoy's own HEAD, refs
+    # and config alone, so only the remote's refs give it away.
+    _run_git(remote, "update-ref", "refs/heads/other", _run_git(decoy, "rev-parse", "HEAD").strip())
+
+    assert repository_state(decoy, remote) != before
+
+
+def own_environment() -> dict[str, str]:
+    """The environment without the GIT_* variables a hook passes down, so a
+    repository made here is the only one git can see.
+    """
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
 def git(cwd: Path, *args: str) -> str:
-    result = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+    result = subprocess.run(
+        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True, env=own_environment()
+    )
     return result.stdout.strip()
 
 
@@ -60,7 +173,7 @@ def repo(tmp_path: Path) -> dict[str, Path]:
 
 def run_sync(repo: dict[str, Path], **env: str) -> subprocess.CompletedProcess[str]:
     full_env = {
-        **os.environ,
+        **own_environment(),
         "PATH": f"{repo['bin']}:{os.environ['PATH']}",
         "REMOTE": str(repo["remote"]),
         **env,
