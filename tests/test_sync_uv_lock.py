@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import stat
 import subprocess
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -34,8 +35,61 @@ fi
 """
 
 
+@pytest.fixture(autouse=True)
+def hook_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Git exports an absolute GIT_DIR to a hook run from a worktree, and a
+    test that builds its own repositories must not inherit it: the commits and
+    the push below would land in the checkout the hook is running from. This
+    stands in for that checkout with a decoy that has a remote of its own, and
+    fails the test if anything reaches it.
+    """
+    decoy_remote = tmp_path / "decoy-remote.git"
+    decoy = tmp_path / "decoy"
+    clean = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    for cwd, args in (
+        (tmp_path, ["init", "-q", "--bare", "-b", "main", str(decoy_remote)]),
+        (tmp_path, ["clone", "-q", str(decoy_remote), str(decoy)]),
+        (
+            decoy,
+            [
+                "-c",
+                "user.name=x",
+                "-c",
+                "user.email=x@x",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "decoy",
+            ],
+        ),
+        (decoy, ["push", "-q", "origin", "HEAD:main"]),
+    ):
+        subprocess.run(["git", *args], cwd=cwd, check=True, env=clean, capture_output=True)
+    monkeypatch.setenv("GIT_DIR", str(decoy / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(decoy))
+    yield
+    count = subprocess.run(
+        ["git", "rev-list", "--all", "--count"],
+        cwd=decoy,
+        env=clean,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert count == "1", "a test wrote to the repository the hook is running from"
+
+
+def own_environment() -> dict[str, str]:
+    """The environment without the GIT_* variables a hook passes down, so a
+    repository made here is the only one git can see.
+    """
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
 def git(cwd: Path, *args: str) -> str:
-    result = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+    result = subprocess.run(
+        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True, env=own_environment()
+    )
     return result.stdout.strip()
 
 
@@ -60,7 +114,7 @@ def repo(tmp_path: Path) -> dict[str, Path]:
 
 def run_sync(repo: dict[str, Path], **env: str) -> subprocess.CompletedProcess[str]:
     full_env = {
-        **os.environ,
+        **own_environment(),
         "PATH": f"{repo['bin']}:{os.environ['PATH']}",
         "REMOTE": str(repo["remote"]),
         **env,
