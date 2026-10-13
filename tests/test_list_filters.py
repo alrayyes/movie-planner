@@ -76,6 +76,7 @@ def store(tmp_path: Path, config_path: Path) -> Iterator[Store]:
         release_year=2014,
         rated="PG",
     )
+    s.create_entry(title="Home Video", date=date(2026, 1, 4), medium_id=cinema.id)
     yield s
     s.close()
 
@@ -133,3 +134,22 @@ def test_a_filter_with_no_match_prints_the_plain_message(config_path: Path, stor
 def test_a_literal_percent_or_underscore_is_not_a_wildcard(config_path: Path, store: Store) -> None:
     assert _titles(config_path, "--title", "%") == []
     assert _titles(config_path, "--title", "Dune_Part") == []
+
+
+def test_an_entry_without_omdb_data_never_matches_a_text_filter(
+    config_path: Path, store: Store
+) -> None:
+    for args in (
+        ["--director", "x"],
+        ["--actor", "x"],
+        ["--genre", "x"],
+        ["--year", "2016"],
+        ["--rated", "PG"],
+        ["--venue", "Eye"],
+    ):
+        assert "Home Video" not in _titles(config_path, *args)
+    assert _titles(config_path, "--title", "home") == ["Home Video"]
+
+
+def test_an_unrated_entry_does_not_match_a_made_up_rating(config_path: Path, store: Store) -> None:
+    assert _titles(config_path, "--rated", "XXXX") == []

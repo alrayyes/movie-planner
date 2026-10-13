@@ -831,6 +831,37 @@ def _contains(value: str | None, needle: str | None) -> bool:
     return needle is None or needle.casefold() in (value or "").casefold()
 
 
+def _filter_entries(
+    entries: list[Entry],
+    *,
+    venues: list[Venue],
+    venue: str | None,
+    title: str | None,
+    director: str | None,
+    actor: str | None,
+    genre: str | None,
+    year: int | None,
+    rated: str | None,
+) -> list[Entry]:
+    """The `list` filters that match on an entry's own text; every one given
+    must match. Kept out of the typer command so mutation testing covers it.
+    """
+    if venue is not None:
+        wanted = venue.casefold()
+        matching_venue_ids = {v.id for v in venues if v.name.casefold() == wanted}
+        entries = [e for e in entries if e.venue_id in matching_venue_ids]
+    return [
+        e
+        for e in entries
+        if _contains(e.title, title)
+        and _contains(e.director, director)
+        and _contains(e.actors, actor)
+        and _contains(e.genre, genre)
+        and (year is None or e.release_year == year)
+        and (rated is None or (e.rated or "").casefold() == rated.casefold())
+    ]
+
+
 @app.command(name="list")
 def list_entries(
     ctx: typer.Context,
@@ -955,22 +986,17 @@ def list_entries(
         )
         if omdb_no_match:
             entries = [e for e in entries if e.omdb_last_no_match is not None]
-        if venue is not None:
-            wanted = venue.casefold()
-            matching_venue_ids = {
-                v.id for v in venues_by_id.values() if v.name.casefold() == wanted
-            }
-            entries = [e for e in entries if e.venue_id in matching_venue_ids]
-        entries = [
-            e
-            for e in entries
-            if _contains(e.title, title)
-            and _contains(e.director, director)
-            and _contains(e.actors, actor)
-            and _contains(e.genre, genre)
-            and (year is None or e.release_year == year)
-            and (rated is None or (e.rated or "").casefold() == rated.casefold())
-        ]
+        entries = _filter_entries(
+            entries,
+            venues=list(venues_by_id.values()),
+            venue=venue,
+            title=title,
+            director=director,
+            actor=actor,
+            genre=genre,
+            year=year,
+            rated=rated,
+        )
         if limit is not None:
             entries = entries[-limit:]
         if not entries:
