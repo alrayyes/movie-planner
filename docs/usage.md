@@ -63,7 +63,9 @@ preceding `list` filter.
 added with just a name can gain one later. `--chain` sets its chain, and
 `--lat` with `--lon` sets its coordinates (latitude -90 to 90, longitude -180
 to 180; give both or neither). Fields you leave out stay as they are, and an
-empty value such as `--street ""` clears one. An unknown name fails and
+empty value such as `--street ""` clears one (on a venue from the built-in
+table, the table fills a cleared field back in the next time you run a
+command). An unknown name fails and
 changes nothing. The calendar events at the venue are updated to carry the new
 LOCATION and GEO straight away; if the calendar can't be reached you get a
 warning, and `sync refresh` pushes them later. `locations venues list` shows
