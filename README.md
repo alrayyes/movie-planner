@@ -112,6 +112,8 @@ uv run movie-planner list --from 2026-01-01 --to 2026-01-31 --medium cinema
 uv run movie-planner list --chain Pathé
 uv run movie-planner list --city Amsterdam
 uv run movie-planner list --limit 5
+uv run movie-planner list --director "Denis Villeneuve" --year 2024
+uv run movie-planner list --title dune --venue Tuschinski --genre Sci-Fi --rated PG-13
 uv run movie-planner list --omdb-no-match
 uv run movie-planner list --json
 uv run movie-planner show 3
