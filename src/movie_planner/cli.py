@@ -479,13 +479,17 @@ def _push_update_or_warn(
     *,
     importer: str,
     screening_details: str | None = None,
-) -> None:
+    client: CalendarClient | None = None,
+) -> bool:
+    """Pushes `entry`'s changes to its calendar event, or warns. Connects
+    itself unless the caller passes a `client` to reuse. Returns False only
+    when the push failed, so a caller looping over many entries can stop.
+    """
     if entry.caldav_uid is None:
-        return
+        return True
     venue = _venue_for_entry(store, entry)
     try:
-        client = _connect_calendar(cfg)
-        CalendarSync(store, client).push_update(
+        CalendarSync(store, client or _connect_calendar(cfg)).push_update(
             entry,
             venue=_venue_location(venue),
             chain=venue.chain if venue else None,
@@ -502,6 +506,8 @@ def _push_update_or_warn(
             f"Warning: could not sync the update to '{entry.title}' to the calendar: {e}",
             fg=typer.colors.YELLOW,
         )
+        return False
+    return True
 
 
 def _finalize_entry(
@@ -1475,6 +1481,27 @@ def venues_list(ctx: typer.Context) -> None:
         store.close()
 
 
+def _push_venue_edit(cfg: config_module.Config, store: Store, venue: Venue) -> None:
+    """Re-pushes the calendar event of every synced entry at `venue` over one
+    connection, stopping at the first failure so a calendar that is down
+    costs one timeout and one warning, not one per entry.
+    """
+    synced = [e for e in store.list_entries(venue_ids=[venue.id]) if e.caldav_uid is not None]
+    if not synced:
+        return
+    try:
+        client = _connect_calendar(cfg)
+    except Exception as e:  # noqa: BLE001
+        typer.secho(
+            f"Warning: could not reach the calendar to update '{venue.name}' events: {e}",
+            fg=typer.colors.YELLOW,
+        )
+        return
+    for entry in synced:
+        if not _push_update_or_warn(cfg, store, entry, importer="venues:edit", client=client):
+            return
+
+
 @venues_app.command("edit")
 def venues_edit(
     ctx: typer.Context,
@@ -1529,8 +1556,7 @@ def venues_edit(
     try:
         venue = store.update_venue(name, **changes)
         typer.echo(f"Updated venue: {_format_venue(venue)}")
-        for entry in store.list_entries(venue_ids=[venue.id]):
-            _push_update_or_warn(cfg, store, entry, importer="venues:edit")
+        _push_venue_edit(cfg, store, venue)
     except StoreError as e:
         typer.secho(str(e), fg=typer.colors.RED)
         raise typer.Exit(code=1) from e
