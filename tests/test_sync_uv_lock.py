@@ -35,48 +35,108 @@ fi
 """
 
 
+def _scrubbed() -> dict[str, str]:
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
+def _run_git(cwd: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=cwd, check=True, env=_scrubbed(), capture_output=True, text=True
+    ).stdout
+
+
+def repository_state(work: Path, remote: Path) -> str:
+    """Everything a stray test could change in a checkout: where HEAD is,
+    every ref (branches, tags), the local config, and the refs on its remote.
+    """
+    return "\n".join(
+        [
+            _run_git(work, "rev-parse", "HEAD"),
+            _run_git(work, "for-each-ref"),
+            _run_git(work, "config", "--local", "--list"),
+            _run_git(remote, "for-each-ref"),
+        ]
+    )
+
+
+def _make_decoy(root: Path) -> tuple[Path, Path]:
+    root.mkdir()
+    remote = root / "decoy-remote.git"
+    decoy = root / "decoy"
+    _run_git(root, "init", "-q", "--bare", "-b", "main", str(remote))
+    _run_git(root, "clone", "-q", str(remote), str(decoy))
+    _run_git(
+        decoy,
+        "-c",
+        "user.name=x",
+        "-c",
+        "user.email=x@x",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "decoy",
+    )
+    _run_git(decoy, "push", "-q", "origin", "HEAD:main")
+    return decoy, remote
+
+
 @pytest.fixture(autouse=True)
 def hook_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Git exports an absolute GIT_DIR to a hook run from a worktree, and a
     test that builds its own repositories must not inherit it: the commits and
     the push below would land in the checkout the hook is running from. This
     stands in for that checkout with a decoy that has a remote of its own, and
-    fails the test if anything reaches it.
+    fails the test if its HEAD, refs, config or remote change.
     """
-    decoy_remote = tmp_path / "decoy-remote.git"
-    decoy = tmp_path / "decoy"
-    clean = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    for cwd, args in (
-        (tmp_path, ["init", "-q", "--bare", "-b", "main", str(decoy_remote)]),
-        (tmp_path, ["clone", "-q", str(decoy_remote), str(decoy)]),
-        (
-            decoy,
-            [
-                "-c",
-                "user.name=x",
-                "-c",
-                "user.email=x@x",
-                "commit",
-                "-q",
-                "--allow-empty",
-                "-m",
-                "decoy",
-            ],
-        ),
-        (decoy, ["push", "-q", "origin", "HEAD:main"]),
-    ):
-        subprocess.run(["git", *args], cwd=cwd, check=True, env=clean, capture_output=True)
+    decoy, remote = _make_decoy(tmp_path / "hook")
+    before = repository_state(decoy, remote)
     monkeypatch.setenv("GIT_DIR", str(decoy / ".git"))
     monkeypatch.setenv("GIT_WORK_TREE", str(decoy))
     yield
-    count = subprocess.run(
-        ["git", "rev-list", "--all", "--count"],
-        cwd=decoy,
-        env=clean,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    assert count == "1", "a test wrote to the repository the hook is running from"
+    assert repository_state(decoy, remote) == before, (
+        "a test changed the repository the hook runs from"
+    )
+
+
+@pytest.mark.parametrize(
+    "leak",
+    [
+        [
+            "-c",
+            "user.name=x",
+            "-c",
+            "user.email=x@x",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "leak",
+        ],
+        ["tag", "-a", "-m", "leak", "leak-tag"],
+        ["branch", "leak-branch"],
+        ["config", "leak.key", "value"],
+    ],
+    ids=["commit", "annotated-tag", "branch", "config"],
+)
+def test_the_decoy_notices_a_leak(tmp_path: Path, leak: list[str]) -> None:
+    decoy, remote = _make_decoy(tmp_path / "probe")
+    before = repository_state(decoy, remote)
+
+    _run_git(decoy, *leak)
+
+    assert repository_state(decoy, remote) != before
+
+
+def test_the_decoy_notices_a_push_to_its_remote(tmp_path: Path) -> None:
+    decoy, remote = _make_decoy(tmp_path / "probe")
+    _run_git(decoy, "branch", "other")
+    before = repository_state(decoy, remote)
+    # The local state is unchanged by a push of an existing ref, so only the
+    # remote's refs give it away.
+    _run_git(decoy, "push", "-q", "origin", "other")
+
+    assert repository_state(decoy, remote) != before
 
 
 def own_environment() -> dict[str, str]:
