@@ -17,7 +17,14 @@
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
           "description": "Date watched, YYYY-MM-DD."
         },
-        "medium": { "type": "string", "minLength": 1 },
+        "medium": {
+          "type": "string",
+          "description": "Where it was watched. Required and non-empty, except on a row that carries a uid: the web app's export writes an empty medium for a viewing whose calendar event has none, which is every viewing this tool logs. Such a row is skipped as a duplicate when it matches a stored entry, and fails otherwise."
+        },
+        "uid": {
+          "type": "string",
+          "description": "The calendar event's uid, as written by the web app's export. Only read to tell a re-import from a new viewing; never stored."
+        },
         "start_time": {
           "type": "string",
           "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
@@ -57,7 +64,13 @@
           "type": "string",
           "description": "Seat number, as text - same provenance as row."
         }
-      }
+      },
+      "if": {
+        "required": ["uid"],
+        "properties": { "uid": { "minLength": 1 } }
+      },
+      "then": {},
+      "else": { "properties": { "medium": { "minLength": 1 } } }
     }
   }
 }

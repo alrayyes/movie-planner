@@ -1517,11 +1517,9 @@ def import_command(
         # Persisted (issue #254) so `import-failures list` can show them
         # after this run's own output has scrolled away - run_import
         # itself stays pure/ephemeral, this is the one place that writes.
-        for row in rows:
-            if row.error is not None:
-                store.record_import_failure(
-                    source=source_label, row_number=row.row_number, error=row.error
-                )
+        failures = [(r.row_number, r.error) for r in rows if r.error is not None]
+        for row_number, error in [*failures, *summary.run_failures]:
+            store.record_import_failure(source=source_label, row_number=row_number, error=error)
 
         typer.echo(
             f"{summary.imported} imported, {summary.skipped_duplicates} skipped, "
