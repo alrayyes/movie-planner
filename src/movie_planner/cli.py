@@ -489,7 +489,7 @@ def _push_update_or_warn(
         return True
     venue = _venue_for_entry(store, entry)
     try:
-        CalendarSync(store, client or _connect_calendar(cfg)).push_update(
+        CalendarSync(store, client if client is not None else _connect_calendar(cfg)).push_update(
             entry,
             venue=_venue_location(venue),
             chain=venue.chain if venue else None,
