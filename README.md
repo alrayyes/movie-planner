@@ -129,6 +129,8 @@ uv run movie-planner locations media add cinema --physical
 uv run movie-planner locations venues add "Grand Vista Cinema"
 uv run movie-planner locations venues edit "Grand Vista Cinema" --city Amsterdam --lat 52.37 --lon 4.89
 uv run movie-planner import movies.csv --force
+uv run movie-planner import diary.csv --medium netflix
+uv run movie-planner import ratings.csv --medium cinema
 uv run movie-planner import-failures list
 uv run movie-planner import-failures clear
 uv run movie-planner activity
@@ -140,13 +142,13 @@ uv run movie-planner sync refresh --force --date 2026-01-15
 uv run movie-planner sync pull
 ```
 
-See [`docs/usage.md`](docs/usage.md) for what each of these does in
-detail: filtering and limiting `list`, `show`'s inline poster rendering,
-`--json` output on either for external tooling, automatic venue
-chain/city/country/GPS fill-in, `import`'s skipped OMDb lookups and
-failure tracking, `sync`'s push-only design and `sync pull`
-reconciliation, `export`, `purge`, the `activity` log, `bug-report`'s PII-stripped
-diagnostic summary, and how to import years of history without
+See [`docs/usage.md`](docs/usage.md) for what each of these does in detail:
+filtering and limiting `list`, `show`'s inline poster rendering, `--json`
+output on either for external tooling, automatic venue chain/city/country/GPS
+fill-in, `import`'s Letterboxd diary and IMDb ratings support, skipped OMDb
+lookups and failure tracking, `sync`'s push-only design and `sync pull`
+reconciliation, `export`, `purge`, the `activity` log, `bug-report`'s
+PII-stripped diagnostic summary, and how to import years of history without
 exceeding OMDb's daily request limit.
 
 ## Configuration

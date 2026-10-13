@@ -6,10 +6,10 @@ duplicate-detection rules used by interactive logging.
 import csv
 import datetime
 import json
-from collections.abc import Callable
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from movie_planner.duplicates import find_duplicate
 from movie_planner.store import Entry, Store
@@ -54,6 +54,9 @@ class ParsedRow:
     row_number: int
     entry: ImportRow | None
     error: str | None
+    # Why a row that parsed fine is left out on purpose (an IMDb series, say).
+    # It is reported as skipped, not failed, and `entry` and `error` are None.
+    skipped: str | None = None
 
 
 @dataclass(frozen=True)
@@ -132,13 +135,6 @@ def _row_from_dict(row_number: int, raw: dict[str, Any]) -> ParsedRow:
     return ParsedRow(row_number=row_number, entry=entry, error=None)
 
 
-def parse_csv(path: Path) -> list[ParsedRow]:
-    with path.open(newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        # Row 1 is the header, so the first data row is 2.
-        return [_row_from_dict(i, raw) for i, raw in enumerate(reader, start=2)]
-
-
 def parse_json_text(text: str) -> list[ParsedRow]:
     """Parses JSON already in memory - a `movies.json`-shaped array, or a
     single bare row object (treated as a one-element array), the shape
@@ -150,8 +146,121 @@ def parse_json_text(text: str) -> list[ParsedRow]:
     return [_row_from_dict(i, raw) for i, raw in enumerate(rows, start=1)]
 
 
-def parse_json(path: Path) -> list[ParsedRow]:
+class MediumRequiredError(ValueError):
+    """The file can't say where it was watched, and no `--medium` was given."""
+
+
+_LETTERBOXD_DIARY_HEADERS = frozenset({"Name", "Letterboxd URI", "Watched Date"})
+_IMDB_RATINGS_HEADERS = frozenset({"Const", "Title", "Your Rating", "Date Rated"})
+_DIARY_NEEDS_MEDIUM = (
+    "This looks like a Letterboxd diary, which doesn't say where you watched. "
+    "Pass --medium, for example --medium netflix."
+)
+_IMDB_NEEDS_MEDIUM = (
+    "This looks like an IMDb ratings export, which doesn't say where you watched. "
+    "Pass --medium, for example --medium cinema."
+)
+
+# IMDb's ratings.csv also lists series, episodes and games. It spells the
+# `Title Type` as a code ("tvMiniSeries") in some exports and as a display name
+# ("TV Mini Series") in others, so the type is compared lowercased with spaces,
+# dashes and underscores removed. Only these known non-films are skipped, per
+# row; any other type, or none, is read as a film, so an unfamiliar one never
+# blocks a whole file.
+_IMDB_NOT_FILM = {
+    "tvseries": "a TV series",
+    "tvminiseries": "a TV miniseries",
+    "tvepisode": "a TV episode",
+    "videogame": "a video game",
+    "podcastseries": "a podcast",
+    "podcastepisode": "a podcast episode",
+    "musicvideo": "a music video",
+}
+
+
+def _letterboxd_record(raw: dict[str, Any], medium: str) -> dict[str, Any]:
+    # `Date` is the day the film was logged; `Watched Date` is the day it was
+    # seen, and the one that belongs on the calendar.
+    tags = (raw.get("Tags") or "").strip()
+    return {
+        "title": raw.get("Name"),
+        "date": raw.get("Watched Date"),
+        "medium": medium,
+        "release_year": raw.get("Year"),
+        "letterboxd_url": raw.get("Letterboxd URI"),
+        "letterboxd_rating": raw.get("Rating"),
+        "notes": f"Tags: {tags}" if tags else None,
+    }
+
+
+def _imdb_not_a_film(raw: dict[str, Any]) -> str | None:
+    kind = re.sub(r"[\s_-]", "", raw.get("Title Type") or "").lower()
+    name = _IMDB_NOT_FILM.get(kind)
+    if name is None:
+        return None
+    return f'"{(raw.get("Title") or "").strip()}" is {name} on IMDb, not a movie'
+
+
+def _imdb_record(raw: dict[str, Any], medium: str) -> dict[str, Any]:
+    # IMDb keeps no watched date; the day a title was rated is the closest.
+    rating = (raw.get("Your Rating") or "").strip()
+    return {
+        "title": raw.get("Title"),
+        "date": raw.get("Date Rated"),
+        "medium": medium,
+        "release_year": raw.get("Year"),
+        "genre": raw.get("Genres"),
+        "director": raw.get("Directors"),
+        "imdb_url": raw.get("URL"),
+        "imdb_rating": raw.get("IMDb Rating"),
+        "notes": f"Your IMDb rating: {rating}/10" if rating else None,
+    }
+
+
+def parse_csv(path: Path, medium: str | None = None) -> list[ParsedRow]:
+    """A native `movies.csv`, a Letterboxd `diary.csv` or an IMDb
+    `ratings.csv`, told apart by their headers. The last two name no medium,
+    so `medium` is required for them and ignored for a native file, which has
+    its own column.
+    """
+    # utf-8-sig drops a byte-order mark so it can't hide the first header.
+    with path.open(newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        reader.fieldnames = [name.strip() for name in reader.fieldnames or []]
+        headers = set(reader.fieldnames)
+        wanted = (medium or "").strip()
+        # Row 1 is the header, so the first data row is 2.
+        if headers >= _LETTERBOXD_DIARY_HEADERS:
+            if not wanted:
+                raise MediumRequiredError(_DIARY_NEEDS_MEDIUM)
+            return [
+                _row_from_dict(i, _letterboxd_record(raw, wanted))
+                for i, raw in enumerate(reader, start=2)
+            ]
+        if headers >= _IMDB_RATINGS_HEADERS:
+            if not wanted:
+                raise MediumRequiredError(_IMDB_NEEDS_MEDIUM)
+            return [
+                _skipped_row(i, reason)
+                if (reason := _imdb_not_a_film(raw))
+                else _row_from_dict(i, _imdb_record(raw, wanted))
+                for i, raw in enumerate(reader, start=2)
+            ]
+        return [_row_from_dict(i, raw) for i, raw in enumerate(reader, start=2)]
+
+
+def _skipped_row(row_number: int, reason: str) -> ParsedRow:
+    return ParsedRow(row_number=row_number, entry=None, error=None, skipped=reason)
+
+
+def parse_json(path: Path, medium: str | None = None) -> list[ParsedRow]:
     return parse_json_text(path.read_text(encoding="utf-8"))
+
+
+class Parser(Protocol):
+    """`medium` is the `--medium` flag, for a format that doesn't carry one."""
+
+    def __call__(self, path: Path, medium: str | None = None) -> list[ParsedRow]: ...
 
 
 @dataclass(frozen=True)
@@ -169,7 +278,7 @@ class ImportFormat:
     """
 
     name: str
-    parse: Callable[[Path], list[ParsedRow]]
+    parse: Parser
 
 
 IMPORT_FORMATS: dict[str, ImportFormat] = {
@@ -195,6 +304,10 @@ def run_import(
     imported_entries: list[ImportedEntry] = []
 
     for row in rows:
+        if row.skipped is not None:
+            skipped += 1
+            skipped_details.append(f"row {row.row_number}: {row.skipped}")
+            continue
         if row.error is not None:
             failed += 1
             failed_details.append(f"row {row.row_number}: {row.error}")
