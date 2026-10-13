@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.29.0...movie-planner-v1.29.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* **import:** skip a blank-medium row with a uid as a duplicate, not a failure ([3ee358f](https://github.com/alrayyes/movie-planner/commit/3ee358fbf026f404ba84f004d0888a88c2104c25)), closes [#410](https://github.com/alrayyes/movie-planner/issues/410)
+
 ## [1.29.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.28.7...movie-planner-v1.29.0) (2026-10-12)
 
 
