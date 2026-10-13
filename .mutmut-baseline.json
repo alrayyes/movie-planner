@@ -1,0 +1,68 @@
+{
+  "src/movie_planner/bug_report.py": {
+    "survived": 58
+  },
+  "src/movie_planner/calendar_pull.py": {
+    "survived": 48
+  },
+  "src/movie_planner/calendar_sync.py": {
+    "survived": 89
+  },
+  "src/movie_planner/cli.py": {
+    "no tests": 37,
+    "survived": 196
+  },
+  "src/movie_planner/config.py": {
+    "survived": 15
+  },
+  "src/movie_planner/config_file.py": {
+    "survived": 3
+  },
+  "src/movie_planner/display.py": {
+    "survived": 32
+  },
+  "src/movie_planner/duplicates.py": {
+    "survived": 21
+  },
+  "src/movie_planner/importers.py": {
+    "survived": 38
+  },
+  "src/movie_planner/mail_import/cli.py": {
+    "no tests": 1,
+    "survived": 11
+  },
+  "src/movie_planner/mail_import/config.py": {
+    "survived": 2
+  },
+  "src/movie_planner/mail_import/dispatch.py": {
+    "survived": 2
+  },
+  "src/movie_planner/mail_import/envelope.py": {
+    "survived": 27
+  },
+  "src/movie_planner/mail_import/imap_client.py": {
+    "no tests": 4,
+    "survived": 3
+  },
+  "src/movie_planner/mail_import/maildir_client.py": {
+    "survived": 12
+  },
+  "src/movie_planner/mail_import/mbox_client.py": {
+    "survived": 13
+  },
+  "src/movie_planner/mail_import/pathe_translate.py": {
+    "no tests": 71
+  },
+  "src/movie_planner/omdb.py": {
+    "survived": 46
+  },
+  "src/movie_planner/pathe.py": {
+    "survived": 30
+  },
+  "src/movie_planner/store.py": {
+    "survived": 123
+  },
+  "src/movie_planner/tmdb.py": {
+    "survived": 48
+  }
+}

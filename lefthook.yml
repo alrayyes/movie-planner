@@ -1,0 +1,160 @@
+# The same commands CI runs, so the two cannot drift. The hook catches it
+# early; CI is the gate that cannot be skipped.
+#
+# Grows a job here the same PR that adds the tool it runs — a linter with no
+# hook is a linter you only meet at CI.
+
+# pre-commit may write. Let every fixer run and restage what it touched — a
+# commit should not fail over a quote style a tool can settle by itself.
+pre-commit:
+  jobs:
+    # ruff format decides the layout, ruff check then judges what it
+    # produced — the same ordering reason as Prettier before markdownlint
+    # below.
+    - name: ruff-format
+      glob: "*.py"
+      run: uv run ruff format {staged_files}
+      stage_fixed: true
+
+    - name: ruff-check
+      glob: "*.py"
+      run: uv run ruff check --fix {staged_files}
+      stage_fixed: true
+
+    # Unlike ruff, pyproject-fmt exits non-zero the moment it rewrites the
+    # file, even outside --check. The second command re-checks what the first
+    # wrote, so the job fails only if the file is still unformatted and
+    # stage_fixed restages the write otherwise.
+    - name: pyproject-fmt
+      glob: "pyproject.toml"
+      run: uv run pyproject-fmt {staged_files}; uv run pyproject-fmt --check {staged_files}
+      stage_fixed: true
+
+    # Prettier decides the layout, markdownlint then judges what Prettier
+    # produced. The other order has markdownlint fixing something Prettier is
+    # about to overwrite.
+    - name: prettier
+      glob: "*.{md,yml,yaml}"
+      run: bunx prettier --write {staged_files}
+      stage_fixed: true
+
+    - name: markdownlint
+      glob: "*.md"
+      run: bunx markdownlint-cli2 {staged_files}
+
+    # Fast enough for a commit. LTeX is not — around ten seconds a file — so
+    # mechanics run at push instead, where the wait is paid once rather than
+    # per commit.
+    - name: vale
+      glob: "*.md"
+      exclude:
+        - "CHANGELOG.md"
+        - "openspec/**"
+        - ".claude/**"
+      run: vale {staged_files}
+
+    # Reads the staged path, mounted read-only, rather than the whole
+    # Dockerfile from stdin. The image builds run at push and in CI.
+    - name: hadolint
+      glob: "Dockerfile"
+      run: docker run --rm -v "$PWD":/work:ro -w /work
+        hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
+        hadolint {staged_files}
+
+commit-msg:
+  jobs:
+    # Resolved from node_modules rather than fetched by bunx: commitlint has to
+    # load the config its own config extends, and bunx cannot resolve a sibling
+    # package for it. Run `bun install` if this cannot find itself.
+    - name: commitlint
+      run: bunx commitlint --edit {1}
+
+# pre-push never writes. A hook rewriting files under a push leaves the pushed
+# commit and the working tree disagreeing about what was reviewed.
+#
+# Parallel because of that: nothing here touches a file, so no job can be
+# reading what another is rewriting.
+pre-push:
+  parallel: true
+  jobs:
+    - name: pytest
+      run: uv run pytest
+
+    - name: ruff-check
+      run: uv run ruff check
+
+    - name: ruff-format-check
+      run: uv run ruff format --check
+
+    - name: pyproject-fmt-check
+      run: uv run pyproject-fmt --check pyproject.toml
+
+    - name: mypy
+      run: uv run mypy
+
+    - name: bandit
+      run: uv run bandit -q -r src/movie_planner
+
+    - name: pip-audit
+      run: uv run pip-audit
+
+    # A full run across src/ is ~3 minutes on 16 cores (measured, #385); a
+    # push touching one file is seconds, cheap enough for pre-push, and CI
+    # runs the identical commands. `mutmut run` itself still exits 0
+    # regardless of survivor count - scripts/check_mutmut_survivors.py is
+    # the actual gate, failing only when a file this push's branch touches
+    # (relative to origin/main) has more survivors now than
+    # .mutmut-baseline.json allows. See CONTRIBUTING.md's mutmut section
+    # and movie-planner#303.
+    # Only the touched files' mutants are run (#385), as in CI; nothing
+    # touched means nothing to run.
+    - name: mutmut
+      run: |
+        git fetch origin main --quiet || true
+        merge_base="$(git merge-base origin/main HEAD 2>/dev/null || echo HEAD)"
+        files="$(git diff --name-only "$merge_base" HEAD -- src)"
+        [ -z "$files" ] && exit 0
+        globs="$(uv run python scripts/check_mutmut_survivors.py mutant-globs $files)"
+        [ -z "$globs" ] && exit 0
+        # Unquoted on purpose, one glob per word, with pathname expansion off
+        # so the shell leaves each * for mutmut.
+        set -f
+        uv run mutmut run $globs
+        set +f
+        uv run mutmut results
+        uv run python scripts/check_mutmut_survivors.py check $files
+
+    # These are `package.json` scripts rather than the commands spelled out,
+    # because CI runs the same ones and a literal copied into two files drifts
+    # the first time somebody edits one of them.
+    - name: prettier
+      run: bun run format:check
+
+    - name: markdownlint
+      run: bun run lint:md
+
+    # Every other linter here runs at commit, at push and in CI. Vale ran at
+    # commit and then nothing until CI, because its invocation lived in the
+    # workflow as a block of bash with nothing a hook could reuse. It is a
+    # script now, and this is the whole-tree run that was missing.
+    - name: vale
+      run: bun run lint:prose
+
+    # Grammar and spelling. Left out of pre-commit on the grounds that it is a
+    # ~300 MB download, which it is — but it caches outside the repository and
+    # then costs about ten seconds.
+    - name: mechanics
+      run: bun run lint:mechanics
+
+    - name: hadolint
+      run:
+        docker run --rm -i hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
+        < Dockerfile
+
+    - name: docker-build
+      run: docker build -t movie-planner:pre-push-check . && docker rmi movie-planner:pre-push-check
+
+    - name: docker-build (pathe-mail-import)
+      run:
+        docker build --target pathe-mail-import -t pathe-mail-import:pre-push-check . && docker rmi
+        pathe-mail-import:pre-push-check

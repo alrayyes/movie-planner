@@ -1,0 +1,448 @@
+# The gate. Every command in here has a twin in lefthook.yml, so a green
+# pre-commit means a green pipeline and neither can drift into being the only
+# place a rule is enforced.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege by default. A job that needs more says so itself.
+permissions:
+  contents: read
+
+# A second push to the same branch makes the first run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Pinned like any other toolchain. The Python version itself comes
+          # from .python-version, which setup-uv reads without being told to.
+          version: "0.12.7"
+      - name: uv sync
+        # Frozen, so a drifted uv.lock fails the job rather than silently
+        # resolving to something nobody committed.
+        run: uv sync --frozen
+      - name: ruff check
+        run: uv run ruff check
+      - name: ruff format --check
+        run: uv run ruff format --check
+      - name: pyproject-fmt --check
+        run: uv run pyproject-fmt --check pyproject.toml
+      - name: mypy
+        run: uv run mypy
+      - name: bandit
+        run: uv run bandit -q -r src/movie_planner
+      - name: pip-audit
+        run: uv run pip-audit
+
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Pinned like any other toolchain. The Python version itself comes
+          # from .python-version, which setup-uv reads without being told to.
+          version: "0.12.7"
+      - run: uv sync --frozen
+      - name: pytest
+        run: |
+          # Without pipefail this step's exit code is tee's (always 0),
+          # not pytest's - a failing suite would still report green
+          # (movie-planner#212).
+          set -o pipefail
+          uv run pytest --cov=movie_planner --cov-report=term-missing --cov-report=xml --cov-report=html:htmlcov --junitxml=unit.xml | tee coverage.txt
+          {
+            echo '### Coverage'
+            echo
+            echo '```'
+            cat coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload coverage to Codecov
+        # GitHub withholds repository secrets from a Dependabot-triggered
+        # run, so CODECOV_TOKEN never resolves here and the tokenless
+        # upload Codecov falls back to is refused outright on a protected
+        # branch ("Token required because branch is protected") — not a
+        # flake, and rebasing the PR doesn't change any of that.
+        if: github.actor != 'dependabot[bot]'
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+      # Codecov Test Analytics: per-test failure/flake detail, not just a
+      # coverage delta. !cancelled(), not always() - still runs when pytest
+      # above failed (unit.xml exists either way), but not if the whole run
+      # was cancelled out from under it. Same Dependabot-token gap as above.
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: unit.xml
+          report_type: test_results
+
+      # Assembled on pull requests too, so a broken step fails before the
+      # merge. Only the upload below is limited to the default branch.
+      - name: assemble the reports
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          mkdir -p site/reports/tests site/reports/coverage
+          cp unit.xml site/reports/tests/unit.xml
+          cp -r htmlcov/. site/reports/coverage/
+          cp coverage.xml site/reports/coverage/coverage.xml
+          # .coverage is a dotfile, which neither upload action carries.
+          cp .coverage site/reports/coverage/coverage.sqlite
+          {
+            echo '<!doctype html>'
+            echo '<html lang="en"><head><meta charset="utf-8">'
+            echo '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            echo '<title>movie-planner reports</title></head><body>'
+            echo '<h1>movie-planner reports</h1>'
+            echo "<p>Commit <code>${SHA::7}</code>, built $(date -u +%Y-%m-%d) UTC.</p>"
+            echo '<ul>'
+            echo '<li><a href="tests/unit.xml">Test results (JUnit XML)</a></li>'
+            echo '<li><a href="coverage/">Coverage (HTML)</a></li>'
+            echo '<li><a href="coverage/coverage.xml">Coverage (Cobertura XML)</a></li>'
+            echo '<li><a href="coverage/coverage.sqlite">Coverage data (coverage.py)</a></li>'
+            echo '</ul></body></html>'
+          } > site/reports/index.html
+      - name: Upload the reports
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports
+          path: site/reports/
+          if-no-files-found: error
+          retention-days: 1
+
+  # Mutation testing: mutates the src/ files this diff touches (excluding
+  # test_e2e.py's real-Baikal-container coverage from the rerun set - ruinous
+  # to repeat per mutant, see pyproject.toml's [tool.mutmut] comment) and
+  # reruns the rest of the suite against each mutant. `mutmut run` itself still exits 0 regardless
+  # of survivor count - flipping that on directly would fail every PR over
+  # the pre-existing backlog (817 survivors as of #303's gate landing,
+  # tracked module by module in milestone #5). scripts/check_mutmut_survivors.py
+  # is the actual gate: it fails the job when a file this diff touches has
+  # *more* survivors now than .mutmut-baseline.json allows it - a new
+  # survivor in the diff, not old debt nobody asked to fix. See
+  # CONTRIBUTING.md's mutmut section.
+  mutmut:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Need the merge-base commit to diff against below, not just the
+          # tip - a shallow checkout can't compute which files changed.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.7"
+      - run: uv sync --frozen
+      # #385: the gate below only reads the files this diff touches, so only
+      # those files' mutants are run. A full run is ~5100 mutants and 17 to 21
+      # minutes on a 4-core runner; one file's share is a few minutes.
+      - name: changed source files
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          # A force-push or a base branch mutmut has never seen (the
+          # "before" SHA is all-zeros on a branch's first push) leaves no
+          # merge base to diff against - fall back to checking every
+          # mutated file rather than skipping the gate.
+          if git cat-file -e "$base" 2>/dev/null; then
+            merge_base="$(git merge-base "$base" HEAD)"
+            git diff --name-only "$merge_base" HEAD -- src > "$RUNNER_TEMP/changed-src.txt"
+          else
+            git ls-files src > "$RUNNER_TEMP/changed-src.txt"
+          fi
+          cat "$RUNNER_TEMP/changed-src.txt"
+      - name: mutmut run
+        run: |
+          mapfile -t files < "$RUNNER_TEMP/changed-src.txt"
+          mapfile -t globs < <(uv run python scripts/check_mutmut_survivors.py mutant-globs "${files[@]}")
+          if [ "${#globs[@]}" -eq 0 ]; then
+            echo "No source file changed, so there is nothing to mutate."
+            exit 0
+          fi
+          # Quoted so the shell leaves the * in each glob for mutmut.
+          uv run mutmut run "${globs[@]}"
+          {
+            echo '### Mutation testing'
+            echo
+            echo '```'
+            uv run mutmut results
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: check for new survivors in this diff
+        run: |
+          mapfile -t files < "$RUNNER_TEMP/changed-src.txt"
+          uv run python scripts/check_mutmut_survivors.py check "${files[@]}"
+
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Pinned like any other toolchain. The Python version itself comes
+          # from .python-version, which setup-uv reads without being told to.
+          version: "0.12.7"
+      - name: uv build
+        # Proves the wheel and sdist still build before anyone merges.
+        # Nothing publishes them — this template doesn't wire a registry up;
+        # a project stamped from it adds that the day it needs one.
+        run: uv build
+
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: hadolint
+        run: >
+          docker run --rm -i
+          hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
+          < Dockerfile
+      - name: docker build
+        # Proves the image still builds — hadolint only reads the Dockerfile
+        # as text and can't catch that on its own. Not pushed here; the
+        # release job publishes it to GHCR once a release actually cuts.
+        run: docker build -t movie-planner:ci .
+      - name: docker build (pathe-mail-import)
+        # Not published anywhere yet (no release-job counterpart) - this
+        # only proves the stage still builds, same as the default target
+        # above.
+        run: docker build --target pathe-mail-import -t pathe-mail-import:ci .
+
+  # No release-job counterpart, unlike package-linux — a flake has
+  # nothing to publish. `nix run github:alrayyes/movie-planner` (or
+  # `nix profile install`) resolves the flake straight from whatever
+  # commit is asked for; the commit itself is the distributable
+  # artifact, so this only ever needs to prove the flake still builds.
+  nix:
+    runs-on: ubuntu-24.04
+    # Cold cache rebuilds the whole dependency tree from source — 30+
+    # minutes, confirmed live (see the Cache the Nix store step below) — so
+    # this has to stay well above the warm-cache run time.
+    timeout-minutes: 45
+    # cache-nix-action's purge step needs this to delete its own stale
+    # cache entries; everything else it does fits the default read scope.
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      # Without this, every run rebuilds the whole dependency tree from
+      # source from scratch — 30+ minutes, confirmed live — since none of
+      # this flake's overridden derivations (uv-build compiled via cargo,
+      # httpcore2/paramiko/caldav rebuilt because they depend on those
+      # overrides) exist in nixpkgs' own binary cache. restore-prefixes
+      # -all-matches (rather than -first-match) so a pull request can see
+      # the cache a push to main already saved, not just its own branch's
+      # — GitHub Actions caches are otherwise ref-isolated.
+      - name: Cache the Nix store
+        uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-prefixes-all-matches: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 4G
+          purge: true
+          purge-prefixes: nix-${{ runner.os }}-
+          purge-created: 0
+          purge-last-accessed: P3D
+          purge-primary-key: never
+      - name: nix flake check
+        run: nix flake check --print-build-logs
+      - name: nix build
+        run: nix build --print-build-logs
+      - name: nix run
+        run: nix run . -- --help
+
+  # Dry run of the same build package-linux.yml's release-job call does,
+  # against a fixed dev version — proves the .deb/.rpm still build and
+  # actually install before a change to the Dockerfile's pyinstaller
+  # stage, nfpm.yaml, or either script only gets exercised for real
+  # against a tagged release.
+  package-linux:
+    uses: ./.github/workflows/package-linux.yml
+    with:
+      version: "0.0.0-dev"
+
+  # Dry run of the AUR PKGBUILD, against a local source tarball built
+  # from the current checkout rather than a real GitHub release — so
+  # a PKGBUILD change gets exercised on every push/PR, not only for
+  # real against a tagged release. makepkg refuses to run as root, so
+  # this creates a build user the same way the release job's
+  # container does.
+  aur:
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    timeout-minutes: 20
+    steps:
+      # archlinux:latest ships no git at all. Confirmed live: with git
+      # missing, actions/checkout falls back to downloading a tarball
+      # via the GitHub REST API instead of a real clone — the checkout
+      # succeeds, but the result has no .git directory, so `git
+      # archive HEAD` two steps later fails with "not a git
+      # repository". git has to be present before checkout runs, not
+      # just before the steps that call it directly.
+      - name: Bootstrap git for checkout
+        run: pacman -Sy --noconfirm --needed git
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install build tooling
+        run: |
+          pacman -Sy --noconfirm --needed \
+            base-devel sudo man-db \
+            python-build python-installer python-wheel python-uv-build \
+            python-caldav python-httpx python-icalendar python-rapidfuzz python-typer
+          # The archlinux image's own pacman.conf excludes man pages
+          # from every install by default (an image-size optimization,
+          # not real Arch behavior) — confirmed live: a package
+          # correctly containing a man page still installed as if it
+          # didn't, silently. Removed so the man-page check below is
+          # actually meaningful.
+          sed -i '/^NoExtract.*man/d' /etc/pacman.conf
+          # actions/checkout's own dubious-ownership fix writes into a
+          # temporary $HOME that only exists for that step — a
+          # `container:` job running as root never sees it again in
+          # later steps' real $HOME, so any git command from here on
+          # (git archive below included) hits "detected dubious
+          # ownership" without this.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+      - name: Build a local source tarball standing in for a GitHub release
+        run: |
+          mkdir -p /tmp/src
+          git archive --prefix=movie-planner-movie-planner-v0.0.0/ \
+            -o /tmp/src/movie-planner-0.0.0.tar.gz HEAD
+          chmod -R a+rwX /tmp/src "$GITHUB_WORKSPACE"
+      - name: Prepare a dev PKGBUILD pointing at that tarball
+        run: |
+          sed \
+            -e "s/^pkgver=.*/pkgver=0.0.0/" \
+            -e "s#^source=.*#source=(\"file:///tmp/src/movie-planner-0.0.0.tar.gz\")#" \
+            -e "s/^sha256sums=.*/sha256sums=('SKIP')/" \
+            PKGBUILD > /tmp/src/PKGBUILD
+      - name: Install AUR-only build dependencies
+        run: su builder -c "bash '$GITHUB_WORKSPACE/scripts/install-aur-builddeps.sh'"
+      - name: makepkg
+        run: su builder -c "cd /tmp/src && makepkg -s --noconfirm --nocheck"
+      - name: Install and verify
+        run: |
+          pacman -U --noconfirm /tmp/src/movie-planner-0.0.0-1-any.pkg.tar.zst
+          movie-planner --help
+          man -w movie-planner
+
+  # Layout and structure. Style and mechanics are prose.yml — see its header
+  # comment for why they're split out.
+  prose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - name: bun install
+        # Frozen, so a drifted lockfile fails the job rather than silently
+        # resolving to something nobody committed.
+        run: bun install --frozen-lockfile
+      - name: prettier --check
+        run: bun run format:check
+      - name: markdownlint
+        run: bun run lint:md
+
+  # A hook is something you can skip, and the version number depends on
+  # these messages being right, so the whole branch is checked here too.
+  commits:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: commitlint
+        run: |
+          bunx commitlint \
+            --from "${{ github.event.pull_request.base.sha }}" \
+            --to "${{ github.event.pull_request.head.sha }}" \
+            --verbose
+
+  # Publishes the reports at apis.ryankes.eu/movie-planner/reports/. A repo has
+  # one Pages deployment, so this is the only job that deploys. It needs every
+  # other job, so a red commit on main ships nothing. A skipped gate (commits
+  # is pull-request only) would skip this job too, so always() lets it through
+  # and the two contains() checks still stop a failed or cancelled one.
+  pages:
+    needs: [lint, test, mutmut, build, docker, nix, package-linux, aur, prose]
+    if: >-
+      always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && !contains(needs.*.result, 'failure')
+      && !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    # A newer push must not cancel a deploy that's already publishing, so this
+    # job opts out of the workflow's cancel-in-progress.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: reports
+          path: site/reports
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      - name: check the reports are served
+        # The deploy succeeds even when a path is wrong, so fetch the real
+        # files. Retries cover the CDN catching up to the new version.
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          curl --fail --silent --show-error --location \
+            --retry 6 --retry-delay 10 --retry-all-errors \
+            --output coverage.xml "${PAGE_URL%/}/reports/coverage/coverage.xml"
+          grep -q '<coverage ' coverage.xml
+          curl --fail --silent --show-error --location \
+            --retry 6 --retry-delay 10 --retry-all-errors \
+            --output unit.xml "${PAGE_URL%/}/reports/tests/unit.xml"
+          grep -q '<testsuite' unit.xml
