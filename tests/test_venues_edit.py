@@ -3,14 +3,16 @@ show them. A venue added with just a name can't gain these any other way.
 """
 
 from collections.abc import Iterator
+from datetime import date
 from pathlib import Path
 
 import pytest
 from fakes import FakeCalendar
 from typer.testing import CliRunner
 
+from movie_planner import config as config_module
 from movie_planner.calendar_sync import CalendarClient
-from movie_planner.cli import _format_venue, app
+from movie_planner.cli import _format_venue, _push_update_or_warn, app
 from movie_planner.store import Store, StoreError, Venue
 
 runner = CliRunner()
@@ -419,3 +421,134 @@ def test_restoring_one_of_several_cleared_fields_leaves_the_others_cleared(
         assert (venue.chain, venue.city) == (None, "Utrecht")
     finally:
         again.close()
+
+
+# --- the calendar is connected to once, however many entries the venue has ---
+
+
+def _log_at_venue(config_path: Path, title: str, entry_date: str) -> None:
+    code, output = _cli(
+        config_path,
+        "log",
+        "--title",
+        title,
+        "--date",
+        entry_date,
+        "--medium",
+        "cinema",
+        "--venue",
+        "Grand Vista Cinema",
+        "--no-metadata",
+    )
+    assert code == 0, output
+
+
+def test_editing_a_venue_connects_to_the_calendar_once(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for day in ("2026-01-01", "2026-01-02", "2026-01-03"):
+        _log_at_venue(config_path, f"Film {day}", day)
+    connections: list[object] = []
+
+    def counting_connect(cls: type[CalendarClient], /, **kw: object) -> CalendarClient:
+        connections.append(kw)
+        return CalendarClient(calendar)
+
+    monkeypatch.setattr(CalendarClient, "connect", classmethod(counting_connect))
+
+    code, output = _edit(config_path, "--city", "Amsterdam", "--country", "NL")
+
+    assert code == 0, output
+    assert len(connections) == 1
+    assert sum("Amsterdam" in e.data for e in calendar.events_by_uid.values()) == 3
+    assert all("X-IMPORTER:venues:edit" in e.data for e in calendar.events_by_uid.values())
+
+
+def test_an_unreachable_calendar_gives_one_warning_and_keeps_the_edit(
+    config_path: Path,
+    calendar: FakeCalendar,
+    store: Store,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for day in ("2026-01-01", "2026-01-02", "2026-01-03"):
+        _log_at_venue(config_path, f"Film {day}", day)
+
+    def refuse(cls: type[CalendarClient], /, **kw: object) -> CalendarClient:
+        raise ConnectionError("calendar down")
+
+    monkeypatch.setattr(CalendarClient, "connect", classmethod(refuse))
+
+    code, output = _edit(config_path, "--city", "Amsterdam")
+
+    assert code == 0, output
+    assert output.count("Warning") == 1
+    assert "calendar down" in output
+    assert next(v for v in store.list_venues() if v.name == "Grand Vista Cinema").city == (
+        "Amsterdam"
+    )
+
+
+def test_a_failed_push_stops_the_rest_with_one_warning(
+    config_path: Path, calendar: FakeCalendar
+) -> None:
+    for day in ("2026-01-01", "2026-01-02", "2026-01-03"):
+        _log_at_venue(config_path, f"Film {day}", day)
+    calendar.fail_next = True
+
+    code, output = _edit(config_path, "--city", "Amsterdam")
+
+    assert code == 0, output
+    assert output.count("Warning") == 1
+
+
+def test_entries_without_a_calendar_uid_never_open_a_connection(
+    config_path: Path, store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cinema = store.get_or_create_medium("cinema", is_physical_place=True)
+    venue = store.add_venue("Grand Vista Cinema")
+    store.create_entry(
+        title="Offline", date=date(2026, 1, 1), medium_id=cinema.id, venue_id=venue.id
+    )
+
+    def forbidden(cls: type[CalendarClient], /, **kw: object) -> CalendarClient:
+        raise AssertionError("connected for an entry that was never synced")
+
+    monkeypatch.setattr(CalendarClient, "connect", classmethod(forbidden))
+
+    code, output = _edit(config_path, "--city", "Amsterdam")
+
+    assert code == 0, output
+    assert "Warning" not in output
+
+
+def test_only_the_edited_venues_events_are_pushed(
+    config_path: Path, calendar: FakeCalendar
+) -> None:
+    _log_at_venue(config_path, "Here", "2026-01-01")
+    code, output = _cli(
+        config_path,
+        "log",
+        "--title",
+        "Elsewhere",
+        "--date",
+        "2026-01-02",
+        "--medium",
+        "cinema",
+        "--venue",
+        "Other Cinema",
+        "--no-metadata",
+    )
+    assert code == 0, output
+
+    _edit(config_path, "--city", "Amsterdam")
+
+    pushed = ["X-IMPORTER:venues:edit" in e.data for e in calendar.events_by_uid.values()]
+    assert sorted(pushed) == [False, True]
+
+
+def test_an_entry_with_no_calendar_uid_is_nothing_to_push(config_path: Path, store: Store) -> None:
+    cfg = config_module.load_config(config_path)
+    cinema = store.get_or_create_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Offline", date=date(2026, 1, 1), medium_id=cinema.id)
+
+    assert _push_update_or_warn(cfg, store, entry, importer="test") is True
