@@ -38,7 +38,7 @@ from movie_planner.display import (
 )
 from movie_planner.duplicates import find_duplicate
 from movie_planner.export import entry_to_export_row
-from movie_planner.importers import IMPORT_FORMATS, parse_json_text, run_import
+from movie_planner.importers import IMPORT_FORMATS, MediumRequiredError, parse_json_text, run_import
 from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
 from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
 from movie_planner.store import ActivityLogEntry, Entry, Medium, Store, StoreError, Venue
@@ -1470,6 +1470,14 @@ def import_command(
             "time.",
         ),
     ] = False,
+    medium: Annotated[
+        str | None,
+        typer.Option(
+            help="The medium to give every row of a Letterboxd diary.csv, which doesn't record "
+            "where you watched (for example netflix). Required for a diary; ignored by "
+            "other files."
+        ),
+    ] = None,
     no_metadata: Annotated[
         bool,
         typer.Option(
@@ -1500,7 +1508,11 @@ def import_command(
                 fg=typer.colors.RED,
             )
             raise typer.Exit(code=1)
-        rows = fmt.parse(path)
+        try:
+            rows = fmt.parse(path, medium)
+        except MediumRequiredError as e:
+            typer.secho(str(e), fg=typer.colors.RED)
+            raise typer.Exit(code=1) from e
         importer = f"import:{fmt.name}"
 
     store = _open_store(cfg)
