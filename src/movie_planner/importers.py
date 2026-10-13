@@ -176,14 +176,17 @@ def parse_csv(path: Path, medium: str | None = None) -> list[ParsedRow]:
     # utf-8-sig drops a byte-order mark so it can't hide the first header.
     with path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
-        is_diary = set(reader.fieldnames or []) >= _LETTERBOXD_DIARY_HEADERS
+        # Trimmed, as the web app compares them, so a stray space can't hide a column.
+        reader.fieldnames = [name.strip() for name in reader.fieldnames or []]
+        is_diary = set(reader.fieldnames) >= _LETTERBOXD_DIARY_HEADERS
+        wanted = (medium or "").strip()
         # Row 1 is the header, so the first data row is 2.
         if not is_diary:
             return [_row_from_dict(i, raw) for i, raw in enumerate(reader, start=2)]
-        if not medium:
+        if not wanted:
             raise MediumRequiredError(_DIARY_NEEDS_MEDIUM)
         return [
-            _row_from_dict(i, _letterboxd_record(raw, medium))
+            _row_from_dict(i, _letterboxd_record(raw, wanted))
             for i, raw in enumerate(reader, start=2)
         ]
 

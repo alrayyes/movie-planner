@@ -100,6 +100,31 @@ def test_a_diary_with_only_the_required_columns_is_still_a_diary(tmp_path: Path)
     )
 
 
+def test_diary_header_names_are_compared_trimmed(tmp_path: Path) -> None:
+    path = tmp_path / "diary.csv"
+    path.write_text(
+        "Name, Letterboxd URI ,Watched Date\nDune,https://boxd.it/a,2026-01-30\n",
+        encoding="utf-8",
+    )
+
+    rows = parse_csv(path, "netflix")
+
+    assert rows[0].entry is not None
+    assert rows[0].entry.letterboxd_url == "https://boxd.it/a"
+
+
+def test_a_blank_medium_counts_as_missing(tmp_path: Path) -> None:
+    with pytest.raises(MediumRequiredError):
+        parse_csv(_diary(tmp_path), "   ")
+
+
+def test_the_medium_is_trimmed(tmp_path: Path) -> None:
+    rows = parse_csv(_diary(tmp_path), "  netflix ")
+
+    assert rows[0].entry is not None
+    assert rows[0].entry.medium == "netflix"
+
+
 def test_a_header_missing_one_diary_column_is_a_native_csv(tmp_path: Path) -> None:
     path = tmp_path / "x.csv"
     path.write_text("Name,Letterboxd URI\nDune,https://boxd.it/a\n", encoding="utf-8")
