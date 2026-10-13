@@ -79,6 +79,14 @@ re-fetching OMDb ratings for entries that already have them.
 
 ## `import`
 
+A Letterboxd `diary.csv` (from Letterboxd's Import & Export settings) imports
+too, recognised by its `Name`, `Letterboxd URI` and `Watched Date` columns.
+Each row becomes an entry dated `Watched Date`, not `Date`, which is the day
+you logged it. It keeps the film's Letterboxd link, rating and year, and any
+tags as a note (`Tags: sci-fi, imax`). A diary doesn't say where you watched,
+so `--medium` is required: `movie-planner import diary.csv --medium netflix`.
+Without it the command stops before writing anything.
+
 `import` accepts a `.csv` or `.json` file with the same fields as
 `examples/`, and fetches OMDb ratings the same as `log` does - unless a
 row already supplies every OMDb-derived field itself (ratings, poster,

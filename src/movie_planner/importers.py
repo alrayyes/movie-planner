@@ -6,10 +6,9 @@ duplicate-detection rules used by interactive logging.
 import csv
 import datetime
 import json
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from movie_planner.duplicates import find_duplicate
 from movie_planner.store import Entry, Store
@@ -132,13 +131,6 @@ def _row_from_dict(row_number: int, raw: dict[str, Any]) -> ParsedRow:
     return ParsedRow(row_number=row_number, entry=entry, error=None)
 
 
-def parse_csv(path: Path) -> list[ParsedRow]:
-    with path.open(newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        # Row 1 is the header, so the first data row is 2.
-        return [_row_from_dict(i, raw) for i, raw in enumerate(reader, start=2)]
-
-
 def parse_json_text(text: str) -> list[ParsedRow]:
     """Parses JSON already in memory - a `movies.json`-shaped array, or a
     single bare row object (treated as a one-element array), the shape
@@ -150,8 +142,63 @@ def parse_json_text(text: str) -> list[ParsedRow]:
     return [_row_from_dict(i, raw) for i, raw in enumerate(rows, start=1)]
 
 
-def parse_json(path: Path) -> list[ParsedRow]:
+class MediumRequiredError(ValueError):
+    """The file can't say where it was watched, and no `--medium` was given."""
+
+
+_LETTERBOXD_DIARY_HEADERS = frozenset({"Name", "Letterboxd URI", "Watched Date"})
+_DIARY_NEEDS_MEDIUM = (
+    "This looks like a Letterboxd diary, which doesn't say where you watched. "
+    "Pass --medium, for example --medium netflix."
+)
+
+
+def _letterboxd_record(raw: dict[str, Any], medium: str) -> dict[str, Any]:
+    # `Date` is the day the film was logged; `Watched Date` is the day it was
+    # seen, and the one that belongs on the calendar.
+    tags = (raw.get("Tags") or "").strip()
+    return {
+        "title": raw.get("Name"),
+        "date": raw.get("Watched Date"),
+        "medium": medium,
+        "release_year": raw.get("Year"),
+        "letterboxd_url": raw.get("Letterboxd URI"),
+        "letterboxd_rating": raw.get("Rating"),
+        "notes": f"Tags: {tags}" if tags else None,
+    }
+
+
+def parse_csv(path: Path, medium: str | None = None) -> list[ParsedRow]:
+    """A native `movies.csv`, or a Letterboxd `diary.csv` (told apart by its
+    header). A diary names no medium, so `medium` is required for one and
+    ignored for a native file, which has its own column.
+    """
+    # utf-8-sig drops a byte-order mark so it can't hide the first header.
+    with path.open(newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        # Trimmed, as the web app compares them, so a stray space can't hide a column.
+        reader.fieldnames = [name.strip() for name in reader.fieldnames or []]
+        is_diary = set(reader.fieldnames) >= _LETTERBOXD_DIARY_HEADERS
+        wanted = (medium or "").strip()
+        # Row 1 is the header, so the first data row is 2.
+        if not is_diary:
+            return [_row_from_dict(i, raw) for i, raw in enumerate(reader, start=2)]
+        if not wanted:
+            raise MediumRequiredError(_DIARY_NEEDS_MEDIUM)
+        return [
+            _row_from_dict(i, _letterboxd_record(raw, wanted))
+            for i, raw in enumerate(reader, start=2)
+        ]
+
+
+def parse_json(path: Path, medium: str | None = None) -> list[ParsedRow]:
     return parse_json_text(path.read_text(encoding="utf-8"))
+
+
+class Parser(Protocol):
+    """`medium` is the `--medium` flag, for a format that doesn't carry one."""
+
+    def __call__(self, path: Path, medium: str | None = None) -> list[ParsedRow]: ...
 
 
 @dataclass(frozen=True)
@@ -169,7 +216,7 @@ class ImportFormat:
     """
 
     name: str
-    parse: Callable[[Path], list[ParsedRow]]
+    parse: Parser
 
 
 IMPORT_FORMATS: dict[str, ImportFormat] = {

@@ -140,14 +140,17 @@ a registry a new adapter plugs into, not a branch to edit.
 Adding a format (a Letterboxd export, XLSX, any other bulk source)
 means:
 
-1. Write a `parse(path: Path) -> list[ParsedRow]` function. `parse_csv`
-   and `parse_json` are the reference implementations - both end up
-   calling the shared `_row_from_dict` helper, worth reusing if your
-   format is also naturally row-shaped. A `ParsedRow` is either a
-   populated `ImportRow` (see its fields for what a row can carry) or a
-   populated `error` string - never both; `run_import` reports every failed
-   row back to the caller rather than aborting the whole file on one
-   bad line.
+1. Write a function `parse(path, medium=None)` returning a
+   `list[ParsedRow]` (`medium` is the `--medium` flag, for a
+   format whose file doesn't say where it was watched; raise
+   `MediumRequiredError` when you need it and it's missing, and `import`
+   stops before writing anything). `parse_csv` and `parse_json` are the
+   reference implementations - both end up calling the shared
+   `_row_from_dict` helper, worth reusing if your format is also
+   naturally row-shaped. A `ParsedRow` is either a populated `ImportRow`
+   (see its fields for what a row can carry) or a populated `error`
+   string - never both; `run_import` reports every failed row back to the
+   caller rather than aborting the whole file on one bad line.
 2. Register it: `IMPORT_FORMATS[".xlsx"] = ImportFormat(name="xlsx",
 parse=parse_xlsx)`. The `name` is what shows up as the entry's
    provenance later - keep it short and lowercase, same
@@ -155,6 +158,10 @@ parse=parse_xlsx)`. The `name` is what shows up as the entry's
 3. Nothing else changes. `movie-planner import <file>` picks up the
    new suffix automatically; the "unsupported file type" error already
    lists every registered format, not a hardcoded string.
+
+A second format with the same suffix, as a Letterboxd `diary.csv` shares
+`.csv` with a native file, is told apart inside the suffix's parser by its
+header, as `parse_csv` does.
 
 Test the parser the same way `tests/test_import.py` already tests
 `parse_csv`/`parse_json`: valid rows, a row missing a required field,
