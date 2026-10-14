@@ -293,3 +293,109 @@ def test_a_row_for_a_venue_without_a_location_leaves_the_location_fields_out(
     row = entry_to_export_row(store.list_entries()[0], medium_name="cinema", venue=venue)
 
     assert _VENUE_FIELDS.isdisjoint(row)
+
+
+# File name (the web app's) on the left, the Entry attribute on the right.
+_EXTRAS = {
+    "synopsis": "plot",
+    "rated": "rated",
+    "runtime": "runtime",
+    "movie_language": "language",
+    "movie_country": "country",
+    "metascore": "metascore",
+    "imdb_votes": "imdb_votes",
+    "dvd": "dvd",
+    "box_office": "box_office",
+    "production": "production",
+    "website": "website",
+    "released": "released",
+    "awards": "awards",
+    "trailer_url": "trailer_url",
+    "collection": "collection",
+    "certification": "certification",
+    "keywords": "keywords",
+}
+
+
+def _seed_extras(store: Store) -> None:
+    _seed(store)
+    dune = store.list_entries()[0]
+    store.update_entry(
+        dune.id,
+        **{attr: f"{attr} value" for attr in _EXTRAS.values()},  # type: ignore[arg-type]
+        budget=165000000,
+        popularity=87.5,
+    )
+
+
+def test_a_row_carries_the_synopsis_and_extras_under_the_web_apps_names(store: Store) -> None:
+    _seed_extras(store)
+
+    row = entry_to_export_row(store.list_entries()[0], medium_name="cinema", venue=None)
+
+    assert {name: row[name] for name in _EXTRAS} == {
+        name: f"{attr} value" for name, attr in _EXTRAS.items()
+    }
+    assert row["budget"] == "165000000"
+    assert row["popularity"] == "87.5"
+
+
+def test_an_export_imports_back_with_its_synopsis_and_extras(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    _seed_extras(store)
+    out = tmp_path / "out.json"
+    _export(config_path, "--output", str(out))
+    other_config = tmp_path / "other.toml"
+    other_config.write_text(
+        config_path.read_text(encoding="utf-8").replace("movies.db", "other.db")
+    )
+
+    result = runner.invoke(
+        app, ["--config", str(other_config), "import", str(out), "--no-metadata"]
+    )
+
+    assert result.exit_code == 0, result.output
+    other = Store(tmp_path / "other.db")
+    try:
+        dune = next(e for e in other.list_entries() if e.title == "Dune")
+        for attr in _EXTRAS.values():
+            assert getattr(dune, attr) == f"{attr} value", attr
+        assert (dune.budget, dune.popularity) == (165000000, 87.5)
+    finally:
+        other.close()
+
+
+def test_a_bad_budget_fails_only_its_row(config_path: Path, tmp_path: Path) -> None:
+    rows = tmp_path / "rows.json"
+    rows.write_text(
+        '[{"title": "A", "date": "2026-01-01", "medium": "netflix", "budget": "lots"},'
+        ' {"title": "B", "date": "2026-01-02", "medium": "netflix", "budget": 5}]'
+    )
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "import", str(rows), "--no-metadata"]
+    )
+
+    assert "1 imported, 0 skipped, 1 failed" in result.output
+    assert "budget" in result.output
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("budget", 12.7), ("budget", True), ("popularity", "nan"), ("popularity", "inf")],
+)
+def test_a_number_field_that_is_not_a_plain_number_fails_its_row(
+    config_path: Path, tmp_path: Path, field: str, value: object
+) -> None:
+    rows = tmp_path / "rows.json"
+    rows.write_text(
+        json.dumps([{"title": "A", "date": "2026-01-01", "medium": "netflix", field: value}])
+    )
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "import", str(rows), "--no-metadata"]
+    )
+
+    assert "0 imported, 0 skipped, 1 failed" in result.output
+    assert f"{field} must be a number" in result.output

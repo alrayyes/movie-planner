@@ -1700,7 +1700,12 @@ def import_command(
                 cfg,
                 store,
                 imported.entry,
-                fetch_metadata=not no_metadata and needs_omdb_fetch(imported.entry),
+                # A row that carries a synopsis came from a full-fidelity export
+                # (the web app's or ours): its OMDb fields are already there,
+                # possibly edited, and a lookup would overwrite them.
+                fetch_metadata=not no_metadata
+                and imported.entry.plot is None
+                and needs_omdb_fetch(imported.entry),
                 importer=importer,
             )
         # Persisted (issue #254) so `import-failures list` can show them
