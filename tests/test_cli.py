@@ -2299,6 +2299,47 @@ def test_import_still_fetches_omdb_when_row_supplies_only_some_fields(
     store.close()
 
 
+def test_import_keeps_an_imported_synopsis_instead_of_fetching_over_it(
+    config_path: Path, calendar: FakeCalendar, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = {"n": 0}
+
+    def lookup(self: OmdbClient, **kw: object) -> MovieRatings | None:
+        calls["n"] += 1
+        return MovieRatings(
+            imdb="8.5/10", rotten_tomatoes="91%", metacritic="80", plot="OMDb's plot"
+        )
+
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lookup)
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text(
+        "title,date,medium,synopsis,budget,popularity,awards\n"
+        "Dune,2026-01-01,cinema,My edited synopsis,165000000,87.5,\n"
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    assert result.exit_code == 0, result.output
+    assert calls["n"] == 0
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert (entry.plot, entry.budget, entry.popularity) == ("My edited synopsis", 165000000, 87.5)
+    assert entry.awards is None
+    store.close()
+
+
+def test_import_fails_a_row_whose_csv_budget_is_not_a_number(
+    config_path: Path, calendar: FakeCalendar, no_omdb_match: None, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text("title,date,medium,budget\nDune,2026-01-01,cinema,1;000\n")
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    assert "0 imported, 0 skipped, 1 failed" in result.output
+    assert "budget must be a number" in result.output
+
+
 def test_import_never_overwrites_an_imported_imdb_url_on_later_fetch(
     config_path: Path, calendar: FakeCalendar, omdb_match: None, tmp_path: Path
 ) -> None:
