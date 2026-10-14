@@ -497,3 +497,143 @@ def test_a_bad_venue_coordinate_fails_only_its_row(
 
     assert "1 imported, 0 skipped, 1 failed" in result.output
     assert message in result.output
+
+
+def _import_rows(config_path: Path, tmp_path: Path, rows: list[dict[str, object]]) -> Store:
+    path = tmp_path / "rows.json"
+    path.write_text(json.dumps(rows))
+    result = runner.invoke(
+        app, ["--config", str(config_path), "import", str(path), "--no-metadata"]
+    )
+    assert result.exit_code == 0, result.output
+    return Store(tmp_path / "movies.db")
+
+
+def _row(title: str = "A", **fields: object) -> dict[str, object]:
+    return {
+        "title": title,
+        "date": "2026-01-01",
+        "medium": "cinema",
+        "venue": "Grand Vista Cinema",
+        **fields,
+    }
+
+
+def test_import_keeps_the_coordinates_a_venue_already_has(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    store.get_or_create_venue("Grand Vista Cinema")
+    store.update_venue("Grand Vista Cinema", latitude=1.0, longitude=2.0)
+
+    other = _import_rows(config_path, tmp_path, [_row(latitude=52.37, longitude=4.89)])
+
+    (venue,) = other.list_venues()
+    assert (venue.latitude, venue.longitude) == (1.0, 2.0)
+
+
+def test_import_gives_a_venue_with_only_one_coordinate_neither(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    store.get_or_create_venue("Grand Vista Cinema")
+    store.update_venue("Grand Vista Cinema", latitude=1.0)
+
+    other = _import_rows(config_path, tmp_path, [_row(latitude=52.37, longitude=4.89)])
+
+    (venue,) = other.list_venues()
+    assert (venue.latitude, venue.longitude) == (1.0, None)
+
+
+def test_import_fills_a_known_venues_gaps_without_touching_what_it_was_seeded_with(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    other = _import_rows(
+        config_path, tmp_path, [_row(venue="De Munt 4DX", city="Elsewhere", postal_code="0000 XX")]
+    )
+
+    (venue,) = other.list_venues()
+    assert venue.name == "De Munt"
+    assert venue.city == "Amsterdam"
+
+
+def test_import_leaves_a_venue_alone_when_the_row_is_a_duplicate(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    _seed(store)
+    other = _import_rows(
+        config_path,
+        tmp_path,
+        [_row("Dune", date="2026-02-15", start_time="19:30", end_time="22:15", city="Elsewhere")],
+    )
+
+    (venue,) = other.list_venues()
+    assert venue.city is None
+
+
+def test_import_accepts_coordinates_on_the_edge_of_their_range(
+    config_path: Path, tmp_path: Path
+) -> None:
+    other = _import_rows(
+        config_path,
+        tmp_path,
+        [
+            _row("A", venue="North", latitude=90, longitude=180),
+            _row("B", venue="South", latitude=-90, longitude=-180),
+        ],
+    )
+
+    venues = {v.name: (v.latitude, v.longitude) for v in other.list_venues()}
+    assert venues == {"North": (90.0, 180.0), "South": (-90.0, -180.0)}
+
+
+def test_import_reads_venue_fields_from_a_csv_and_trims_them(
+    config_path: Path, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "rows.csv"
+    csv_path.write_text(
+        "title,date,medium,venue,city,street_address,latitude,longitude\n"
+        "A,2026-01-01,cinema,Grand Vista Cinema, Amsterdam ,  ,52.37,4.89\n"
+        "B,2026-01-02,cinema,Other Cinema,,,  ,  \n"
+    )
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "import", str(csv_path), "--no-metadata"]
+    )
+
+    assert result.exit_code == 0, result.output
+    venues = {
+        v.name: (v.city, v.street_address, v.latitude, v.longitude)
+        for v in Store(tmp_path / "movies.db").list_venues()
+    }
+    assert venues == {
+        "Grand Vista Cinema": ("Amsterdam", None, 52.37, 4.89),
+        "Other Cinema": (None, None, None, None),
+    }
+
+
+def test_a_csv_row_with_a_longitude_but_a_blank_latitude_fails(
+    config_path: Path, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "rows.csv"
+    csv_path.write_text(
+        "title,date,medium,venue,latitude,longitude\nA,2026-01-01,cinema,Grand Vista Cinema,,4.89\n"
+    )
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "import", str(csv_path), "--no-metadata"]
+    )
+
+    assert "0 imported, 0 skipped, 1 failed" in result.output
+    assert "latitude and longitude must both be given" in result.output
+
+
+def test_import_does_not_refill_a_venue_field_that_was_cleared_on_purpose(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    store.get_or_create_venue("Grand Vista Cinema")
+    store.update_venue("Grand Vista Cinema", city="Amsterdam")
+    store.update_venue("Grand Vista Cinema", city=None)
+
+    other = _import_rows(config_path, tmp_path, [_row(city="Amsterdam", country="Netherlands")])
+
+    (venue,) = other.list_venues()
+    assert (venue.city, venue.country) == (None, "Netherlands")

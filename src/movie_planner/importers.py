@@ -119,15 +119,21 @@ def _parse_number[T: (int, float)](value: Any, name: str, kind: type[T]) -> T | 
         raise ValueError(f"{name} must be a number, got {value!r}") from None
 
 
+def _blank_to_none(value: Any) -> Any:
+    return None if isinstance(value, str) and not value.strip() else value
+
+
 _VENUE_TEXT_FIELDS = ("city", "country", "street_address", "postal_code")
 
 
 def _parse_venue_fields(raw: dict[str, Any]) -> dict[str, str | float]:
-    found: dict[str, str | float] = {
-        name: str(raw[name]) for name in _VENUE_TEXT_FIELDS if raw.get(name)
-    }
-    latitude = _parse_number(raw.get("latitude"), "latitude", float)
-    longitude = _parse_number(raw.get("longitude"), "longitude", float)
+    found: dict[str, str | float] = {}
+    for name in _VENUE_TEXT_FIELDS:
+        text = str(raw.get(name) or "").strip()
+        if text:
+            found[name] = text
+    latitude = _parse_number(_blank_to_none(raw.get("latitude")), "latitude", float)
+    longitude = _parse_number(_blank_to_none(raw.get("longitude")), "longitude", float)
     if (latitude is None) != (longitude is None):
         raise ValueError("latitude and longitude must both be given")
     if latitude is not None and longitude is not None:
@@ -340,14 +346,24 @@ IMPORT_FORMATS: dict[str, ImportFormat] = {
 def _fill_venue_gaps(store: Store, venue: Venue, fields: dict[str, str | float]) -> Venue:
     """Sets the venue fields a row carries that the venue doesn't have yet. A
     value the venue already has wins, so a re-import never rewrites an address
-    that was corrected here. The coordinates go in together or not at all.
+    that was corrected here, and so does a field that was cleared on purpose
+    (`venues edit --city ""`), which is the same rule the built-in venue data
+    follows. The coordinates go in together or not at all.
     """
+    cleared = store.cleared_venue_fields(venue.name)
     gaps: dict[str, str | float] = {
         name: value
         for name, value in fields.items()
-        if name not in ("latitude", "longitude") and getattr(venue, name) is None
+        if name not in ("latitude", "longitude")
+        and getattr(venue, name) is None
+        and name not in cleared
     }
-    if "latitude" in fields and venue.latitude is None and venue.longitude is None:
+    if (
+        "latitude" in fields
+        and venue.latitude is None
+        and venue.longitude is None
+        and not cleared & {"latitude", "longitude"}
+    ):
         gaps["latitude"], gaps["longitude"] = fields["latitude"], fields["longitude"]
     if not gaps:
         return venue
