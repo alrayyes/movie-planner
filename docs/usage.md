@@ -154,7 +154,8 @@ but couldn't complete, and leaves it out for the next 30 days instead of
 spending the daily quota on it again; it says how many it left out. Only an
 answer counts: a refusal, a failed request and "no match" mark nothing. The
 note is kept in the local database, not on the calendar. `--force`, or
-`--date` for one day, asks OMDb anyway.
+`--date` for one day, asks OMDb anyway. Changing an entry's title or IMDb ID with
+`update` drops its note, since that asks OMDb something new.
 
 An entry that already has an IMDb link is always refreshed from the ID in that
 link, never by looking its title up again, so a match you corrected by hand

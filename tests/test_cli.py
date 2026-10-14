@@ -5470,3 +5470,76 @@ def test_refresh_drops_the_marker_once_the_title_is_complete(
     store = _store(config_path)
     assert store.omdb_answered_incomplete_ids(today=date.today()) == set()
     store.close()
+
+
+# --- update clears a stale answered-incomplete marker: issue #460 ---
+
+
+def _marked_dune(config_path: Path, monkeypatch: pytest.MonkeyPatch) -> int:
+    _log_dune_without_metadata(config_path, monkeypatch)
+    _count_lookups(monkeypatch, _THIN_ANSWER)
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    assert store.omdb_answered_incomplete_ids(today=date.today()) == {entry.id}
+    store.close()
+    return entry.id
+
+
+def test_update_with_a_new_imdb_id_that_gets_no_answer_clears_the_marker(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entry_id = _marked_dune(config_path, monkeypatch)
+    _count_lookups(monkeypatch, None)
+
+    runner.invoke(
+        app, ["--config", str(config_path), "update", str(entry_id), "--imdb-id", "tt1160419"]
+    )
+
+    store = _store(config_path)
+    assert store.omdb_answered_incomplete_ids(today=date.today()) == set()
+    store.close()
+
+
+def test_update_that_renames_the_title_clears_the_marker(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entry_id = _marked_dune(config_path, monkeypatch)
+
+    runner.invoke(
+        app, ["--config", str(config_path), "update", str(entry_id), "--title", "Dune: Part Two"]
+    )
+
+    store = _store(config_path)
+    assert store.omdb_answered_incomplete_ids(today=date.today()) == set()
+    store.close()
+
+
+def test_update_that_changes_only_the_notes_keeps_the_marker(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entry_id = _marked_dune(config_path, monkeypatch)
+
+    runner.invoke(app, ["--config", str(config_path), "update", str(entry_id), "--notes", "IMAX"])
+
+    store = _store(config_path)
+    assert store.omdb_answered_incomplete_ids(today=date.today()) == {entry_id}
+    store.close()
+
+
+def test_update_refresh_metadata_marks_a_new_incomplete_answer(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entry_id = _marked_dune(config_path, monkeypatch)
+    store = _store(config_path)
+    store.clear_omdb_answered_incomplete(entry_id)
+    store.close()
+    _count_lookups(monkeypatch, _THIN_ANSWER)
+
+    runner.invoke(
+        app, ["--config", str(config_path), "update", str(entry_id), "--refresh-metadata"]
+    )
+
+    store = _store(config_path)
+    assert store.omdb_answered_incomplete_ids(today=date.today()) == {entry_id}
+    store.close()

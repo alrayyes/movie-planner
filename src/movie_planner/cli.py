@@ -578,6 +578,15 @@ def _push_delete_or_warn(cfg: config_module.Config, store: Store, entry: Entry) 
 _IMDB_ID_RE = re.compile(r"tt\d+")
 
 
+def _remember_omdb_answer(store: Store, answered: Entry, *, today: date) -> None:
+    """Note whether an OMDb answer left the entry incomplete (issue #458), so
+    a bulk refresh knows whether to ask about it again."""
+    if needs_omdb_fetch(answered):
+        store.mark_omdb_answered_incomplete(answered.id, today=today)
+    else:
+        store.clear_omdb_answered_incomplete(answered.id)
+
+
 def _echo_omdb_stopped(done: int, total: int) -> None:
     typer.echo(
         f"Stopped looking up OMDb after {done} of {total}; the remaining "
@@ -1356,10 +1365,22 @@ def update(
             notes=notes if notes is not None else current.notes,
         )
 
+        # A corrected match is a different question for OMDb, so an earlier
+        # "answered without completing" no longer applies (issue #460).
+        if imdb_id is not None or refresh_metadata or updated.title != current.title:
+            store.clear_omdb_answered_incomplete(entry_id)
+
+        def remember_answer(answered: Entry) -> None:
+            _remember_omdb_answer(store, answered, today=date.today())
+
         if imdb_id is not None:
-            updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=imdb_id, overwrite=True)
+            updated = _fetch_metadata_or_warn(
+                cfg, store, updated, imdb_id=imdb_id, overwrite=True, on_answer=remember_answer
+            )
         elif refresh_metadata:
-            updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=None, overwrite=True)
+            updated = _fetch_metadata_or_warn(
+                cfg, store, updated, imdb_id=None, overwrite=True, on_answer=remember_answer
+            )
 
         _push_update_or_warn(cfg, store, updated, importer="update")
         typer.echo(f"Updated entry {entry_id}.")
@@ -2142,10 +2163,7 @@ def sync_refresh(
             return force or (needs_omdb_fetch(e) and e.id not in left_out)
 
         def remember_answer(answered: Entry) -> None:
-            if needs_omdb_fetch(answered):
-                store.mark_omdb_answered_incomplete(answered.id, today=today)
-            else:
-                store.clear_omdb_answered_incomplete(answered.id)
+            _remember_omdb_answer(store, answered, today=today)
 
         to_fetch = [e for e in entries if wants_lookup(e)]
         skipped = sum(1 for e in entries if e.id in left_out and needs_omdb_fetch(e))
