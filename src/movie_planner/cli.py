@@ -10,6 +10,7 @@ import json
 import logging
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, time
 from pathlib import Path
@@ -532,6 +533,7 @@ def _finalize_entry(
     screening_details: str | None = None,
     overwrite_metadata: bool = False,
     stop_on_refusal: bool = False,
+    on_answer: Callable[[Entry], None] | None = None,
 ) -> Entry:
     """Metadata fetch (optional), then a calendar push - create if the
     entry has never been synced, update otherwise. The one orchestration
@@ -550,6 +552,7 @@ def _finalize_entry(
             imdb_id=imdb_id,
             overwrite=overwrite_metadata,
             stop_on_refusal=stop_on_refusal,
+            on_answer=on_answer,
         )
     if entry.caldav_uid is None:
         return _push_new_or_warn(
@@ -590,6 +593,7 @@ def _fetch_metadata_or_warn(
     imdb_id: str | None,
     overwrite: bool = False,
     stop_on_refusal: bool = False,
+    on_answer: Callable[[Entry], None] | None = None,
 ) -> Entry:
     try:
         client = OmdbClient(cfg.omdb_api_key)
@@ -606,7 +610,10 @@ def _fetch_metadata_or_warn(
     if not matched:
         typer.echo(f"No OMDb match found for '{entry.title}'.")
         return updated
-    return _fetch_tmdb_details_or_warn(cfg, store, updated, overwrite=overwrite, before=entry)
+    result = _fetch_tmdb_details_or_warn(cfg, store, updated, overwrite=overwrite, before=entry)
+    if on_answer is not None:
+        on_answer(result)
+    return result
 
 
 def _fetch_tmdb_details_or_warn(
@@ -2121,7 +2128,27 @@ def sync_refresh(
             typer.echo("No entries to refresh.")
             return
 
-        to_fetch = entries if force else [e for e in entries if needs_omdb_fetch(e)]
+        # A title OMDb already answered without completing would only be sent
+        # again for no change, and the daily quota is small (issue #458). An
+        # explicit ask - --force, or one --date - still goes to OMDb.
+        today = date.today()
+        left_out = (
+            set()
+            if force or entry_date is not None
+            else store.omdb_answered_incomplete_ids(today=today)
+        )
+
+        def wants_lookup(e: Entry) -> bool:
+            return force or (needs_omdb_fetch(e) and e.id not in left_out)
+
+        def remember_answer(answered: Entry) -> None:
+            if needs_omdb_fetch(answered):
+                store.mark_omdb_answered_incomplete(answered.id, today=today)
+            else:
+                store.clear_omdb_answered_incomplete(answered.id)
+
+        to_fetch = [e for e in entries if wants_lookup(e)]
+        skipped = sum(1 for e in entries if e.id in left_out and needs_omdb_fetch(e))
         if to_fetch:
             typer.echo(
                 f"About to look up OMDb ratings for {len(to_fetch)} of {len(entries)} entries."
@@ -2131,7 +2158,7 @@ def sync_refresh(
         looked_up = 0
         omdb_refused = False
         for entry in entries:
-            fetch_metadata = (force or needs_omdb_fetch(entry)) and not omdb_refused
+            fetch_metadata = wants_lookup(entry) and not omdb_refused
             try:
                 refreshed = _finalize_entry(
                     cfg,
@@ -2141,6 +2168,7 @@ def sync_refresh(
                     importer="sync-refresh",
                     overwrite_metadata=force,
                     stop_on_refusal=True,
+                    on_answer=remember_answer,
                 )
             except OmdbRefusedError:
                 omdb_refused = True
@@ -2154,6 +2182,11 @@ def sync_refresh(
                 fetched += 1
 
         typer.echo(f"Refreshed {len(entries)} entries ({fetched} metadata fetches).")
+        if skipped:
+            typer.echo(
+                f"{skipped} left out: OMDb already answered without completing "
+                f"{'it' if skipped == 1 else 'them'}. Run with --force to ask again."
+            )
     finally:
         store.close()
 

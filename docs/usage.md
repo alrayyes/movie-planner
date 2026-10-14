@@ -148,6 +148,14 @@ and carry on pushing the rest to the calendar. Run `sync refresh` again once
 OMDb answers. `log` and `update` save the entry without metadata, as they do
 for any failed lookup.
 
+Some films OMDb knows but has no poster or plot for, so they stay incomplete
+after every lookup. A plain `sync refresh` remembers a title OMDb answered for
+but couldn't complete, and leaves it out for the next 30 days instead of
+spending the daily quota on it again; it says how many it left out. Only an
+answer counts: a refusal, a failed request and "no match" mark nothing. The
+note is kept in the local database, not on the calendar. `--force`, or
+`--date` for one day, asks OMDb anyway.
+
 An entry that already has an IMDb link is always refreshed from the ID in that
 link, never by looking its title up again, so a match you corrected by hand
 stays put. If OMDb has nothing for that ID the entry is left as it is.
