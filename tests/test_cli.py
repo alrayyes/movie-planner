@@ -10,11 +10,12 @@ from fakes import FakeCalendar
 from fixtures import PATHE_BOOKING_REF, PATHE_EMAIL_PLAIN
 from typer.testing import CliRunner
 
+from movie_planner import cli as cli_module
 from movie_planner import config as config_module
 from movie_planner.calendar_sync import CalendarClient, build_vevent
 from movie_planner.cli import app
 from movie_planner.omdb import MovieRatings, OmdbClient, OmdbRefusedError
-from movie_planner.store import Store
+from movie_planner.store import Entry, Store
 from movie_planner.tmdb import TmdbClient, TmdbMovieDetails
 from movie_planner.user_agent import USER_AGENT_HEADER
 
@@ -5204,3 +5205,112 @@ def test_log_carries_on_without_metadata_when_omdb_refuses(
     assert (entry.imdb_rating, entry.omdb_last_no_match) == (None, None)
     assert entry.caldav_uid is not None
     store.close()
+
+
+def _match_then_refuse(calls: dict[str, int]) -> Callable[..., MovieRatings | None]:
+    def lookup(self: OmdbClient, **kw: object) -> MovieRatings | None:
+        calls["n"] += 1
+        if calls["n"] > 1:
+            raise OmdbRefusedError("Request limit reached!")
+        return MovieRatings(imdb="8.5/10", rotten_tomatoes="91%", metacritic="80")
+
+    return lookup
+
+
+def test_sync_refresh_reports_how_far_it_got_and_finalises_each_entry_once(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: None)
+        for day, title in (("01", "Dune"), ("02", "Arrival"), ("03", "Heat")):
+            _log(config_path, title, f"2026-01-{day}")
+    calls = {"n": 0}
+    pushed: list[str] = []
+    original = cli_module._push_update_or_warn
+
+    def counting_push(cfg: object, store: Store, entry: Entry, **kw: object) -> bool:
+        pushed.append(entry.title)
+        return original(cfg, store, entry, **kw)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("movie_planner.cli._push_update_or_warn", counting_push)
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", _match_then_refuse(calls))
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert result.exit_code == 0, result.output
+    assert calls["n"] == 2
+    assert (
+        "Stopped looking up OMDb after 1 of 3; the remaining 2 were not looked up." in result.output
+    )
+    assert sorted(pushed) == ["Arrival", "Dune", "Heat"]
+
+
+def test_import_reports_how_far_it_got_and_finalises_each_entry_once(
+    config_path: Path, calendar: FakeCalendar, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = {"n": 0}
+    pushed: list[str] = []
+    original = cli_module._push_new_or_warn
+
+    def counting_push(cfg: object, store: Store, entry: Entry, **kw: object) -> Entry:
+        pushed.append(entry.title)
+        return original(cfg, store, entry, **kw)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("movie_planner.cli._push_new_or_warn", counting_push)
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", _match_then_refuse(calls))
+    csv_path = tmp_path / "movies.csv"
+    csv_path.write_text(
+        "title,date,medium\nDune,2026-01-01,cinema\nArrival,2026-01-02,cinema\n"
+        "Heat,2026-01-03,cinema\n"
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
+
+    assert result.exit_code == 0, result.output
+    assert calls["n"] == 2
+    assert (
+        "Stopped looking up OMDb after 1 of 3; the remaining 2 were not looked up." in result.output
+    )
+    assert sorted(pushed) == ["Arrival", "Dune", "Heat"]
+
+
+def test_log_and_update_say_why_there_is_no_metadata_when_omdb_refuses(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = {"n": 0}
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", _refusing_lookup(calls))
+
+    logged = runner.invoke(
+        app,
+        ["--config", str(config_path), "log", "--title", "Dune", "--date", "2026-01-01",
+         "--medium", "cinema"],
+    )  # fmt: skip
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    store.close()
+    updated = runner.invoke(
+        app, ["--config", str(config_path), "update", str(entry.id), "--refresh-metadata"]
+    )
+
+    for result in (logged, updated):
+        assert result.exit_code == 0, result.output
+        assert (
+            "Warning: could not fetch ratings: OMDb refused the request: Request limit reached!"
+            in result.output
+        )
+
+
+def test_show_skips_the_poster_when_omdb_refuses(
+    config_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from movie_planner.cli import _poster_url_for
+
+    store = _store(config_path)
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    entry = store.update_entry(entry.id, imdb_url="https://www.imdb.com/title/tt1160419/")
+    cfg = config_module.load_config(config_path)
+    store.close()
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", _refusing_lookup({"n": 0}))
+
+    assert _poster_url_for(cfg, entry) is None

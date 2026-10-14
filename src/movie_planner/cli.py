@@ -578,7 +578,7 @@ _IMDB_ID_RE = re.compile(r"tt\d+")
 def _echo_omdb_stopped(done: int, total: int) -> None:
     typer.echo(
         f"Stopped looking up OMDb after {done} of {total}; the remaining "
-        f"{total - done} were skipped. Run 'sync refresh' again once it answers."
+        f"{total - done} were not looked up. Run 'sync refresh' again once it answers."
     )
 
 
@@ -1182,7 +1182,11 @@ def _poster_url_for(cfg: config_module.Config, entry: Entry) -> str | None:
     if match is None:
         return None
     client = OmdbClient(cfg.omdb_api_key)
-    ratings = client.lookup(imdb_id=match.group())
+    try:
+        ratings = client.lookup(imdb_id=match.group())
+    except OmdbRefusedError:
+        # The poster is a nicety; a refused request just means none this time.
+        return None
     return ratings.poster if ratings else None
 
 
