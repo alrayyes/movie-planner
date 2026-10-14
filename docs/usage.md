@@ -141,6 +141,13 @@ entries still missing one. `update --refresh-metadata` does the same
 thing for one specific entry, by ID - no need to work out its date or
 risk force-refreshing a sibling entry that happens to share it.
 
+If OMDb refuses a request, because the day's quota is spent or the API key is
+wrong, that isn't a missing title: the entry isn't marked as having no match,
+and `sync refresh` and `import` stop asking, say how many titles they had done,
+and carry on pushing the rest to the calendar. Run `sync refresh` again once
+OMDb answers. `log` and `update` save the entry without metadata, as they do
+for any failed lookup.
+
 An entry that already has an IMDb link is always refreshed from the ID in that
 link, never by looking its title up again, so a match you corrected by hand
 stays put. If OMDb has nothing for that ID the entry is left as it is.
