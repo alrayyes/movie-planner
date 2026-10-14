@@ -17,6 +17,22 @@ from movie_planner.user_agent import USER_AGENT_HEADER
 logger = logging.getLogger(__name__)
 
 
+class OmdbRefusedError(Exception):
+    """OMDb refused the request - a spent daily quota or a bad key - which is
+    not the same as having no match for a title. Raised so nothing records the
+    refusal as a miss, and so a bulk run can stop asking.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"OMDb refused the request: {reason}")
+        self.reason = reason
+
+
+# The 200-with-an-error answers that mean "not now", not "not found"; the
+# same test movie-planner-web uses.
+_REFUSAL_RE = re.compile(r"api key|limit", re.IGNORECASE)
+
+
 @dataclass(frozen=True)
 class MovieRatings:
     imdb: str | None
@@ -199,6 +215,10 @@ class OmdbClient:
         data = response.json()
 
         if data.get("Response") == "False":
+            error = data.get("Error")
+            if isinstance(error, str) and _REFUSAL_RE.search(error):
+                logger.debug("OMDb response: refused: %s", error)
+                raise OmdbRefusedError(error)
             logger.debug("OMDb response: no match for %s", cache_key_base)
             self._cache[cache_key] = None
             return None

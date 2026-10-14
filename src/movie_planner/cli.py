@@ -38,8 +38,19 @@ from movie_planner.display import (
 )
 from movie_planner.duplicates import find_duplicate
 from movie_planner.export import entry_to_export_row
-from movie_planner.importers import IMPORT_FORMATS, MediumRequiredError, parse_json_text, run_import
-from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
+from movie_planner.importers import (
+    IMPORT_FORMATS,
+    ImportedEntry,
+    MediumRequiredError,
+    parse_json_text,
+    run_import,
+)
+from movie_planner.omdb import (
+    OmdbClient,
+    OmdbRefusedError,
+    fetch_and_store_ratings,
+    needs_omdb_fetch,
+)
 from movie_planner.pathe import PatheBooking, PatheEmailParseError, parse_pathe_email
 from movie_planner.store import ActivityLogEntry, Entry, Medium, Store, StoreError, Venue
 from movie_planner.tmdb import TmdbClient, TmdbMovieDetails
@@ -520,6 +531,7 @@ def _finalize_entry(
     imdb_id: str | None = None,
     screening_details: str | None = None,
     overwrite_metadata: bool = False,
+    stop_on_refusal: bool = False,
 ) -> Entry:
     """Metadata fetch (optional), then a calendar push - create if the
     entry has never been synced, update otherwise. The one orchestration
@@ -532,7 +544,12 @@ def _finalize_entry(
     """
     if fetch_metadata:
         entry = _fetch_metadata_or_warn(
-            cfg, store, entry, imdb_id=imdb_id, overwrite=overwrite_metadata
+            cfg,
+            store,
+            entry,
+            imdb_id=imdb_id,
+            overwrite=overwrite_metadata,
+            stop_on_refusal=stop_on_refusal,
         )
     if entry.caldav_uid is None:
         return _push_new_or_warn(
@@ -558,6 +575,13 @@ def _push_delete_or_warn(cfg: config_module.Config, store: Store, entry: Entry) 
 _IMDB_ID_RE = re.compile(r"tt\d+")
 
 
+def _echo_omdb_stopped(done: int, total: int) -> None:
+    typer.echo(
+        f"Stopped looking up OMDb after {done} of {total}; the remaining "
+        f"{total - done} were not looked up. Run 'sync refresh' again once it answers."
+    )
+
+
 def _fetch_metadata_or_warn(
     cfg: config_module.Config,
     store: Store,
@@ -565,6 +589,7 @@ def _fetch_metadata_or_warn(
     *,
     imdb_id: str | None,
     overwrite: bool = False,
+    stop_on_refusal: bool = False,
 ) -> Entry:
     try:
         client = OmdbClient(cfg.omdb_api_key)
@@ -573,6 +598,10 @@ def _fetch_metadata_or_warn(
         )
     except Exception as e:  # noqa: BLE001 - metadata is optional, never fatal
         typer.secho(f"Warning: could not fetch ratings: {e}", fg=typer.colors.YELLOW)
+        # A bulk caller asks to hear about a refusal so it can stop: OMDb
+        # would refuse every title after this one too.
+        if stop_on_refusal and isinstance(e, OmdbRefusedError):
+            raise
         return entry
     if not matched:
         typer.echo(f"No OMDb match found for '{entry.title}'.")
@@ -1153,7 +1182,11 @@ def _poster_url_for(cfg: config_module.Config, entry: Entry) -> str | None:
     if match is None:
         return None
     client = OmdbClient(cfg.omdb_api_key)
-    ratings = client.lookup(imdb_id=match.group())
+    try:
+        ratings = client.lookup(imdb_id=match.group())
+    except OmdbRefusedError:
+        # The poster is a nicety; a refused request just means none this time.
+        return None
     return ratings.poster if ratings else None
 
 
@@ -1722,14 +1755,30 @@ def import_command(
     store = _open_store(cfg)
     try:
         summary = run_import(store, rows, force=force)
+
+        def wants_lookup(imported: ImportedEntry) -> bool:
+            return not no_metadata and needs_omdb_fetch(imported.entry)
+
+        to_look_up = sum(wants_lookup(imported) for imported in summary.imported_entries)
+        looked_up = 0
+        omdb_refused = False
         for imported in summary.imported_entries:
-            _finalize_entry(
-                cfg,
-                store,
-                imported.entry,
-                fetch_metadata=not no_metadata and needs_omdb_fetch(imported.entry),
-                importer=importer,
-            )
+            fetch_metadata = wants_lookup(imported) and not omdb_refused
+            try:
+                _finalize_entry(
+                    cfg,
+                    store,
+                    imported.entry,
+                    fetch_metadata=fetch_metadata,
+                    importer=importer,
+                    stop_on_refusal=True,
+                )
+            except OmdbRefusedError:
+                omdb_refused = True
+                _echo_omdb_stopped(looked_up, to_look_up)
+                _finalize_entry(cfg, store, imported.entry, fetch_metadata=False, importer=importer)
+            else:
+                looked_up += fetch_metadata
         # Persisted (issue #254) so `import-failures list` can show them
         # after this run's own output has scrolled away - run_import
         # itself stays pure/ephemeral, this is the one place that writes.
@@ -2079,16 +2128,28 @@ def sync_refresh(
             )
 
         fetched = 0
+        looked_up = 0
+        omdb_refused = False
         for entry in entries:
-            fetch_metadata = force or needs_omdb_fetch(entry)
-            refreshed = _finalize_entry(
-                cfg,
-                store,
-                entry,
-                fetch_metadata=fetch_metadata,
-                importer="sync-refresh",
-                overwrite_metadata=force,
-            )
+            fetch_metadata = (force or needs_omdb_fetch(entry)) and not omdb_refused
+            try:
+                refreshed = _finalize_entry(
+                    cfg,
+                    store,
+                    entry,
+                    fetch_metadata=fetch_metadata,
+                    importer="sync-refresh",
+                    overwrite_metadata=force,
+                    stop_on_refusal=True,
+                )
+            except OmdbRefusedError:
+                omdb_refused = True
+                _echo_omdb_stopped(looked_up, len(to_fetch))
+                refreshed = _finalize_entry(
+                    cfg, store, entry, fetch_metadata=False, importer="sync-refresh"
+                )
+            else:
+                looked_up += fetch_metadata
             if fetch_metadata and refreshed.imdb_rating is not None:
                 fetched += 1
 

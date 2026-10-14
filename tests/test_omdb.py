@@ -8,7 +8,12 @@ import pytest
 from fakes import FakeCalendar
 
 from movie_planner.calendar_sync import CalendarClient, CalendarSync
-from movie_planner.omdb import OmdbClient, fetch_and_store_ratings, needs_omdb_fetch
+from movie_planner.omdb import (
+    OmdbClient,
+    OmdbRefusedError,
+    fetch_and_store_ratings,
+    needs_omdb_fetch,
+)
 from movie_planner.store import Entry, Store
 from movie_planner.user_agent import USER_AGENT_HEADER
 
@@ -1097,3 +1102,54 @@ def test_a_lookup_that_overwrites_still_keeps_a_value_omdb_has_no_answer_for(
 
     assert updated.plot == "My own synopsis"
     assert updated.director == "Denis Villeneuve"
+
+
+@pytest.mark.parametrize(
+    "error", ["Request limit reached!", "Invalid API key!", "No API key provided."]
+)
+def test_a_refusal_raises_and_is_not_a_no_match(error: str) -> None:
+    client = _client(
+        lambda request: httpx.Response(200, json={"Response": "False", "Error": error})
+    )
+
+    with pytest.raises(OmdbRefusedError, match=error.replace("!", r"\!").replace(".", r"\.")):
+        client.lookup(title="Dune")
+
+
+def test_a_refusal_is_not_cached() -> None:
+    answers = iter(
+        [
+            {"Response": "False", "Error": "Request limit reached!"},
+            MATCH_RESPONSE,
+        ]
+    )
+    client = _client(lambda request: httpx.Response(200, json=next(answers)))
+
+    with pytest.raises(OmdbRefusedError):
+        client.lookup(title="Dune")
+
+    assert client.lookup(title="Dune") is not None
+
+
+@pytest.mark.parametrize("error", ["Movie not found!", "Incorrect IMDb ID."])
+def test_an_ordinary_not_found_answer_is_still_a_no_match(error: str) -> None:
+    client = _client(
+        lambda request: httpx.Response(200, json={"Response": "False", "Error": error})
+    )
+
+    assert client.lookup(title="Dune") is None
+
+
+def test_a_refusal_does_not_mark_the_entry_as_having_no_match(store: Store) -> None:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    client = _client(
+        lambda request: httpx.Response(
+            200, json={"Response": "False", "Error": "Request limit reached!"}
+        )
+    )
+
+    with pytest.raises(OmdbRefusedError):
+        fetch_and_store_ratings(store, client, entry)
+
+    assert store.get_entry(entry.id).omdb_last_no_match is None
