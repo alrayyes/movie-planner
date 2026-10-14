@@ -1057,3 +1057,43 @@ def test_a_link_without_an_id_still_looks_the_title_up(store: Store) -> None:
     fetch_and_store_ratings(store, _client(handler), entry)
 
     assert seen[0].get("t") == "Dune"
+
+
+def _entry_with_edited_fields(store: Store) -> Entry:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    return store.update_entry(entry.id, plot="My own synopsis", director="Someone Else")
+
+
+def test_a_plain_lookup_fills_empty_fields_and_keeps_the_ones_an_entry_has(store: Store) -> None:
+    entry = _entry_with_edited_fields(store)
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    updated, _ = fetch_and_store_ratings(store, client, entry)
+
+    assert (updated.plot, updated.director) == ("My own synopsis", "Someone Else")
+    assert updated.imdb_rating == "8.0/10"
+    assert updated.awards == "Won 6 Oscars. 175 wins & 235 nominations total"
+
+
+def test_a_lookup_that_asks_to_overwrite_replaces_what_an_entry_has(store: Store) -> None:
+    entry = _entry_with_edited_fields(store)
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    updated, _ = fetch_and_store_ratings(store, client, entry, overwrite=True)
+
+    assert updated.plot == "Paul Atreides unites with the Fremen to seek revenge."
+    assert updated.director == "Denis Villeneuve"
+
+
+def test_a_lookup_that_overwrites_still_keeps_a_value_omdb_has_no_answer_for(
+    store: Store,
+) -> None:
+    entry = _entry_with_edited_fields(store)
+    sparse = {**MATCH_RESPONSE, "Plot": "N/A", "Awards": "N/A"}
+    client = _client(lambda request: httpx.Response(200, json=sparse))
+
+    updated, _ = fetch_and_store_ratings(store, client, entry, overwrite=True)
+
+    assert updated.plot == "My own synopsis"
+    assert updated.director == "Denis Villeneuve"

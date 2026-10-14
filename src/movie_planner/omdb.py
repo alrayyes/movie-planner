@@ -249,11 +249,18 @@ def fetch_and_store_ratings(
     entry: Entry,
     *,
     imdb_id: str | None = None,
+    overwrite: bool = False,
 ) -> tuple[Entry, bool]:
     """Looks up `entry`'s title (or `imdb_id`, when known) and stores
     whatever OMDb returns. Returns the entry (updated only on a match)
     and whether a match was found, so the caller can tell the user when
     it wasn't.
+
+    By default only fields the entry doesn't have yet are filled, so a
+    routine lookup never replaces a value that was imported or edited.
+    `overwrite=True` is for the callers that asked for a fresh copy
+    (`--force`, `--refresh-metadata`, `--imdb-id`); it replaces values
+    but, like the default, never blanks one OMDb has no answer for.
     """
     # An entry that already has an IMDb link is asked about by that ID: a
     # title lookup could answer with another film and replace a match that
@@ -266,34 +273,48 @@ def fetch_and_store_ratings(
         # None forever until a lookup is actually attempted.
         no_match_entry = store.update_entry(entry.id, omdb_last_no_match=datetime.date.today())
         return no_match_entry, False
-    imdb_url = entry.imdb_url or (
-        f"https://www.imdb.com/title/{ratings.imdb_id}/" if ratings.imdb_id else None
-    )
+    matched_url = f"https://www.imdb.com/title/{ratings.imdb_id}/" if ratings.imdb_id else None
+    # A fresh copy takes the matched link too, so it never keeps the page of a
+    # different title. (A stored ID is looked up as itself, so only an explicit
+    # --imdb-id can change which film an entry points at.)
+    imdb_url = (matched_url or entry.imdb_url) if overwrite else (entry.imdb_url or matched_url)
+    fetched: dict[str, object] = {
+        "imdb_rating": ratings.imdb,
+        "rotten_tomatoes_rating": ratings.rotten_tomatoes,
+        "metacritic_rating": ratings.metacritic,
+        "poster_url": ratings.poster,
+        "director": ratings.director,
+        "actors": ratings.actors,
+        "genre": ratings.genre,
+        "release_year": ratings.release_year,
+        "rated": ratings.rated,
+        "released": ratings.released,
+        "runtime": ratings.runtime,
+        "writer": ratings.writer,
+        "plot": ratings.plot,
+        "language": ratings.language,
+        "country": ratings.country,
+        "awards": ratings.awards,
+        "metascore": ratings.metascore,
+        "imdb_votes": ratings.imdb_votes,
+        "dvd": ratings.dvd,
+        "box_office": ratings.box_office,
+        "production": ratings.production,
+        "website": ratings.website,
+    }
+    # A value OMDb has no answer for ("N/A") never blanks one the entry has,
+    # even when the caller asked for a fresh copy.
+    fetched = {
+        field: value
+        if value is not None and (overwrite or getattr(entry, field) is None)
+        else getattr(entry, field)
+        for field, value in fetched.items()
+    }
+    # fetched is heterogeneous by design, like import's supplied_fields.
     updated = store.update_entry(
         entry.id,
-        imdb_rating=ratings.imdb,
-        rotten_tomatoes_rating=ratings.rotten_tomatoes,
-        metacritic_rating=ratings.metacritic,
         imdb_url=imdb_url,
-        poster_url=ratings.poster,
-        director=ratings.director,
-        actors=ratings.actors,
-        genre=ratings.genre,
-        release_year=ratings.release_year,
-        rated=ratings.rated,
-        released=ratings.released,
-        runtime=ratings.runtime,
-        writer=ratings.writer,
-        plot=ratings.plot,
-        language=ratings.language,
-        country=ratings.country,
-        awards=ratings.awards,
-        metascore=ratings.metascore,
-        imdb_votes=ratings.imdb_votes,
-        dvd=ratings.dvd,
-        box_office=ratings.box_office,
-        production=ratings.production,
-        website=ratings.website,
         omdb_last_no_match=None,
+        **fetched,  # type: ignore[arg-type]
     )
     return updated, True

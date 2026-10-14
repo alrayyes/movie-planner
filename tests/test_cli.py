@@ -2299,32 +2299,40 @@ def test_import_still_fetches_omdb_when_row_supplies_only_some_fields(
     store.close()
 
 
-def test_import_keeps_an_imported_synopsis_instead_of_fetching_over_it(
+def test_import_fills_gaps_from_omdb_but_keeps_what_the_row_carried(
     config_path: Path, calendar: FakeCalendar, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    calls = {"n": 0}
-
     def lookup(self: OmdbClient, **kw: object) -> MovieRatings | None:
-        calls["n"] += 1
         return MovieRatings(
-            imdb="8.5/10", rotten_tomatoes="91%", metacritic="80", plot="OMDb's plot"
+            imdb="8.5/10",
+            rotten_tomatoes="91%",
+            metacritic="80",
+            plot="OMDb's plot",
+            rated="PG-13",
+            awards="OMDb awards",
         )
 
     monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lookup)
     csv_path = tmp_path / "movies.csv"
     csv_path.write_text(
-        "title,date,medium,synopsis,budget,popularity,awards\n"
-        "Dune,2026-01-01,cinema,My edited synopsis,165000000,87.5,\n"
+        "title,date,medium,synopsis,rated,budget,popularity,awards\n"
+        "Dune,2026-01-01,cinema,My edited synopsis,R,165000000,87.5,\n"
+        "Arrival,2026-01-02,cinema,,Unrated,,,\n"
     )
 
     result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
 
     assert result.exit_code == 0, result.output
-    assert calls["n"] == 0
     store = _store(config_path)
-    (entry,) = store.list_entries()
-    assert (entry.plot, entry.budget, entry.popularity) == ("My edited synopsis", 165000000, 87.5)
-    assert entry.awards is None
+    dune, arrival = sorted(store.list_entries(), key=lambda e: e.title, reverse=True)
+    assert (dune.plot, dune.rated, dune.budget, dune.popularity) == (
+        "My edited synopsis",
+        "R",
+        165000000,
+        87.5,
+    )
+    assert dune.awards == "OMDb awards"
+    assert (arrival.plot, arrival.rated) == ("OMDb's plot", "Unrated")
     store.close()
 
 
@@ -4986,4 +4994,144 @@ def test_purge_leaves_local_entries_alone(
 
     store = _store(config_path)
     assert len(store.list_entries()) == 1
+    store.close()
+
+
+_FRESH = MovieRatings(
+    imdb="8.5/10",
+    rotten_tomatoes="91%",
+    metacritic="80",
+    imdb_id="tt9999999",
+    plot="OMDb's plot",
+    awards="OMDb awards",
+)
+
+
+def _log_with_edited_plot(config_path: Path) -> int:
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: None)
+        _log(config_path, "Dune", "2026-01-01")
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    store.update_entry(entry.id, plot="My own synopsis", imdb_url="https://www.imdb.com/title/tt1/")
+    store.close()
+    return entry.id
+
+
+@pytest.mark.parametrize("flag", [["--refresh-metadata"], ["--imdb-id", "tt9999999"]])
+def test_update_replaces_an_entrys_values_when_asked_for_a_fresh_copy(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch, flag: list[str]
+) -> None:
+    entry_id = _log_with_edited_plot(config_path)
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: _FRESH)
+
+    result = runner.invoke(app, ["--config", str(config_path), "update", str(entry_id), *flag])
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    entry = store.get_entry(entry_id)
+    assert (entry.plot, entry.imdb_url) == (
+        "OMDb's plot",
+        "https://www.imdb.com/title/tt9999999/",
+    )
+    store.close()
+
+
+def test_a_plain_sync_refresh_fills_gaps_and_a_forced_one_replaces(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entry_id = _log_with_edited_plot(config_path)
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: _FRESH)
+
+    plain = runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert plain.exit_code == 0, plain.output
+    store = _store(config_path)
+    entry = store.get_entry(entry_id)
+    assert (entry.plot, entry.awards, entry.imdb_url) == (
+        "My own synopsis",
+        "OMDb awards",
+        "https://www.imdb.com/title/tt1/",
+    )
+    store.close()
+
+    forced = runner.invoke(app, ["--config", str(config_path), "sync", "refresh", "--force"])
+
+    assert forced.exit_code == 0, forced.output
+    store = _store(config_path)
+    assert store.get_entry(entry_id).plot == "OMDb's plot"
+    store.close()
+
+
+_TMDB_DETAILS = TmdbMovieDetails(
+    trailer_url="https://www.youtube.com/watch?v=tmdb",
+    actors="TMDb cast",
+    collection="TMDb collection",
+    homepage="https://tmdb.example",
+    budget=1,
+)
+
+
+def _log_with_edited_tmdb_fields(config_path: Path) -> int:
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: None)
+        _log(config_path, "Dune", "2026-01-01")
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    store.update_entry(
+        entry.id, actors="My cast", website="https://mine.example", trailer_url="https://mine"
+    )
+    store.close()
+    return entry.id
+
+
+def test_a_plain_refresh_keeps_edited_tmdb_fields_and_fills_the_empty_ones(
+    config_path_with_tmdb: Path,
+    calendar: FakeCalendar,
+    omdb_match_with_imdb_id: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_id = _log_with_edited_tmdb_fields(config_path_with_tmdb)
+    monkeypatch.setattr(
+        "movie_planner.cli.TmdbClient.lookup_movie_details", lambda self, **kw: _TMDB_DETAILS
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path_with_tmdb), "sync", "refresh"])
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path_with_tmdb)
+    entry = store.get_entry(entry_id)
+    assert (entry.actors, entry.website, entry.trailer_url) == (
+        "My cast",
+        "https://mine.example",
+        "https://mine",
+    )
+    assert (entry.collection, entry.budget) == ("TMDb collection", 1)
+    store.close()
+
+
+def test_a_refresh_that_overwrites_replaces_the_tmdb_fields_too(
+    config_path_with_tmdb: Path,
+    calendar: FakeCalendar,
+    omdb_match_with_imdb_id: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_id = _log_with_edited_tmdb_fields(config_path_with_tmdb)
+    monkeypatch.setattr(
+        "movie_planner.cli.TmdbClient.lookup_movie_details", lambda self, **kw: _TMDB_DETAILS
+    )
+
+    result = runner.invoke(
+        app,
+        ["--config", str(config_path_with_tmdb), "update", str(entry_id), "--refresh-metadata"],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path_with_tmdb)
+    entry = store.get_entry(entry_id)
+    assert (entry.actors, entry.website, entry.trailer_url) == (
+        "TMDb cast",
+        "https://tmdb.example",
+        "https://www.youtube.com/watch?v=tmdb",
+    )
     store.close()

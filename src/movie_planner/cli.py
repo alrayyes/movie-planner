@@ -519,6 +519,7 @@ def _finalize_entry(
     importer: str,
     imdb_id: str | None = None,
     screening_details: str | None = None,
+    overwrite_metadata: bool = False,
 ) -> Entry:
     """Metadata fetch (optional), then a calendar push - create if the
     entry has never been synced, update otherwise. The one orchestration
@@ -530,7 +531,9 @@ def _finalize_entry(
     call site can't forget to set it.
     """
     if fetch_metadata:
-        entry = _fetch_metadata_or_warn(cfg, store, entry, imdb_id=imdb_id)
+        entry = _fetch_metadata_or_warn(
+            cfg, store, entry, imdb_id=imdb_id, overwrite=overwrite_metadata
+        )
     if entry.caldav_uid is None:
         return _push_new_or_warn(
             cfg, store, entry, importer=importer, screening_details=screening_details
@@ -556,21 +559,35 @@ _IMDB_ID_RE = re.compile(r"tt\d+")
 
 
 def _fetch_metadata_or_warn(
-    cfg: config_module.Config, store: Store, entry: Entry, *, imdb_id: str | None
+    cfg: config_module.Config,
+    store: Store,
+    entry: Entry,
+    *,
+    imdb_id: str | None,
+    overwrite: bool = False,
 ) -> Entry:
     try:
         client = OmdbClient(cfg.omdb_api_key)
-        updated, matched = fetch_and_store_ratings(store, client, entry, imdb_id=imdb_id)
+        updated, matched = fetch_and_store_ratings(
+            store, client, entry, imdb_id=imdb_id, overwrite=overwrite
+        )
     except Exception as e:  # noqa: BLE001 - metadata is optional, never fatal
         typer.secho(f"Warning: could not fetch ratings: {e}", fg=typer.colors.YELLOW)
         return entry
     if not matched:
         typer.echo(f"No OMDb match found for '{entry.title}'.")
         return updated
-    return _fetch_tmdb_details_or_warn(cfg, store, updated)
+    return _fetch_tmdb_details_or_warn(cfg, store, updated, overwrite=overwrite, before=entry)
 
 
-def _fetch_tmdb_details_or_warn(cfg: config_module.Config, store: Store, entry: Entry) -> Entry:
+def _fetch_tmdb_details_or_warn(
+    cfg: config_module.Config,
+    store: Store,
+    entry: Entry,
+    *,
+    overwrite: bool = False,
+    before: Entry | None = None,
+) -> Entry:
     """TMDb lookup (issue #236, extended by #311) - piggybacks on the
     imdb_id an OMDb match already produced, so it's only ever attempted
     right after a successful OMDb fetch, never on its own. A config with
@@ -590,30 +607,40 @@ def _fetch_tmdb_details_or_warn(cfg: config_module.Config, store: Store, entry: 
         return entry
     if details is None:
         return entry
-    return _apply_tmdb_details(store, entry, details)
+    return _apply_tmdb_details(store, entry, details, overwrite=overwrite, before=before)
 
 
-def _apply_tmdb_details(store: Store, entry: Entry, details: TmdbMovieDetails) -> Entry:
-    # Every field here falls back to the entry's current value when TMDb
-    # doesn't have one, rather than a blind overwrite - a re-fetch that
-    # gets a thinner TMDb response than last time (a missing sub-
-    # resource, a transient gap in TMDb's own data) must never reset an
-    # already-known field back to unknown. `actors`/`website` are also
-    # OMDb-derived columns, so their fallback is what OMDb already set;
-    # every other field has no OMDb equivalent, so the fallback is
-    # simply "leave it as it was".
+def _apply_tmdb_details(
+    store: Store,
+    entry: Entry,
+    details: TmdbMovieDetails,
+    *,
+    overwrite: bool = False,
+    before: Entry | None = None,
+) -> Entry:
+    # Like the OMDb step: by default only a field that was empty is filled, so
+    # an imported or edited value survives; `overwrite` replaces values. Either
+    # way a field TMDb has no value for keeps what the entry has - a thinner
+    # response than last time must never reset a known field to unknown.
+    # "Was empty" is judged against the entry as it stood before this lookup
+    # (`before`), not after OMDb ran: `actors` and `website` are also OMDb
+    # columns, and TMDb's fuller cast list is meant to replace the short one
+    # OMDb just filled in, though not one the entry already had.
+    start = before or entry
+
+    def pick(fetched: Any, current: Any, original: Any) -> Any:
+        return fetched if fetched is not None and (overwrite or original is None) else current
+
     return store.update_entry(
         entry.id,
-        trailer_url=details.trailer_url if details.trailer_url is not None else entry.trailer_url,
-        actors=details.actors if details.actors is not None else entry.actors,
-        website=details.homepage if details.homepage is not None else entry.website,
-        collection=details.collection if details.collection is not None else entry.collection,
-        certification=details.certification
-        if details.certification is not None
-        else entry.certification,
-        keywords=details.keywords if details.keywords is not None else entry.keywords,
-        budget=details.budget if details.budget is not None else entry.budget,
-        popularity=details.popularity if details.popularity is not None else entry.popularity,
+        trailer_url=pick(details.trailer_url, entry.trailer_url, start.trailer_url),
+        actors=pick(details.actors, entry.actors, start.actors),
+        website=pick(details.homepage, entry.website, start.website),
+        collection=pick(details.collection, entry.collection, start.collection),
+        certification=pick(details.certification, entry.certification, start.certification),
+        keywords=pick(details.keywords, entry.keywords, start.keywords),
+        budget=pick(details.budget, entry.budget, start.budget),
+        popularity=pick(details.popularity, entry.popularity, start.popularity),
     )
 
 
@@ -1290,9 +1317,9 @@ def update(
         )
 
         if imdb_id is not None:
-            updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=imdb_id)
+            updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=imdb_id, overwrite=True)
         elif refresh_metadata:
-            updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=None)
+            updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=None, overwrite=True)
 
         _push_update_or_warn(cfg, store, updated, importer="update")
         typer.echo(f"Updated entry {entry_id}.")
@@ -1700,12 +1727,7 @@ def import_command(
                 cfg,
                 store,
                 imported.entry,
-                # A row that carries a synopsis came from a full-fidelity export
-                # (the web app's or ours): its OMDb fields are already there,
-                # possibly edited, and a lookup would overwrite them.
-                fetch_metadata=not no_metadata
-                and imported.entry.plot is None
-                and needs_omdb_fetch(imported.entry),
+                fetch_metadata=not no_metadata and needs_omdb_fetch(imported.entry),
                 importer=importer,
             )
         # Persisted (issue #254) so `import-failures list` can show them
@@ -2060,7 +2082,12 @@ def sync_refresh(
         for entry in entries:
             fetch_metadata = force or needs_omdb_fetch(entry)
             refreshed = _finalize_entry(
-                cfg, store, entry, fetch_metadata=fetch_metadata, importer="sync-refresh"
+                cfg,
+                store,
+                entry,
+                fetch_metadata=fetch_metadata,
+                importer="sync-refresh",
+                overwrite_metadata=force,
             )
             if fetch_metadata and refreshed.imdb_rating is not None:
                 fetched += 1
