@@ -5314,3 +5314,159 @@ def test_show_skips_the_poster_when_omdb_refuses(
     monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", _refusing_lookup({"n": 0}))
 
     assert _poster_url_for(cfg, entry) is None
+
+
+# --- sync refresh leaves out titles OMDb answered without completing: issue #458 ---
+
+
+def _log_dune_without_metadata(config_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: None)
+    runner.invoke(
+        app,
+        ["--config", str(config_path), "log", "--title", "Dune", "--date", "2026-01-01"]
+        + ["--medium", "cinema"],
+    )
+
+
+def _count_lookups(monkeypatch: pytest.MonkeyPatch, answer: MovieRatings | None) -> dict[str, int]:
+    calls = {"n": 0}
+
+    def lookup(self: OmdbClient, **kw: object) -> MovieRatings | None:
+        calls["n"] += 1
+        return answer
+
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lookup)
+    return calls
+
+
+# What OMDb says for a film it knows but has no poster or plot for.
+_THIN_ANSWER = MovieRatings(imdb="6.0/10", rotten_tomatoes=None, metacritic=None)
+
+
+def test_refresh_does_not_resend_a_title_omdb_answered_without_completing(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _log_dune_without_metadata(config_path, monkeypatch)
+    calls = _count_lookups(monkeypatch, _THIN_ANSWER)
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+    assert calls["n"] == 1
+
+    result = runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert result.exit_code == 0, result.output
+    assert calls["n"] == 1
+    assert "1 left out" in result.output
+    assert "--force" in result.output
+
+
+def test_refresh_asks_again_once_the_marker_has_expired(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _log_dune_without_metadata(config_path, monkeypatch)
+    calls = _count_lookups(monkeypatch, _THIN_ANSWER)
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+    store = _store(config_path)
+    store._conn.execute("UPDATE omdb_answered_incomplete SET marked_on = '2000-01-01'")
+    store._conn.commit()
+    store.close()
+
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert calls["n"] == 2
+
+
+def test_refresh_force_asks_even_for_a_marked_title(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _log_dune_without_metadata(config_path, monkeypatch)
+    calls = _count_lookups(monkeypatch, _THIN_ANSWER)
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh", "--force"])
+
+    assert calls["n"] == 2
+
+
+def test_refresh_of_one_date_asks_even_for_a_marked_title(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _log_dune_without_metadata(config_path, monkeypatch)
+    calls = _count_lookups(monkeypatch, _THIN_ANSWER)
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh", "--date", "2026-01-01"])
+
+    assert calls["n"] == 2
+
+
+def test_refresh_marks_nothing_when_omdb_has_no_match(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _log_dune_without_metadata(config_path, monkeypatch)
+    calls = _count_lookups(monkeypatch, None)
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert calls["n"] == 2
+
+
+def test_refresh_marks_nothing_when_omdb_refuses(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _log_dune_without_metadata(config_path, monkeypatch)
+    calls = {"n": 0}
+
+    def refuse(self: OmdbClient, **kw: object) -> MovieRatings:
+        calls["n"] += 1
+        raise OmdbRefusedError("Request limit reached!")
+
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", refuse)
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert calls["n"] == 2
+
+
+def test_refresh_marks_nothing_when_the_lookup_fails(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _log_dune_without_metadata(config_path, monkeypatch)
+    calls = {"n": 0}
+
+    def fail(self: OmdbClient, **kw: object) -> MovieRatings:
+        calls["n"] += 1
+        raise httpx.ConnectError("offline")
+
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", fail)
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert calls["n"] == 2
+
+
+def test_refresh_drops_the_marker_once_the_title_is_complete(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _log_dune_without_metadata(config_path, monkeypatch)
+    _count_lookups(monkeypatch, _THIN_ANSWER)
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+    full = MovieRatings(
+        imdb="8.5/10",
+        rotten_tomatoes=None,
+        metacritic=None,
+        poster="https://example.com/p.jpg",
+        director="Denis Villeneuve",
+        actors="Zendaya",
+        genre="Sci-Fi",
+        release_year=2021,
+    )
+    _count_lookups(monkeypatch, full)
+
+    runner.invoke(app, ["--config", str(config_path), "sync", "refresh", "--force"])
+
+    store = _store(config_path)
+    assert store.omdb_answered_incomplete_ids(today=date.today()) == set()
+    store.close()
