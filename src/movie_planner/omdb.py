@@ -257,9 +257,10 @@ def fetch_and_store_ratings(
     it wasn't.
 
     By default only fields the entry doesn't have yet are filled, so a
-    routine lookup never replaces a value that was imported or edited
-    (or blanks one when OMDb says "N/A"). `overwrite=True` is for the
-    callers that asked for a fresh copy: `--force` and `--refresh-metadata`.
+    routine lookup never replaces a value that was imported or edited.
+    `overwrite=True` is for the callers that asked for a fresh copy
+    (`--force`, `--refresh-metadata`, `--imdb-id`); it replaces values
+    but, like the default, never blanks one OMDb has no answer for.
     """
     # An entry that already has an IMDb link is asked about by that ID: a
     # title lookup could answer with another film and replace a match that
@@ -301,11 +302,14 @@ def fetch_and_store_ratings(
         "production": ratings.production,
         "website": ratings.website,
     }
-    if not overwrite:
-        fetched = {
-            field: value if getattr(entry, field) is None else getattr(entry, field)
-            for field, value in fetched.items()
-        }
+    # A value OMDb has no answer for ("N/A") never blanks one the entry has,
+    # even when the caller asked for a fresh copy.
+    fetched = {
+        field: value
+        if value is not None and (overwrite or getattr(entry, field) is None)
+        else getattr(entry, field)
+        for field, value in fetched.items()
+    }
     # fetched is heterogeneous by design, like import's supplied_fields.
     updated = store.update_entry(
         entry.id,

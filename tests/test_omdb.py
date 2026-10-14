@@ -1084,3 +1084,16 @@ def test_a_lookup_that_asks_to_overwrite_replaces_what_an_entry_has(store: Store
 
     assert updated.plot == "Paul Atreides unites with the Fremen to seek revenge."
     assert updated.director == "Denis Villeneuve"
+
+
+def test_a_lookup_that_overwrites_still_keeps_a_value_omdb_has_no_answer_for(
+    store: Store,
+) -> None:
+    entry = _entry_with_edited_fields(store)
+    sparse = {**MATCH_RESPONSE, "Plot": "N/A", "Awards": "N/A"}
+    client = _client(lambda request: httpx.Response(200, json=sparse))
+
+    updated, _ = fetch_and_store_ratings(store, client, entry, overwrite=True)
+
+    assert updated.plot == "My own synopsis"
+    assert updated.director == "Denis Villeneuve"
