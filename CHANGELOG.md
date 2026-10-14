@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.34.0...movie-planner-v1.35.0) (2026-10-14)
+
+
+### Features
+
+* **export:** carry the synopsis and OMDb/TMDb extras through export and import ([#444](https://github.com/alrayyes/movie-planner/issues/444)) ([bf8d51b](https://github.com/alrayyes/movie-planner/commit/bf8d51bc0c8c677e904f6ce6d3ab291ba72f9344))
+
 ## [1.34.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.33.2...movie-planner-v1.34.0) (2026-10-14)
 
 
