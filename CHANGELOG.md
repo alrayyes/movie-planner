@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.36.0...movie-planner-v1.36.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **omdb:** tell a refused request from a title OMDb doesn't know ([#456](https://github.com/alrayyes/movie-planner/issues/456)) ([50932da](https://github.com/alrayyes/movie-planner/commit/50932da6493e782d8a3335ef6b1c33956ca03bb2))
+
 ## [1.36.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.35.1...movie-planner-v1.36.0) (2026-10-14)
 
 
