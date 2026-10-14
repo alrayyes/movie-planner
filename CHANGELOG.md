@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.35.1...movie-planner-v1.36.0) (2026-10-14)
+
+
+### Features
+
+* **import:** read each row's venue city, country, address and coordinates ([#453](https://github.com/alrayyes/movie-planner/issues/453)) ([eb2d1fa](https://github.com/alrayyes/movie-planner/commit/eb2d1faebbe8aba5c3bdb891801369897607eae5))
+
 ## [1.35.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.35.0...movie-planner-v1.35.1) (2026-10-14)
 
 
