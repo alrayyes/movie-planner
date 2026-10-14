@@ -69,6 +69,14 @@ CREATE TABLE IF NOT EXISTS import_failures (
     created_at TEXT NOT NULL
 );
 
+-- Titles a bulk OMDb refresh got an answer for that were still incomplete
+-- afterwards (issue #458). Local to this database, never pushed to the
+-- calendar: it only records a hint about the daily OMDb quota.
+CREATE TABLE IF NOT EXISTS omdb_answered_incomplete (
+    entry_id INTEGER PRIMARY KEY REFERENCES entries(id) ON DELETE CASCADE,
+    marked_on TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS activity_log (
     id INTEGER PRIMARY KEY,
     action TEXT NOT NULL,
@@ -78,6 +86,10 @@ CREATE TABLE IF NOT EXISTS activity_log (
     created_at TEXT NOT NULL
 );
 """
+
+# How long a bulk refresh leaves out a title OMDb answered without completing:
+# OMDb's data does change, so the answer isn't remembered forever. Same as web.
+OMDB_ANSWER_MEMORY_DAYS = 30
 
 # Columns added to `entries` after its initial release, ALTERed in for a
 # database created before each one existed - CREATE TABLE IF NOT EXISTS
@@ -514,6 +526,28 @@ class Store:
                 f"UPDATE venues SET {assignments} WHERE name = ?",  # nosec B608
                 (*fills.values(), name),
             )
+
+    def mark_omdb_answered_incomplete(self, entry_id: int, *, today: datetime.date) -> None:
+        """Remember that OMDb answered for this entry but couldn't complete
+        it, so a bulk refresh leaves it out for `OMDB_ANSWER_MEMORY_DAYS`."""
+        self._conn.execute(
+            "INSERT INTO omdb_answered_incomplete (entry_id, marked_on) VALUES (?, ?) "
+            "ON CONFLICT(entry_id) DO UPDATE SET marked_on = excluded.marked_on",
+            (entry_id, today.isoformat()),
+        )
+        self._conn.commit()
+
+    def clear_omdb_answered_incomplete(self, entry_id: int) -> None:
+        self._conn.execute("DELETE FROM omdb_answered_incomplete WHERE entry_id = ?", (entry_id,))
+        self._conn.commit()
+
+    def omdb_answered_incomplete_ids(self, *, today: datetime.date) -> set[int]:
+        oldest = today - datetime.timedelta(days=OMDB_ANSWER_MEMORY_DAYS)
+        rows = self._conn.execute(
+            "SELECT entry_id FROM omdb_answered_incomplete WHERE marked_on > ?",
+            (oldest.isoformat(),),
+        )
+        return {row[0] for row in rows}
 
     def close(self) -> None:
         self._conn.close()

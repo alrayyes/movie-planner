@@ -1484,3 +1484,52 @@ def test_migrates_a_database_created_before_booking_ref_existed(tmp_path: Path) 
         assert updated.booking_ref == "N°WWBXKM8"
     finally:
         s.close()
+
+
+# --- OMDb answered-but-incomplete markers: issue #458 ---
+
+
+def _logged(store: Store) -> int:
+    return store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=_medium(store)).id
+
+
+def test_a_marked_entry_is_listed_as_answered_without_completing(store: Store) -> None:
+    entry_id = _logged(store)
+
+    store.mark_omdb_answered_incomplete(entry_id, today=date(2026, 3, 1))
+
+    assert store.omdb_answered_incomplete_ids(today=date(2026, 3, 1)) == {entry_id}
+
+
+def test_a_marker_expires_after_thirty_days(store: Store) -> None:
+    entry_id = _logged(store)
+    store.mark_omdb_answered_incomplete(entry_id, today=date(2026, 3, 1))
+
+    assert store.omdb_answered_incomplete_ids(today=date(2026, 3, 30)) == {entry_id}
+    assert store.omdb_answered_incomplete_ids(today=date(2026, 3, 31)) == set()
+
+
+def test_marking_again_restarts_the_thirty_days(store: Store) -> None:
+    entry_id = _logged(store)
+    store.mark_omdb_answered_incomplete(entry_id, today=date(2026, 3, 1))
+    store.mark_omdb_answered_incomplete(entry_id, today=date(2026, 3, 20))
+
+    assert store.omdb_answered_incomplete_ids(today=date(2026, 4, 10)) == {entry_id}
+
+
+def test_clearing_a_marker_asks_again(store: Store) -> None:
+    entry_id = _logged(store)
+    store.mark_omdb_answered_incomplete(entry_id, today=date(2026, 3, 1))
+
+    store.clear_omdb_answered_incomplete(entry_id)
+
+    assert store.omdb_answered_incomplete_ids(today=date(2026, 3, 1)) == set()
+
+
+def test_deleting_an_entry_drops_its_marker(store: Store) -> None:
+    entry_id = _logged(store)
+    store.mark_omdb_answered_incomplete(entry_id, today=date(2026, 3, 1))
+
+    store.delete_entry(entry_id)
+
+    assert store.omdb_answered_incomplete_ids(today=date(2026, 3, 1)) == set()
