@@ -151,7 +151,9 @@ Only `--force`, `update --refresh-metadata` and `update --imdb-id` replace
 values an entry already has. A plain lookup, whether from `log`, `import` or
 a plain `sync refresh`, fills the fields that are empty and leaves the rest
 alone, so a synopsis you edited or imported isn't overwritten. Neither kind of
-lookup ever blanks a value because OMDb has no answer for it.
+lookup ever blanks a value because OMDb has no answer for it. The same goes
+for the TMDb fields, and for ratings: a plain refresh won't update one an entry
+already has, so use `--force` for that.
 
 ## Sync and `sync pull`
 

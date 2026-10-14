@@ -5061,3 +5061,77 @@ def test_a_plain_sync_refresh_fills_gaps_and_a_forced_one_replaces(
     store = _store(config_path)
     assert store.get_entry(entry_id).plot == "OMDb's plot"
     store.close()
+
+
+_TMDB_DETAILS = TmdbMovieDetails(
+    trailer_url="https://www.youtube.com/watch?v=tmdb",
+    actors="TMDb cast",
+    collection="TMDb collection",
+    homepage="https://tmdb.example",
+    budget=1,
+)
+
+
+def _log_with_edited_tmdb_fields(config_path: Path) -> int:
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: None)
+        _log(config_path, "Dune", "2026-01-01")
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    store.update_entry(
+        entry.id, actors="My cast", website="https://mine.example", trailer_url="https://mine"
+    )
+    store.close()
+    return entry.id
+
+
+def test_a_plain_refresh_keeps_edited_tmdb_fields_and_fills_the_empty_ones(
+    config_path_with_tmdb: Path,
+    calendar: FakeCalendar,
+    omdb_match_with_imdb_id: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_id = _log_with_edited_tmdb_fields(config_path_with_tmdb)
+    monkeypatch.setattr(
+        "movie_planner.cli.TmdbClient.lookup_movie_details", lambda self, **kw: _TMDB_DETAILS
+    )
+
+    result = runner.invoke(app, ["--config", str(config_path_with_tmdb), "sync", "refresh"])
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path_with_tmdb)
+    entry = store.get_entry(entry_id)
+    assert (entry.actors, entry.website, entry.trailer_url) == (
+        "My cast",
+        "https://mine.example",
+        "https://mine",
+    )
+    assert (entry.collection, entry.budget) == ("TMDb collection", 1)
+    store.close()
+
+
+def test_a_refresh_that_overwrites_replaces_the_tmdb_fields_too(
+    config_path_with_tmdb: Path,
+    calendar: FakeCalendar,
+    omdb_match_with_imdb_id: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_id = _log_with_edited_tmdb_fields(config_path_with_tmdb)
+    monkeypatch.setattr(
+        "movie_planner.cli.TmdbClient.lookup_movie_details", lambda self, **kw: _TMDB_DETAILS
+    )
+
+    result = runner.invoke(
+        app,
+        ["--config", str(config_path_with_tmdb), "update", str(entry_id), "--refresh-metadata"],
+    )
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path_with_tmdb)
+    entry = store.get_entry(entry_id)
+    assert (entry.actors, entry.website, entry.trailer_url) == (
+        "TMDb cast",
+        "https://tmdb.example",
+        "https://www.youtube.com/watch?v=tmdb",
+    )
+    store.close()
