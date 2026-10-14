@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.0...movie-planner-v1.37.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **update:** drop the OMDb answered-incomplete note when the match changes ([#462](https://github.com/alrayyes/movie-planner/issues/462)) ([4ce4b94](https://github.com/alrayyes/movie-planner/commit/4ce4b94a9d56503e38169454980315d8cbea891b))
+
 ## [1.37.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.36.1...movie-planner-v1.37.0) (2026-10-14)
 
 
