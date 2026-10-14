@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.33.2...movie-planner-v1.34.0) (2026-10-14)
+
+
+### Features
+
+* **export:** write each venue's city, country, address and coordinates ([#441](https://github.com/alrayyes/movie-planner/issues/441)) ([a81f5b6](https://github.com/alrayyes/movie-planner/commit/a81f5b6dfb77cbe00a4312c2689124b07c196f98))
+
 ## [1.33.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.33.1...movie-planner-v1.33.2) (2026-10-13)
 
 
