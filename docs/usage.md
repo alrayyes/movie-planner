@@ -153,8 +153,10 @@ after every lookup. A plain `sync refresh` remembers a title OMDb answered for
 but couldn't complete, and leaves it out for the next 30 days instead of
 spending the daily quota on it again; it says how many it left out. Only an
 answer counts: a refusal, a failed request and "no match" mark nothing. The
-note is kept in the local database, not on the calendar. `--force`, or
-`--date` for one day, asks OMDb anyway.
+note is kept in the local database, not on the calendar. `--force`, or `--date`
+for one day, asks OMDb anyway. `update` drops an entry's note when it changes
+the title or IMDb ID, or with `--refresh-metadata`, since those ask OMDb again.
+A new answer is then noted afresh.
 
 An entry that already has an IMDb link is always refreshed from the ID in that
 link, never by looking its title up again, so a match you corrected by hand
