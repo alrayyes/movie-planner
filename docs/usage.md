@@ -184,7 +184,10 @@ is left out of its row rather than written as `null`, and `booking_ref` is
 never written, since only `from-pathe-email` understands it. A row also
 carries its venue's `city`, `country`, `street_address`, `postal_code`,
 `latitude` and `longitude` when the venue has them, so importing the file into
-movie-planner-web keeps the venue maps. Each row also carries `synopsis`,
+movie-planner-web keeps the venue maps. `import` reads the same six fields back,
+filling only what the venue doesn't have yet, so a venue you corrected here
+isn't overwritten. A latitude without a longitude, or one out of range, fails
+its row. Each row also carries `synopsis`,
 `rated`, `runtime`, `movie_language`, `movie_country`, `metascore`,
 `imdb_votes`, `dvd`, `box_office`, `production`, `website`, `released`,
 `awards`, `trailer_url`, `collection`, `certification`, `keywords`, `budget`

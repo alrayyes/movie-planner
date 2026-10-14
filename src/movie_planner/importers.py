@@ -14,7 +14,7 @@ from typing import Any, Protocol
 
 from movie_planner.duplicates import find_duplicate
 from movie_planner.extra_fields import EXTRA_TEXT_FIELDS
-from movie_planner.store import Entry, Store
+from movie_planner.store import Entry, Store, Venue
 
 
 @dataclass(frozen=True)
@@ -48,6 +48,9 @@ class ImportRow:
     # The web app's synopsis and OMDb/TMDb extras, keyed by Entry attribute
     # (see extra_fields.py); budget and popularity are the two non-text ones.
     extras: dict[str, str] = field(default_factory=dict)
+    # The row's venue city, country, street_address, postal_code, latitude and
+    # longitude, under the web app's names, for whichever the row carries.
+    venue_fields: dict[str, str | float] = field(default_factory=dict)
     budget: int | None = None
     popularity: float | None = None
 
@@ -116,6 +119,26 @@ def _parse_number[T: (int, float)](value: Any, name: str, kind: type[T]) -> T | 
         raise ValueError(f"{name} must be a number, got {value!r}") from None
 
 
+_VENUE_TEXT_FIELDS = ("city", "country", "street_address", "postal_code")
+
+
+def _parse_venue_fields(raw: dict[str, Any]) -> dict[str, str | float]:
+    found: dict[str, str | float] = {
+        name: str(raw[name]) for name in _VENUE_TEXT_FIELDS if raw.get(name)
+    }
+    latitude = _parse_number(raw.get("latitude"), "latitude", float)
+    longitude = _parse_number(raw.get("longitude"), "longitude", float)
+    if (latitude is None) != (longitude is None):
+        raise ValueError("latitude and longitude must both be given")
+    if latitude is not None and longitude is not None:
+        if not -90 <= latitude <= 90:
+            raise ValueError("latitude must be between -90 and 90")
+        if not -180 <= longitude <= 180:
+            raise ValueError("longitude must be between -180 and 180")
+        found["latitude"], found["longitude"] = latitude, longitude
+    return found
+
+
 def _row_from_dict(row_number: int, raw: dict[str, Any]) -> ParsedRow:
     # A parsed CSV/JSON row is dynamically typed - Any is the honest
     # boundary here; the try/except below is what actually validates it.
@@ -153,6 +176,7 @@ def _row_from_dict(row_number: int, raw: dict[str, Any]) -> ParsedRow:
             extras={
                 attr: str(raw[name]) for name, attr in EXTRA_TEXT_FIELDS.items() if raw.get(name)
             },
+            venue_fields=_parse_venue_fields(raw),
             budget=_parse_number(raw.get("budget"), "budget", int),
             popularity=_parse_number(raw.get("popularity"), "popularity", float),
         )
@@ -313,6 +337,23 @@ IMPORT_FORMATS: dict[str, ImportFormat] = {
 }
 
 
+def _fill_venue_gaps(store: Store, venue: Venue, fields: dict[str, str | float]) -> Venue:
+    """Sets the venue fields a row carries that the venue doesn't have yet. A
+    value the venue already has wins, so a re-import never rewrites an address
+    that was corrected here. The coordinates go in together or not at all.
+    """
+    gaps: dict[str, str | float] = {
+        name: value
+        for name, value in fields.items()
+        if name not in ("latitude", "longitude") and getattr(venue, name) is None
+    }
+    if "latitude" in fields and venue.latitude is None and venue.longitude is None:
+        gaps["latitude"], gaps["longitude"] = fields["latitude"], fields["longitude"]
+    if not gaps:
+        return venue
+    return store.update_venue(venue.name, **gaps)  # type: ignore[arg-type]
+
+
 def run_import(
     store: Store,
     rows: list[ParsedRow],
@@ -366,6 +407,8 @@ def run_import(
 
         medium = store.get_or_create_medium(r.medium, is_physical_place=r.venue is not None)
         venue = store.get_or_create_venue(r.venue) if r.venue else None
+        if venue is not None and r.venue_fields:
+            venue = _fill_venue_gaps(store, venue, r.venue_fields)
         entry = store.create_entry(
             title=r.title,
             date=r.date,

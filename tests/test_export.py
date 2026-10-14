@@ -399,3 +399,101 @@ def test_a_number_field_that_is_not_a_plain_number_fails_its_row(
 
     assert "0 imported, 0 skipped, 1 failed" in result.output
     assert f"{field} must be a number" in result.output
+
+
+def _import_into_other(config_path: Path, tmp_path: Path, file: Path) -> tuple[str, Store]:
+    other_config = tmp_path / "other.toml"
+    other_config.write_text(
+        config_path.read_text(encoding="utf-8").replace("movies.db", "other.db")
+    )
+    result = runner.invoke(
+        app, ["--config", str(other_config), "import", str(file), "--no-metadata"]
+    )
+    return result.output, Store(tmp_path / "other.db")
+
+
+def test_an_export_imports_back_with_its_venues_location(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    _seed(store)
+    store.update_venue(
+        "Grand Vista Cinema",
+        city="Amsterdam",
+        country="Netherlands",
+        street_address="Kinoplein 1",
+        postal_code="1011 AB",
+        latitude=52.37,
+        longitude=4.89,
+    )
+    out = tmp_path / "out.json"
+    _export(config_path, "--output", str(out))
+
+    _, other = _import_into_other(config_path, tmp_path, out)
+
+    try:
+        (venue,) = other.list_venues()
+        assert (
+            venue.city,
+            venue.country,
+            venue.street_address,
+            venue.postal_code,
+            venue.latitude,
+            venue.longitude,
+        ) == ("Amsterdam", "Netherlands", "Kinoplein 1", "1011 AB", 52.37, 4.89)
+    finally:
+        other.close()
+
+
+def test_import_fills_only_the_venue_fields_that_are_empty(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    store.get_or_create_venue("Grand Vista Cinema")
+    store.update_venue("Grand Vista Cinema", city="Rotterdam")
+    rows = tmp_path / "rows.json"
+    rows.write_text(
+        json.dumps(
+            [
+                {
+                    "title": "A",
+                    "date": "2026-01-01",
+                    "medium": "cinema",
+                    "venue": "Grand Vista Cinema",
+                    "city": "Amsterdam",
+                    "country": "Netherlands",
+                }
+            ]
+        )
+    )
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "import", str(rows), "--no-metadata"]
+    )
+
+    assert result.exit_code == 0, result.output
+    (venue,) = Store(tmp_path / "movies.db").list_venues()
+    assert (venue.city, venue.country) == ("Rotterdam", "Netherlands")
+
+
+@pytest.mark.parametrize(
+    ("fields", "message"),
+    [
+        ({"latitude": 52.37}, "latitude and longitude must both be given"),
+        ({"longitude": 4.89}, "latitude and longitude must both be given"),
+        ({"latitude": 91, "longitude": 4.89}, "latitude must be between -90 and 90"),
+        ({"latitude": 52.37, "longitude": 181}, "longitude must be between -180 and 180"),
+        ({"latitude": "north", "longitude": 4.89}, "latitude must be a number"),
+    ],
+)
+def test_a_bad_venue_coordinate_fails_only_its_row(
+    config_path: Path, tmp_path: Path, fields: dict[str, object], message: str
+) -> None:
+    base = {"date": "2026-01-01", "medium": "cinema", "venue": "Grand Vista Cinema"}
+    rows = tmp_path / "rows.json"
+    rows.write_text(json.dumps([{"title": "A", **base, **fields}, {"title": "B", **base}]))
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "import", str(rows), "--no-metadata"]
+    )
+
+    assert "1 imported, 0 skipped, 1 failed" in result.output
+    assert message in result.output
