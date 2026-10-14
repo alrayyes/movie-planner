@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from movie_planner.duplicates import find_duplicate
+from movie_planner.extra_fields import EXTRA_TEXT_FIELDS
 from movie_planner.store import Entry, Store
 
 
@@ -43,6 +44,11 @@ class ImportRow:
     # is a re-import of something already stored, so a blank medium is only
     # an error once it turns out not to be a duplicate.
     uid: str | None = None
+    # The web app's synopsis and OMDb/TMDb extras, keyed by Entry attribute
+    # (see extra_fields.py); budget and popularity are the two non-text ones.
+    extras: dict[str, str] = field(default_factory=dict)
+    budget: int | None = None
+    popularity: float | None = None
 
 
 @dataclass(frozen=True)
@@ -95,6 +101,15 @@ def _parse_release_year(value: object) -> int | None:
     return None
 
 
+def _parse_number[T: (int, float)](value: Any, name: str, kind: type[T]) -> T | None:
+    if value is None or value == "":
+        return None
+    try:
+        return kind(value)
+    except TypeError, ValueError:
+        raise ValueError(f"{name} must be a number, got {value!r}") from None
+
+
 def _row_from_dict(row_number: int, raw: dict[str, Any]) -> ParsedRow:
     # A parsed CSV/JSON row is dynamically typed - Any is the honest
     # boundary here; the try/except below is what actually validates it.
@@ -129,6 +144,11 @@ def _row_from_dict(row_number: int, raw: dict[str, Any]) -> ParsedRow:
             row=raw.get("row") or None,
             seat=raw.get("seat") or None,
             uid=uid,
+            extras={
+                attr: str(raw[name]) for name, attr in EXTRA_TEXT_FIELDS.items() if raw.get(name)
+            },
+            budget=_parse_number(raw.get("budget"), "budget", int),
+            popularity=_parse_number(raw.get("popularity"), "popularity", float),
         )
     except (KeyError, ValueError) as e:
         return ParsedRow(row_number=row_number, entry=None, error=str(e))
@@ -364,6 +384,9 @@ def run_import(
             "source": r.source,
             "row": r.row,
             "seat": r.seat,
+            "budget": r.budget,
+            "popularity": r.popularity,
+            **r.extras,
         }
         supplied_fields = {k: v for k, v in supplied_fields.items() if v is not None}
         if supplied_fields:

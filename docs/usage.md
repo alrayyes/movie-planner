@@ -178,7 +178,12 @@ is left out of its row rather than written as `null`, and `booking_ref` is
 never written, since only `from-pathe-email` understands it. A row also
 carries its venue's `city`, `country`, `street_address`, `postal_code`,
 `latitude` and `longitude` when the venue has them, so importing the file into
-movie-planner-web keeps the venue maps. This differs from
+movie-planner-web keeps the venue maps. Each row also carries `synopsis`,
+`rated`, `runtime`, `movie_language`, `movie_country`, `metascore`,
+`imdb_votes`, `dvd`, `box_office`, `production`, `website`, `released`,
+`awards`, `trailer_url`, `collection`, `certification`, `keywords`, `budget`
+and `popularity`, and `import` reads them back. They use the web app's names,
+so `synopsis` is the `plot` stored here. This differs from
 `list --json`, which keeps every key and uses movie-planner's own names.
 
 ## `purge`

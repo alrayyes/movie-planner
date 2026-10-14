@@ -6,6 +6,7 @@ out rather than written as null.
 
 import datetime
 
+from movie_planner.extra_fields import EXTRA_TEXT_FIELDS
 from movie_planner.store import Entry, Venue
 
 
@@ -50,5 +51,9 @@ def entry_to_export_row(
         "source": entry.source,
         "row": entry.row,
         "seat": entry.seat,
+        "budget": None if entry.budget is None else str(entry.budget),
+        "popularity": None if entry.popularity is None else str(entry.popularity),
     }
+    for name, attr in EXTRA_TEXT_FIELDS.items():
+        fields[name] = getattr(entry, attr)
     return {key: value for key, value in fields.items() if value is not None}
