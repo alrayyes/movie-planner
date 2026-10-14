@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.0](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.36.1...movie-planner-v1.37.0) (2026-10-14)
+
+
+### Features
+
+* **sync:** leave titles OMDb answered without completing out of refresh ([#459](https://github.com/alrayyes/movie-planner/issues/459)) ([8816de8](https://github.com/alrayyes/movie-planner/commit/8816de8ab704a45d0c58a8173435820d1a73f4df)), closes [#458](https://github.com/alrayyes/movie-planner/issues/458)
+
 ## [1.36.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.36.0...movie-planner-v1.36.1) (2026-10-14)
 
 
