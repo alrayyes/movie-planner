@@ -659,6 +659,15 @@ class Store:
             self._conn.commit()
         return next(v for v in self.list_venues() if v.id == venue.id)
 
+    def cleared_venue_fields(self, name: str) -> set[str]:
+        """The columns of the venue called `name` that were cleared on purpose,
+        so a backfill or an import knows not to put a value back.
+        """
+        row = self._conn.execute(
+            "SELECT cleared_fields FROM venues WHERE name = ?", (name,)
+        ).fetchone()
+        return set((row[0] or "").split(",")) - {""} if row else set()
+
     def get_or_create_venue(self, name: str) -> Venue:
         # Resolve a known alias before searching, so two different
         # aliases of the same real venue both find (or both create)

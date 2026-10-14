@@ -399,3 +399,241 @@ def test_a_number_field_that_is_not_a_plain_number_fails_its_row(
 
     assert "0 imported, 0 skipped, 1 failed" in result.output
     assert f"{field} must be a number" in result.output
+
+
+def _import_into_other(config_path: Path, tmp_path: Path, file: Path) -> tuple[str, Store]:
+    other_config = tmp_path / "other.toml"
+    other_config.write_text(
+        config_path.read_text(encoding="utf-8").replace("movies.db", "other.db")
+    )
+    result = runner.invoke(
+        app, ["--config", str(other_config), "import", str(file), "--no-metadata"]
+    )
+    return result.output, Store(tmp_path / "other.db")
+
+
+def test_an_export_imports_back_with_its_venues_location(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    _seed(store)
+    store.update_venue(
+        "Grand Vista Cinema",
+        city="Amsterdam",
+        country="Netherlands",
+        street_address="Kinoplein 1",
+        postal_code="1011 AB",
+        latitude=52.37,
+        longitude=4.89,
+    )
+    out = tmp_path / "out.json"
+    _export(config_path, "--output", str(out))
+
+    _, other = _import_into_other(config_path, tmp_path, out)
+
+    try:
+        (venue,) = other.list_venues()
+        assert (
+            venue.city,
+            venue.country,
+            venue.street_address,
+            venue.postal_code,
+            venue.latitude,
+            venue.longitude,
+        ) == ("Amsterdam", "Netherlands", "Kinoplein 1", "1011 AB", 52.37, 4.89)
+    finally:
+        other.close()
+
+
+def test_import_fills_only_the_venue_fields_that_are_empty(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    store.get_or_create_venue("Grand Vista Cinema")
+    store.update_venue("Grand Vista Cinema", city="Rotterdam")
+    rows = tmp_path / "rows.json"
+    rows.write_text(
+        json.dumps(
+            [
+                {
+                    "title": "A",
+                    "date": "2026-01-01",
+                    "medium": "cinema",
+                    "venue": "Grand Vista Cinema",
+                    "city": "Amsterdam",
+                    "country": "Netherlands",
+                }
+            ]
+        )
+    )
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "import", str(rows), "--no-metadata"]
+    )
+
+    assert result.exit_code == 0, result.output
+    (venue,) = Store(tmp_path / "movies.db").list_venues()
+    assert (venue.city, venue.country) == ("Rotterdam", "Netherlands")
+
+
+@pytest.mark.parametrize(
+    ("fields", "message"),
+    [
+        ({"latitude": 52.37}, "latitude and longitude must both be given"),
+        ({"longitude": 4.89}, "latitude and longitude must both be given"),
+        ({"latitude": 91, "longitude": 4.89}, "latitude must be between -90 and 90"),
+        ({"latitude": 52.37, "longitude": 181}, "longitude must be between -180 and 180"),
+        ({"latitude": "north", "longitude": 4.89}, "latitude must be a number"),
+    ],
+)
+def test_a_bad_venue_coordinate_fails_only_its_row(
+    config_path: Path, tmp_path: Path, fields: dict[str, object], message: str
+) -> None:
+    base = {"date": "2026-01-01", "medium": "cinema", "venue": "Grand Vista Cinema"}
+    rows = tmp_path / "rows.json"
+    rows.write_text(json.dumps([{"title": "A", **base, **fields}, {"title": "B", **base}]))
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "import", str(rows), "--no-metadata"]
+    )
+
+    assert "1 imported, 0 skipped, 1 failed" in result.output
+    assert message in result.output
+
+
+def _import_rows(config_path: Path, tmp_path: Path, rows: list[dict[str, object]]) -> Store:
+    path = tmp_path / "rows.json"
+    path.write_text(json.dumps(rows))
+    result = runner.invoke(
+        app, ["--config", str(config_path), "import", str(path), "--no-metadata"]
+    )
+    assert result.exit_code == 0, result.output
+    return Store(tmp_path / "movies.db")
+
+
+def _row(title: str = "A", **fields: object) -> dict[str, object]:
+    return {
+        "title": title,
+        "date": "2026-01-01",
+        "medium": "cinema",
+        "venue": "Grand Vista Cinema",
+        **fields,
+    }
+
+
+def test_import_keeps_the_coordinates_a_venue_already_has(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    store.get_or_create_venue("Grand Vista Cinema")
+    store.update_venue("Grand Vista Cinema", latitude=1.0, longitude=2.0)
+
+    other = _import_rows(config_path, tmp_path, [_row(latitude=52.37, longitude=4.89)])
+
+    (venue,) = other.list_venues()
+    assert (venue.latitude, venue.longitude) == (1.0, 2.0)
+
+
+def test_import_gives_a_venue_with_only_one_coordinate_neither(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    store.get_or_create_venue("Grand Vista Cinema")
+    store.update_venue("Grand Vista Cinema", latitude=1.0)
+
+    other = _import_rows(config_path, tmp_path, [_row(latitude=52.37, longitude=4.89)])
+
+    (venue,) = other.list_venues()
+    assert (venue.latitude, venue.longitude) == (1.0, None)
+
+
+def test_import_fills_a_known_venues_gaps_without_touching_what_it_was_seeded_with(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    other = _import_rows(
+        config_path, tmp_path, [_row(venue="De Munt 4DX", city="Elsewhere", postal_code="0000 XX")]
+    )
+
+    (venue,) = other.list_venues()
+    assert venue.name == "De Munt"
+    assert venue.city == "Amsterdam"
+
+
+def test_import_leaves_a_venue_alone_when_the_row_is_a_duplicate(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    _seed(store)
+    other = _import_rows(
+        config_path,
+        tmp_path,
+        [_row("Dune", date="2026-02-15", start_time="19:30", end_time="22:15", city="Elsewhere")],
+    )
+
+    (venue,) = other.list_venues()
+    assert venue.city is None
+
+
+def test_import_accepts_coordinates_on_the_edge_of_their_range(
+    config_path: Path, tmp_path: Path
+) -> None:
+    other = _import_rows(
+        config_path,
+        tmp_path,
+        [
+            _row("A", venue="North", latitude=90, longitude=180),
+            _row("B", venue="South", latitude=-90, longitude=-180),
+        ],
+    )
+
+    venues = {v.name: (v.latitude, v.longitude) for v in other.list_venues()}
+    assert venues == {"North": (90.0, 180.0), "South": (-90.0, -180.0)}
+
+
+def test_import_reads_venue_fields_from_a_csv_and_trims_them(
+    config_path: Path, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "rows.csv"
+    csv_path.write_text(
+        "title,date,medium,venue,city,street_address,latitude,longitude\n"
+        "A,2026-01-01,cinema,Grand Vista Cinema, Amsterdam ,  ,52.37,4.89\n"
+        "B,2026-01-02,cinema,Other Cinema,,,  ,  \n"
+    )
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "import", str(csv_path), "--no-metadata"]
+    )
+
+    assert result.exit_code == 0, result.output
+    venues = {
+        v.name: (v.city, v.street_address, v.latitude, v.longitude)
+        for v in Store(tmp_path / "movies.db").list_venues()
+    }
+    assert venues == {
+        "Grand Vista Cinema": ("Amsterdam", None, 52.37, 4.89),
+        "Other Cinema": (None, None, None, None),
+    }
+
+
+def test_a_csv_row_with_a_longitude_but_a_blank_latitude_fails(
+    config_path: Path, tmp_path: Path
+) -> None:
+    csv_path = tmp_path / "rows.csv"
+    csv_path.write_text(
+        "title,date,medium,venue,latitude,longitude\nA,2026-01-01,cinema,Grand Vista Cinema,,4.89\n"
+    )
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "import", str(csv_path), "--no-metadata"]
+    )
+
+    assert "0 imported, 0 skipped, 1 failed" in result.output
+    assert "latitude and longitude must both be given" in result.output
+
+
+def test_import_does_not_refill_a_venue_field_that_was_cleared_on_purpose(
+    config_path: Path, store: Store, tmp_path: Path
+) -> None:
+    store.get_or_create_venue("Grand Vista Cinema")
+    store.update_venue("Grand Vista Cinema", city="Amsterdam")
+    store.update_venue("Grand Vista Cinema", city=None)
+
+    other = _import_rows(config_path, tmp_path, [_row(city="Amsterdam", country="Netherlands")])
+
+    (venue,) = other.list_venues()
+    assert (venue.city, venue.country) == (None, "Netherlands")
