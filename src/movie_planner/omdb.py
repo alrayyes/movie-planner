@@ -54,6 +54,14 @@ class MovieRatings:
     website: str | None = None
 
 
+_IMDB_ID_RE = re.compile(r"tt\d+")
+
+
+def _imdb_id_in(url: str | None) -> str | None:
+    match = _IMDB_ID_RE.search(url) if url else None
+    return match.group() if match else None
+
+
 def needs_omdb_fetch(entry: Entry) -> bool:
     """Whether an entry is missing any OMDb-derived field it could have -
     not just the rating, so an entry logged before a field like
@@ -247,6 +255,10 @@ def fetch_and_store_ratings(
     and whether a match was found, so the caller can tell the user when
     it wasn't.
     """
+    # An entry that already has an IMDb link is asked about by that ID: a
+    # title lookup could answer with another film and replace a match that
+    # was chosen or corrected by hand.
+    imdb_id = imdb_id or _imdb_id_in(entry.imdb_url)
     ratings = client.lookup(title=entry.title, imdb_id=imdb_id, year=entry.date.year)
     if ratings is None:
         # Recorded (issue #255) so a later "list --omdb-no-match" can

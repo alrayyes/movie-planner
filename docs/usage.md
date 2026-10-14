@@ -141,6 +141,10 @@ entries still missing one. `update --refresh-metadata` does the same
 thing for one specific entry, by ID - no need to work out its date or
 risk force-refreshing a sibling entry that happens to share it.
 
+An entry that already has an IMDb link is always refreshed from the ID in that
+link, never by looking its title up again, so a match you corrected by hand
+stays put. If OMDb has nothing for that ID the entry is left as it is.
+
 ## Sync and `sync pull`
 
 Sync is otherwise push-only — movie-planner never reads the calendar

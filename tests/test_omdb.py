@@ -995,3 +995,65 @@ def test_entry_logs_updates_and_syncs_with_no_metadata_at_all(store: Store) -> N
 
     assert synced.caldav_uid is not None
     assert synced.imdb_rating is None
+
+
+def _entry_with_link(store: Store, url: str | None) -> Entry:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    return store.update_entry(entry.id, imdb_url=url)
+
+
+def test_a_lookup_uses_the_id_in_the_entrys_imdb_link(store: Store) -> None:
+    entry = _entry_with_link(store, "https://www.imdb.com/title/tt1160419/")
+    seen: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(dict(request.url.params))
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    fetch_and_store_ratings(store, _client(handler), entry)
+
+    assert [(p.get("i"), p.get("t")) for p in seen] == [("tt1160419", None)]
+
+
+def test_an_explicit_imdb_id_wins_over_the_entrys_link(store: Store) -> None:
+    entry = _entry_with_link(store, "https://www.imdb.com/title/tt1160419/")
+    seen: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(dict(request.url.params))
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    fetch_and_store_ratings(store, _client(handler), entry, imdb_id="tt0000001")
+
+    assert [p.get("i") for p in seen] == ["tt0000001"]
+
+
+def test_no_match_for_the_stored_id_leaves_the_entry_alone_and_skips_the_title(
+    store: Store,
+) -> None:
+    entry = _entry_with_link(store, "https://www.imdb.com/title/tt1160419/")
+    seen: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(dict(request.url.params))
+        return httpx.Response(200, json={"Response": "False", "Error": "Incorrect IMDb ID."})
+
+    updated, matched = fetch_and_store_ratings(store, _client(handler), entry)
+
+    assert matched is False
+    assert updated.imdb_rating is None
+    assert all("t" not in p for p in seen)
+
+
+def test_a_link_without_an_id_still_looks_the_title_up(store: Store) -> None:
+    entry = _entry_with_link(store, "https://www.imdb.com/find/?q=dune")
+    seen: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(dict(request.url.params))
+        return httpx.Response(200, json=MATCH_RESPONSE)
+
+    fetch_and_store_ratings(store, _client(handler), entry)
+
+    assert seen[0].get("t") == "Dune"
