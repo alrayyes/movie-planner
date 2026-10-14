@@ -135,11 +135,17 @@ existed, not something to run reflexively the way `retry` is. Pass
 `--from`/`--to` or a single `--date` to scope it to a range instead of
 the whole log; `--date` can't be
 combined with either. Pass `--force` to re-fetch ratings for entries
-that already have them too — useful after a wrong OMDb match, or when a
-rating's changed since — instead of the default of only fetching for
+that already have them too, useful when a rating's changed since, instead
+of the default of only fetching for
 entries still missing one. `update --refresh-metadata` does the same
 thing for one specific entry, by ID - no need to work out its date or
 risk force-refreshing a sibling entry that happens to share it.
+
+An entry that already has an IMDb link is always refreshed from the ID in that
+link, never by looking its title up again, so a match you corrected by hand
+stays put. If OMDb has nothing for that ID the entry is left as it is.
+That also means `--force` and `--refresh-metadata` can't fix a wrong match:
+they re-fetch the same ID. Use `update --imdb-id` with the right one.
 
 ## Sync and `sync pull`
 
