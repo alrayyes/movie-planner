@@ -55,29 +55,29 @@
         "popularity": { "type": ["string", "number"] },
         "city": {
           "type": "string",
-          "description": "Written by export; import ignores it."
+          "description": "The venue's, written by export. Import sets it on the venue only if the venue has no value yet."
         },
         "country": {
           "type": "string",
-          "description": "Written by export; import ignores it."
+          "description": "The venue's, written by export. Import sets it on the venue only if the venue has no value yet."
         },
         "street_address": {
           "type": "string",
-          "description": "Written by export; import ignores it."
+          "description": "The venue's, written by export. Import sets it on the venue only if the venue has no value yet."
         },
         "postal_code": {
           "type": "string",
-          "description": "Written by export; import ignores it."
+          "description": "The venue's, written by export. Import sets it on the venue only if the venue has no value yet."
         },
         "latitude": {
           "type": "number",
-          "description": "Written by export; import ignores it.",
+          "description": "The venue's, written by export. Import sets it on the venue only if the venue has no value yet.",
           "minimum": -90,
           "maximum": 90
         },
         "longitude": {
           "type": "number",
-          "description": "Written by export; import ignores it.",
+          "description": "The venue's, written by export. Import sets it on the venue only if the venue has no value yet.",
           "minimum": -180,
           "maximum": 180
         },
