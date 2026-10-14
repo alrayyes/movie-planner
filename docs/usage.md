@@ -175,7 +175,10 @@ movie-planner export --from 2026-01-01 --to 2026-01-31 --medium cinema -o januar
 `--from`, `--to` and `--medium` filter as `list` does. `--output`/`-o` writes
 a file and prints a one-line count instead of the JSON. A field that isn't set
 is left out of its row rather than written as `null`, and `booking_ref` is
-never written, since only `from-pathe-email` understands it. This differs from
+never written, since only `from-pathe-email` understands it. A row also
+carries its venue's `city`, `country`, `street_address`, `postal_code`,
+`latitude` and `longitude` when the venue has them, so importing the file into
+movie-planner-web keeps the venue maps. This differs from
 `list --json`, which keeps every key and uses movie-planner's own names.
 
 ## `purge`

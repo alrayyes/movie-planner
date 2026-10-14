@@ -2,6 +2,7 @@
 writes, so a file made by either tool imports into the other.
 """
 
+import dataclasses
 import json
 from collections.abc import Iterator
 from datetime import date, time
@@ -254,3 +255,41 @@ def test_an_export_imports_back_into_an_empty_store(
         assert dune.letterboxd_rating == "4.5"
     finally:
         other.close()
+
+
+_VENUE_FIELDS = {"city", "country", "street_address", "postal_code", "latitude", "longitude"}
+
+
+def test_a_row_carries_the_venues_location_under_the_web_apps_field_names(store: Store) -> None:
+    _seed(store)
+    venue = dataclasses.replace(
+        store.list_venues()[0],
+        city="Amsterdam",
+        country="Netherlands",
+        street_address="Kinoplein 1",
+        postal_code="1011 AB",
+        latitude=52.37,
+        longitude=4.89,
+    )
+
+    row = entry_to_export_row(store.list_entries()[0], medium_name="cinema", venue=venue)
+
+    assert {k: row[k] for k in row if k in _VENUE_FIELDS} == {
+        "city": "Amsterdam",
+        "country": "Netherlands",
+        "street_address": "Kinoplein 1",
+        "postal_code": "1011 AB",
+        "latitude": 52.37,
+        "longitude": 4.89,
+    }
+
+
+def test_a_row_for_a_venue_without_a_location_leaves_the_location_fields_out(
+    store: Store,
+) -> None:
+    _seed(store)
+    venue = store.list_venues()[0]
+
+    row = entry_to_export_row(store.list_entries()[0], medium_name="cinema", venue=venue)
+
+    assert _VENUE_FIELDS.isdisjoint(row)
