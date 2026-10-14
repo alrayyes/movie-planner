@@ -4995,3 +4995,69 @@ def test_purge_leaves_local_entries_alone(
     store = _store(config_path)
     assert len(store.list_entries()) == 1
     store.close()
+
+
+_FRESH = MovieRatings(
+    imdb="8.5/10",
+    rotten_tomatoes="91%",
+    metacritic="80",
+    imdb_id="tt9999999",
+    plot="OMDb's plot",
+    awards="OMDb awards",
+)
+
+
+def _log_with_edited_plot(config_path: Path) -> int:
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: None)
+        _log(config_path, "Dune", "2026-01-01")
+    store = _store(config_path)
+    (entry,) = store.list_entries()
+    store.update_entry(entry.id, plot="My own synopsis", imdb_url="https://www.imdb.com/title/tt1/")
+    store.close()
+    return entry.id
+
+
+@pytest.mark.parametrize("flag", [["--refresh-metadata"], ["--imdb-id", "tt9999999"]])
+def test_update_replaces_an_entrys_values_when_asked_for_a_fresh_copy(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch, flag: list[str]
+) -> None:
+    entry_id = _log_with_edited_plot(config_path)
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: _FRESH)
+
+    result = runner.invoke(app, ["--config", str(config_path), "update", str(entry_id), *flag])
+
+    assert result.exit_code == 0, result.output
+    store = _store(config_path)
+    entry = store.get_entry(entry_id)
+    assert (entry.plot, entry.imdb_url) == (
+        "OMDb's plot",
+        "https://www.imdb.com/title/tt9999999/",
+    )
+    store.close()
+
+
+def test_a_plain_sync_refresh_fills_gaps_and_a_forced_one_replaces(
+    config_path: Path, calendar: FakeCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entry_id = _log_with_edited_plot(config_path)
+    monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lambda self, **kw: _FRESH)
+
+    plain = runner.invoke(app, ["--config", str(config_path), "sync", "refresh"])
+
+    assert plain.exit_code == 0, plain.output
+    store = _store(config_path)
+    entry = store.get_entry(entry_id)
+    assert (entry.plot, entry.awards, entry.imdb_url) == (
+        "My own synopsis",
+        "OMDb awards",
+        "https://www.imdb.com/title/tt1/",
+    )
+    store.close()
+
+    forced = runner.invoke(app, ["--config", str(config_path), "sync", "refresh", "--force"])
+
+    assert forced.exit_code == 0, forced.output
+    store = _store(config_path)
+    assert store.get_entry(entry_id).plot == "OMDb's plot"
+    store.close()

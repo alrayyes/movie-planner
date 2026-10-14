@@ -1058,6 +1058,7 @@ def test_a_link_without_an_id_still_looks_the_title_up(store: Store) -> None:
 
     assert seen[0].get("t") == "Dune"
 
+
 def _entry_with_edited_fields(store: Store) -> Entry:
     medium = store.add_medium("cinema", is_physical_place=True)
     entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)

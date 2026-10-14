@@ -272,9 +272,11 @@ def fetch_and_store_ratings(
         # None forever until a lookup is actually attempted.
         no_match_entry = store.update_entry(entry.id, omdb_last_no_match=datetime.date.today())
         return no_match_entry, False
-    imdb_url = entry.imdb_url or (
-        f"https://www.imdb.com/title/{ratings.imdb_id}/" if ratings.imdb_id else None
-    )
+    matched_url = f"https://www.imdb.com/title/{ratings.imdb_id}/" if ratings.imdb_id else None
+    # A fresh copy takes the matched link too, so it never keeps the page of a
+    # different title. (A stored ID is looked up as itself, so only an explicit
+    # --imdb-id can change which film an entry points at.)
+    imdb_url = (matched_url or entry.imdb_url) if overwrite else (entry.imdb_url or matched_url)
     fetched: dict[str, object] = {
         "imdb_rating": ratings.imdb,
         "rotten_tomatoes_rating": ratings.rotten_tomatoes,
