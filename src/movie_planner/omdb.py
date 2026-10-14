@@ -241,11 +241,17 @@ def fetch_and_store_ratings(
     entry: Entry,
     *,
     imdb_id: str | None = None,
+    overwrite: bool = False,
 ) -> tuple[Entry, bool]:
     """Looks up `entry`'s title (or `imdb_id`, when known) and stores
     whatever OMDb returns. Returns the entry (updated only on a match)
     and whether a match was found, so the caller can tell the user when
     it wasn't.
+
+    By default only fields the entry doesn't have yet are filled, so a
+    routine lookup never replaces a value that was imported or edited
+    (or blanks one when OMDb says "N/A"). `overwrite=True` is for the
+    callers that asked for a fresh copy: `--force` and `--refresh-metadata`.
     """
     ratings = client.lookup(title=entry.title, imdb_id=imdb_id, year=entry.date.year)
     if ratings is None:
@@ -257,31 +263,40 @@ def fetch_and_store_ratings(
     imdb_url = entry.imdb_url or (
         f"https://www.imdb.com/title/{ratings.imdb_id}/" if ratings.imdb_id else None
     )
+    fetched: dict[str, object] = {
+        "imdb_rating": ratings.imdb,
+        "rotten_tomatoes_rating": ratings.rotten_tomatoes,
+        "metacritic_rating": ratings.metacritic,
+        "poster_url": ratings.poster,
+        "director": ratings.director,
+        "actors": ratings.actors,
+        "genre": ratings.genre,
+        "release_year": ratings.release_year,
+        "rated": ratings.rated,
+        "released": ratings.released,
+        "runtime": ratings.runtime,
+        "writer": ratings.writer,
+        "plot": ratings.plot,
+        "language": ratings.language,
+        "country": ratings.country,
+        "awards": ratings.awards,
+        "metascore": ratings.metascore,
+        "imdb_votes": ratings.imdb_votes,
+        "dvd": ratings.dvd,
+        "box_office": ratings.box_office,
+        "production": ratings.production,
+        "website": ratings.website,
+    }
+    if not overwrite:
+        fetched = {
+            field: value if getattr(entry, field) is None else getattr(entry, field)
+            for field, value in fetched.items()
+        }
+    # fetched is heterogeneous by design, like import's supplied_fields.
     updated = store.update_entry(
         entry.id,
-        imdb_rating=ratings.imdb,
-        rotten_tomatoes_rating=ratings.rotten_tomatoes,
-        metacritic_rating=ratings.metacritic,
         imdb_url=imdb_url,
-        poster_url=ratings.poster,
-        director=ratings.director,
-        actors=ratings.actors,
-        genre=ratings.genre,
-        release_year=ratings.release_year,
-        rated=ratings.rated,
-        released=ratings.released,
-        runtime=ratings.runtime,
-        writer=ratings.writer,
-        plot=ratings.plot,
-        language=ratings.language,
-        country=ratings.country,
-        awards=ratings.awards,
-        metascore=ratings.metascore,
-        imdb_votes=ratings.imdb_votes,
-        dvd=ratings.dvd,
-        box_office=ratings.box_office,
-        production=ratings.production,
-        website=ratings.website,
         omdb_last_no_match=None,
+        **fetched,  # type: ignore[arg-type]
     )
     return updated, True

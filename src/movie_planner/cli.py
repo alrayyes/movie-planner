@@ -519,6 +519,7 @@ def _finalize_entry(
     importer: str,
     imdb_id: str | None = None,
     screening_details: str | None = None,
+    overwrite_metadata: bool = False,
 ) -> Entry:
     """Metadata fetch (optional), then a calendar push - create if the
     entry has never been synced, update otherwise. The one orchestration
@@ -530,7 +531,9 @@ def _finalize_entry(
     call site can't forget to set it.
     """
     if fetch_metadata:
-        entry = _fetch_metadata_or_warn(cfg, store, entry, imdb_id=imdb_id)
+        entry = _fetch_metadata_or_warn(
+            cfg, store, entry, imdb_id=imdb_id, overwrite=overwrite_metadata
+        )
     if entry.caldav_uid is None:
         return _push_new_or_warn(
             cfg, store, entry, importer=importer, screening_details=screening_details
@@ -556,11 +559,18 @@ _IMDB_ID_RE = re.compile(r"tt\d+")
 
 
 def _fetch_metadata_or_warn(
-    cfg: config_module.Config, store: Store, entry: Entry, *, imdb_id: str | None
+    cfg: config_module.Config,
+    store: Store,
+    entry: Entry,
+    *,
+    imdb_id: str | None,
+    overwrite: bool = False,
 ) -> Entry:
     try:
         client = OmdbClient(cfg.omdb_api_key)
-        updated, matched = fetch_and_store_ratings(store, client, entry, imdb_id=imdb_id)
+        updated, matched = fetch_and_store_ratings(
+            store, client, entry, imdb_id=imdb_id, overwrite=overwrite
+        )
     except Exception as e:  # noqa: BLE001 - metadata is optional, never fatal
         typer.secho(f"Warning: could not fetch ratings: {e}", fg=typer.colors.YELLOW)
         return entry
@@ -1290,9 +1300,9 @@ def update(
         )
 
         if imdb_id is not None:
-            updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=imdb_id)
+            updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=imdb_id, overwrite=True)
         elif refresh_metadata:
-            updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=None)
+            updated = _fetch_metadata_or_warn(cfg, store, updated, imdb_id=None, overwrite=True)
 
         _push_update_or_warn(cfg, store, updated, importer="update")
         typer.echo(f"Updated entry {entry_id}.")
@@ -1700,12 +1710,7 @@ def import_command(
                 cfg,
                 store,
                 imported.entry,
-                # A row that carries a synopsis came from a full-fidelity export
-                # (the web app's or ours): its OMDb fields are already there,
-                # possibly edited, and a lookup would overwrite them.
-                fetch_metadata=not no_metadata
-                and imported.entry.plot is None
-                and needs_omdb_fetch(imported.entry),
+                fetch_metadata=not no_metadata and needs_omdb_fetch(imported.entry),
                 importer=importer,
             )
         # Persisted (issue #254) so `import-failures list` can show them
@@ -2060,7 +2065,12 @@ def sync_refresh(
         for entry in entries:
             fetch_metadata = force or needs_omdb_fetch(entry)
             refreshed = _finalize_entry(
-                cfg, store, entry, fetch_metadata=fetch_metadata, importer="sync-refresh"
+                cfg,
+                store,
+                entry,
+                fetch_metadata=fetch_metadata,
+                importer="sync-refresh",
+                overwrite_metadata=force,
             )
             if fetch_metadata and refreshed.imdb_rating is not None:
                 fetched += 1

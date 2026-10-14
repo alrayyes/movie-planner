@@ -995,3 +995,30 @@ def test_entry_logs_updates_and_syncs_with_no_metadata_at_all(store: Store) -> N
 
     assert synced.caldav_uid is not None
     assert synced.imdb_rating is None
+
+
+def _entry_with_edited_fields(store: Store) -> Entry:
+    medium = store.add_medium("cinema", is_physical_place=True)
+    entry = store.create_entry(title="Dune", date=date(2026, 1, 1), medium_id=medium.id)
+    return store.update_entry(entry.id, plot="My own synopsis", director="Someone Else")
+
+
+def test_a_plain_lookup_fills_empty_fields_and_keeps_the_ones_an_entry_has(store: Store) -> None:
+    entry = _entry_with_edited_fields(store)
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    updated, _ = fetch_and_store_ratings(store, client, entry)
+
+    assert (updated.plot, updated.director) == ("My own synopsis", "Someone Else")
+    assert updated.imdb_rating == "8.0/10"
+    assert updated.awards == "Won 6 Oscars. 175 wins & 235 nominations total"
+
+
+def test_a_lookup_that_asks_to_overwrite_replaces_what_an_entry_has(store: Store) -> None:
+    entry = _entry_with_edited_fields(store)
+    client = _client(lambda request: httpx.Response(200, json=MATCH_RESPONSE))
+
+    updated, _ = fetch_and_store_ratings(store, client, entry, overwrite=True)
+
+    assert updated.plot == "Paul Atreides unites with the Fremen to seek revenge."
+    assert updated.director == "Denis Villeneuve"

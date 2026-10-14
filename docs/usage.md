@@ -141,6 +141,11 @@ entries still missing one. `update --refresh-metadata` does the same
 thing for one specific entry, by ID - no need to work out its date or
 risk force-refreshing a sibling entry that happens to share it.
 
+Only those two, and `update --imdb-id`, replace values an entry already has.
+A plain lookup, whether from `log`, `import` or a plain `sync refresh`, fills
+the fields that are empty and leaves the rest alone, so a synopsis you edited
+or imported isn't overwritten.
+
 ## Sync and `sync pull`
 
 Sync is otherwise push-only — movie-planner never reads the calendar

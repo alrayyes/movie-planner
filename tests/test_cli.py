@@ -2299,32 +2299,40 @@ def test_import_still_fetches_omdb_when_row_supplies_only_some_fields(
     store.close()
 
 
-def test_import_keeps_an_imported_synopsis_instead_of_fetching_over_it(
+def test_import_fills_gaps_from_omdb_but_keeps_what_the_row_carried(
     config_path: Path, calendar: FakeCalendar, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    calls = {"n": 0}
-
     def lookup(self: OmdbClient, **kw: object) -> MovieRatings | None:
-        calls["n"] += 1
         return MovieRatings(
-            imdb="8.5/10", rotten_tomatoes="91%", metacritic="80", plot="OMDb's plot"
+            imdb="8.5/10",
+            rotten_tomatoes="91%",
+            metacritic="80",
+            plot="OMDb's plot",
+            rated="PG-13",
+            awards="OMDb awards",
         )
 
     monkeypatch.setattr("movie_planner.cli.OmdbClient.lookup", lookup)
     csv_path = tmp_path / "movies.csv"
     csv_path.write_text(
-        "title,date,medium,synopsis,budget,popularity,awards\n"
-        "Dune,2026-01-01,cinema,My edited synopsis,165000000,87.5,\n"
+        "title,date,medium,synopsis,rated,budget,popularity,awards\n"
+        "Dune,2026-01-01,cinema,My edited synopsis,R,165000000,87.5,\n"
+        "Arrival,2026-01-02,cinema,,Unrated,,,\n"
     )
 
     result = runner.invoke(app, ["--config", str(config_path), "import", str(csv_path)])
 
     assert result.exit_code == 0, result.output
-    assert calls["n"] == 0
     store = _store(config_path)
-    (entry,) = store.list_entries()
-    assert (entry.plot, entry.budget, entry.popularity) == ("My edited synopsis", 165000000, 87.5)
-    assert entry.awards is None
+    dune, arrival = sorted(store.list_entries(), key=lambda e: e.title, reverse=True)
+    assert (dune.plot, dune.rated, dune.budget, dune.popularity) == (
+        "My edited synopsis",
+        "R",
+        165000000,
+        87.5,
+    )
+    assert dune.awards == "OMDb awards"
+    assert (arrival.plot, arrival.rated) == ("OMDb's plot", "Unrated")
     store.close()
 
 
