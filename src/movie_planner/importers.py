@@ -6,6 +6,7 @@ duplicate-detection rules used by interactive logging.
 import csv
 import datetime
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -105,7 +106,12 @@ def _parse_number[T: (int, float)](value: Any, name: str, kind: type[T]) -> T | 
     if value is None or value == "":
         return None
     try:
-        return kind(value)
+        if isinstance(value, bool):
+            raise ValueError
+        number = float(value)
+        if not math.isfinite(number) or (kind is int and number != int(number)):
+            raise ValueError
+        return kind(value) if isinstance(value, str) and kind is int else kind(number)
     except TypeError, ValueError:
         raise ValueError(f"{name} must be a number, got {value!r}") from None
 

@@ -379,3 +379,23 @@ def test_a_bad_budget_fails_only_its_row(config_path: Path, tmp_path: Path) -> N
 
     assert "1 imported, 0 skipped, 1 failed" in result.output
     assert "budget" in result.output
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("budget", 12.7), ("budget", True), ("popularity", "nan"), ("popularity", "inf")],
+)
+def test_a_number_field_that_is_not_a_plain_number_fails_its_row(
+    config_path: Path, tmp_path: Path, field: str, value: object
+) -> None:
+    rows = tmp_path / "rows.json"
+    rows.write_text(
+        json.dumps([{"title": "A", "date": "2026-01-01", "medium": "netflix", field: value}])
+    )
+
+    result = runner.invoke(
+        app, ["--config", str(config_path), "import", str(rows), "--no-metadata"]
+    )
+
+    assert "0 imported, 0 skipped, 1 failed" in result.output
+    assert f"{field} must be a number" in result.output
