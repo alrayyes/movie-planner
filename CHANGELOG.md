@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.1...movie-planner-v1.37.2) (2026-10-15)
+
+
+### Bug Fixes
+
+* **ci:** run release-auto-merge when the autorelease label is added ([#466](https://github.com/alrayyes/movie-planner/issues/466)) ([1bf07cd](https://github.com/alrayyes/movie-planner/commit/1bf07cdc49757bd8756ae10c180ac5a19318e48f)), closes [#465](https://github.com/alrayyes/movie-planner/issues/465)
+
 ## [1.37.1](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.0...movie-planner-v1.37.1) (2026-10-14)
 
 
