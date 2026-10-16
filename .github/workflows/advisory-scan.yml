@@ -39,8 +39,7 @@ jobs:
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           version: "0.12.7"
-      # Pinned to a main commit of alrayyes/advisory-scan until its first release; re-pin then.
-      - uses: alrayyes/advisory-scan@425418a63e80eb10142fbd2e82127b7ef3a51d68
+      - uses: alrayyes/advisory-scan@9801551dad16ce63853b2babfda885365d368232 # v0.3.0
         with:
           mode: scan
           # One scan step, one ticket (two steps sharing a title would close each other's
