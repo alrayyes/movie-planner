@@ -118,6 +118,13 @@ finish first in the whole suite, not one that actually exercises it. Its
 with the same kind of investigated, documented justification — never to silence
 a real one.
 
+### Auditing dependencies by hand
+
+No hook runs the dependency audit. CI's `audit` job does, and fails only on
+advisories a pull request adds; a hook can't compare against the base and would
+fail on advisories already on `main`. To check by hand, run `bun audit` and
+`uv run pip-audit`.
+
 ## How it fits together
 
 `src/movie_planner/` holds everything importable — `cli.py` is the

@@ -95,9 +95,6 @@ pre-push:
     - name: bandit
       run: uv run bandit -q -r src/movie_planner
 
-    - name: pip-audit
-      run: uv run pip-audit
-
     # A full run across src/ is ~3 minutes on 16 cores (measured, #385); a
     # push touching one file is seconds, cheap enough for pre-push, and CI
     # runs the identical commands. `mutmut run` itself still exits 0
