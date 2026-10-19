@@ -18,12 +18,12 @@ classifiers = [
   "Programming Language :: Python :: 3.15",
 ]
 dependencies = [
-  "caldav==3.4.0",
+  "caldav==3.5.0",
   "httpx==0.28.1",
   "icalendar==7.3",
   "questionary==2.1.1",
   "rapidfuzz==3.14.6",
-  "tomlkit==0.15.1",
+  "tomlkit==0.15.2",
   "typer==0.27.3",
 ]
 scripts.movie-planner = "movie_planner:main"
@@ -33,7 +33,7 @@ scripts.pathe-translate = "movie_planner.mail_import.pathe_translate:main"
 [dependency-groups]
 dev = [
   "bandit==1.9.4",
-  "click-man==0.5.1",
+  "click-man==0.6.0",
   "jsonschema==4.26",
   "mutmut==3.8",
   "mypy==2.4.0",
@@ -42,7 +42,7 @@ dev = [
   "pyproject-fmt==2.30.3",
   "pytest==9.1.1",
   "pytest-cov==7.1",
-  "ruff==0.17.0",
+  "ruff==0.17.1",
   "testcontainers==4.15",
   "types-jsonschema==4.26.0.20261006",
 ]
