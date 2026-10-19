@@ -83,13 +83,13 @@ jobs:
       # tool's error can't be masked by another tool's advisory IDs (advisory-scan#8).
       - name: bun audit
         if: ${{ !cancelled() && (steps.changed.outcome == 'failure' || steps.changed.outputs.deps == 'true') }}
-        uses: alrayyes/advisory-scan@9801551dad16ce63853b2babfda885365d368232 # v0.3.0
+        uses: alrayyes/advisory-scan@c9f794de4354b870e159510f036779baf20f4a2f # v0.3.1
         with:
           mode: gate
           command: bun audit
       - name: pip-audit
         if: ${{ !cancelled() && (steps.changed.outcome == 'failure' || steps.changed.outputs.deps == 'true') }}
-        uses: alrayyes/advisory-scan@9801551dad16ce63853b2babfda885365d368232 # v0.3.0
+        uses: alrayyes/advisory-scan@c9f794de4354b870e159510f036779baf20f4a2f # v0.3.1
         with:
           mode: gate
           # pip-audit reads the installed environment, so the project is synced first, on
@@ -303,7 +303,7 @@ jobs:
       actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
