@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.37.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.2...movie-planner-v1.37.3) (2026-11-02)
+
+
+### Bug Fixes
+
+* **ci:** audit release PRs with a frozen sync ([#495](https://github.com/alrayyes/movie-planner/issues/495)) ([6bbd556](https://github.com/alrayyes/movie-planner/commit/6bbd5564c3a35de8d6d42dd4aa72fc7fb1d53ef8)), closes [#494](https://github.com/alrayyes/movie-planner/issues/494)
+* **ci:** build calendaring-config for the AUR job ([#492](https://github.com/alrayyes/movie-planner/issues/492)) ([949ed0d](https://github.com/alrayyes/movie-planner/commit/949ed0d16f24964abb734c48d6658f89bf939dd8)), closes [#491](https://github.com/alrayyes/movie-planner/issues/491)
+* **deps:** bump certifi from 2026.10.18 to 2026.10.23 ([#489](https://github.com/alrayyes/movie-planner/issues/489)) ([0cc105b](https://github.com/alrayyes/movie-planner/commit/0cc105baf1219ba9b0d7d28bc9798178ea8e25f0))
+* **deps:** bump certifi from 2026.7.22 to 2026.10.18 ([#486](https://github.com/alrayyes/movie-planner/issues/486)) ([3b2c84d](https://github.com/alrayyes/movie-planner/commit/3b2c84d5ce2b1e7538ff8109180648ae122666fd))
+* **deps:** bump dnspython from 2.8.0 to 2.9.0 ([#484](https://github.com/alrayyes/movie-planner/issues/484)) ([cd8745c](https://github.com/alrayyes/movie-planner/commit/cd8745c49921c3997381dc0cb91b3990555f8e40))
+* **deps:** bump dnspython from 2.9.0 to 2.9.1 ([#488](https://github.com/alrayyes/movie-planner/issues/488)) ([3f2534a](https://github.com/alrayyes/movie-planner/commit/3f2534a1f92bbc90089b8d18aa4c7d3774c21477))
+* **deps:** bump msgpack from 1.2.2 to 1.2.3 ([#485](https://github.com/alrayyes/movie-planner/issues/485)) ([bb6f3f5](https://github.com/alrayyes/movie-planner/commit/bb6f3f56040db03f8cfe1b60b125aaf62a0f247e))
+* **deps:** bump setuptools from 84.0.0 to 84.1.0 ([#483](https://github.com/alrayyes/movie-planner/issues/483)) ([de5057a](https://github.com/alrayyes/movie-planner/commit/de5057ac9d114211a1ada8ccc7059d13d7eeb4d5))
+* **deps:** bump setuptools from 84.1.0 to 84.2.1 ([#490](https://github.com/alrayyes/movie-planner/issues/490)) ([85f3966](https://github.com/alrayyes/movie-planner/commit/85f3966c4c8b50fc8f9d3fd468e06f55fca9fc76))
+* **deps:** bump the python-dependencies group with 2 updates ([#479](https://github.com/alrayyes/movie-planner/issues/479)) ([ddc1679](https://github.com/alrayyes/movie-planner/commit/ddc1679cbdb5e7e55e3b90e5cd1eabd3335681ed))
+* **deps:** bump the python-dependencies group with 4 updates ([#476](https://github.com/alrayyes/movie-planner/issues/476)) ([e8cd444](https://github.com/alrayyes/movie-planner/commit/e8cd44446f26357f64ee5d9bec651820adeba51c))
+* **deps:** bump the python-dependencies group with 5 updates ([#481](https://github.com/alrayyes/movie-planner/issues/481)) ([0fe4a91](https://github.com/alrayyes/movie-planner/commit/0fe4a91af3497f24380c33548d64393d01c5575e))
+
 ## [1.37.2](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.1...movie-planner-v1.37.2) (2026-10-15)
 
 
