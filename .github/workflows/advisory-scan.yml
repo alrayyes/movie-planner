@@ -48,8 +48,10 @@ jobs:
           # naming one (registry down) fails the step with no IDs in the log, so another tool's
           # findings can't mask it and the ticket stays as it was. advisory-scan#8 (one audit
           # per tool in the action) will replace this wrapper. pip-audit reads the installed
-          # environment, so the project is synced first.
-          setup: uv sync --locked
+          # environment, so the project is synced first. --frozen, not --locked: the scan
+          # starts on a release commit before sync_uv_lock.sh has fixed uv.lock's version line,
+          # and --locked would fail it. The pins scanned are still uv.lock's.
+          setup: uv sync --frozen
           command: |
             ids='GHSA(-[0-9a-z]{4}){3}|CVE-[0-9]{4}-[0-9]+|PYSEC-[0-9]{4}-[0-9]+'
             dir=$(mktemp -d)
