@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.5](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.4...movie-planner-v1.37.5) (2026-11-02)
+
+
+### Bug Fixes
+
+* **ci:** scan main with a frozen sync ([#498](https://github.com/alrayyes/movie-planner/issues/498)) ([c780c99](https://github.com/alrayyes/movie-planner/commit/c780c999efa58ddf617c925d70882ef6d8e2e814)), closes [#497](https://github.com/alrayyes/movie-planner/issues/497)
+
 ## [1.37.4](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.3...movie-planner-v1.37.4) (2026-11-02)
 
 
