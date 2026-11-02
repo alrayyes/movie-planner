@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.4](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.3...movie-planner-v1.37.4) (2026-11-02)
+
+
+### Bug Fixes
+
+* **deps:** bump filelock from 3.32.4 to 4.2.1 ([#487](https://github.com/alrayyes/movie-planner/issues/487)) ([a806f57](https://github.com/alrayyes/movie-planner/commit/a806f57c96fb3a7eeb0f152091d325d2cca2d24a))
+
 ## [1.37.3](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.2...movie-planner-v1.37.3) (2026-11-02)
 
 
