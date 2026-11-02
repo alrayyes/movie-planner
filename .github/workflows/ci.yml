@@ -93,8 +93,10 @@ jobs:
         with:
           mode: gate
           # pip-audit reads the installed environment, so the project is synced first, on
-          # the base checkout too.
-          setup: uv sync --locked
+          # the base checkout too. --frozen, not --locked: a release PR bumps the version in
+          # pyproject.toml but not uv.lock (sync_uv_lock.sh fixes it after the merge), and
+          # --locked would fail it. The pins audited are still uv.lock's.
+          setup: uv sync --frozen
           command: uv run pip-audit
 
   test:
