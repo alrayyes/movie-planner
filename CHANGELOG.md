@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.37.6](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.5...movie-planner-v1.37.6) (2026-11-09)
+
+
+### Bug Fixes
+
+* **aur:** bundle calendaring_config so the package builds for users ([#502](https://github.com/alrayyes/movie-planner/issues/502)) ([aa548b9](https://github.com/alrayyes/movie-planner/commit/aa548b99aa2b55b6990eee21753ddcc31fe594fb)), closes [#491](https://github.com/alrayyes/movie-planner/issues/491)
+* **deps-dev:** bump the python-dependencies group with 2 updates ([#501](https://github.com/alrayyes/movie-planner/issues/501)) ([6735f1c](https://github.com/alrayyes/movie-planner/commit/6735f1cd04388e8dd3e48a8a5ef402fdaef00e73))
+
 ## [1.37.5](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.4...movie-planner-v1.37.5) (2026-11-02)
 
 
