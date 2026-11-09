@@ -396,11 +396,12 @@ jobs:
           chmod -R a+rwX /tmp/src "$GITHUB_WORKSPACE"
       - name: Prepare a dev PKGBUILD pointing at that tarball
         run: |
-          sed \
-            -e "s/^pkgver=.*/pkgver=0.0.0/" \
-            -e "s#^source=.*#source=(\"file:///tmp/src/movie-planner-0.0.0.tar.gz\")#" \
-            -e "s/^sha256sums=.*/sha256sums=('SKIP')/" \
-            PKGBUILD > /tmp/src/PKGBUILD
+          # Override entry 0 (the release tarball) after the originals, so
+          # the bundled wheel source and its checksum stay as shipped.
+          { sed -e "s/^pkgver=.*/pkgver=0.0.0/" PKGBUILD
+            echo 'source[0]="file:///tmp/src/movie-planner-0.0.0.tar.gz"'
+            echo "sha256sums[0]='SKIP'"
+          } > /tmp/src/PKGBUILD
       - name: Install AUR-only build dependencies
         run: su builder -c "bash '$GITHUB_WORKSPACE/scripts/install-aur-builddeps.sh'"
       - name: makepkg

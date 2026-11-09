@@ -199,10 +199,12 @@ jobs:
           pkgver="${TAG_NAME##*-v}"
           url="https://github.com/${GITHUB_REPOSITORY}/archive/${TAG_NAME}.tar.gz"
           sha256=$(curl -fsSL "$url" | sha256sum | cut -d' ' -f1)
+          # sha256sums is a two-entry array (tarball, then the bundled
+          # calendaring_config wheel): only the first entry changes.
           sed -i \
             -e "s/^pkgver=.*/pkgver=${pkgver}/" \
             -e "s/^pkgrel=.*/pkgrel=1/" \
-            -e "s/^sha256sums=.*/sha256sums=('${sha256}')/" \
+            -e "/^sha256sums=(/{n;s/'[0-9a-f]\{64\}'/'${sha256}'/}" \
             PKGBUILD
 
       - name: Install AUR-only build dependencies
