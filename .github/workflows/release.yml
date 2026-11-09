@@ -204,7 +204,7 @@ jobs:
           sed -i \
             -e "s/^pkgver=.*/pkgver=${pkgver}/" \
             -e "s/^pkgrel=.*/pkgrel=1/" \
-            -e "/^sha256sums=(/,/^)/ s/^  '[0-9a-f]\{64\}'/  '${sha256}'/;t" \
+            -e "/^sha256sums=(/{n;s/'[0-9a-f]\{64\}'/'${sha256}'/}" \
             PKGBUILD
 
       - name: Install AUR-only build dependencies
