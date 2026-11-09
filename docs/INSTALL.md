@@ -24,7 +24,9 @@ cd movie-planner
 makepkg -si
 ```
 
-Builds for real against Arch's own `python-*` packages — see the
+Builds for real against Arch's own `python-*` packages, plus a pinned
+`calendaring_config` wheel fetched from PyPI during the build (Arch's
+`python-caldav` needs it but doesn't depend on it; #491) — see the
 [`PKGBUILD`](../PKGBUILD) in this repo for the exact dependencies (kept
 here for reference and review; the actual AUR package lives in its own
 git repo, updated by this project's release job).
