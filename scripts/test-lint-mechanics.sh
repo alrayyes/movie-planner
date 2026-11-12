@@ -57,6 +57,17 @@ run CHANGELOG.md >/dev/null
 [ "$(run .ltex.json)" = "README.md docs.md " ] || fail "a config-only push did not check the whole tree: $(run .ltex.json)"
 [ "$(run scripts/lint-mechanics.sh)" = "README.md docs.md " ] || fail "a script-only push did not check the whole tree"
 
+# With no ltex and no docker anywhere, a push with no prose must exit before
+# the lookup: no download, no cache directory.
+mkdir -p "$tmp/nobin"
+for t in git grep dirname find head; do ln -s "$(command -v "$t")" "$tmp/nobin/$t"; done
+printf '#!/bin/sh\ntouch "%s/curl-called"\n' "$tmp" >"$tmp/nobin/curl"
+chmod +x "$tmp/nobin/curl"
+PATH="$tmp/nobin" "$(command -v bash)" scripts/lint-mechanics.sh CHANGELOG.md >/dev/null 2>&1 ||
+  fail "a no-prose push failed on a machine with no ltex"
+[ ! -e "$tmp/curl-called" ] || fail "a no-prose push downloaded ltex"
+[ ! -e "$XDG_CACHE_HOME/ltex-ls-plus" ] || fail "a no-prose push created the ltex cache"
+
 cd "$root"
 job=$(awk '/^    - name: mechanics$/{p=1;print;next} /^    - name:/{p=0} p' lefthook.yml)
 grep -q 'glob:' <<<"$job" || fail "the mechanics hook has no glob, so every push starts a JVM"
