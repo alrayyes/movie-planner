@@ -139,9 +139,15 @@ pre-push:
 
     # Grammar and spelling. Left out of pre-commit on the grounds that it is a
     # ~300 MB download, which it is — but it caches outside the repository and
-    # then costs about ten seconds.
+    # then costs about ten seconds. It takes only the Markdown in the push (a
+    # change to .ltex.json or the script checks all of it), so a push with no
+    # prose never starts the JVM. CI checks everything.
     - name: mechanics
-      run: bun run lint:mechanics
+      glob:
+        - "*.md"
+        - ".ltex.json"
+        - "scripts/lint-mechanics.sh"
+      run: ./scripts/lint-mechanics.sh {push_files}
 
     - name: hadolint
       run:

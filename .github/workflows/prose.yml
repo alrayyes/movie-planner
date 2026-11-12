@@ -17,6 +17,9 @@ on:
       - "**/*.md"
       - .vale.ini
       - .ltex.json
+      - scripts/lint-mechanics.sh
+      - scripts/test-lint-mechanics.sh
+      - lefthook.yml
       - styles/**
       - .github/workflows/prose.yml
   pull_request:
@@ -24,6 +27,9 @@ on:
       - "**/*.md"
       - .vale.ini
       - .ltex.json
+      - scripts/lint-mechanics.sh
+      - scripts/test-lint-mechanics.sh
+      - lefthook.yml
       - styles/**
       - .github/workflows/prose.yml
   workflow_dispatch:
@@ -73,6 +79,9 @@ jobs:
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           ./scripts/lint-mechanics.sh
+
+      - name: Check the mechanics hook
+        run: scripts/test-lint-mechanics.sh
 
   style:
     runs-on: ubuntu-24.04

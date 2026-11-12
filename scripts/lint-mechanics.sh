@@ -16,6 +16,30 @@ cd "$(dirname "$0")/.."
 VERSION=18.7.0
 IMAGE="ghcr.io/alrayyes/ltex-cli-plus:$VERSION@sha256:22452e86a130e528d526b60792926002983fcbf732bff09bd4e843d22816e4ea"
 
+# CHANGELOG.md is written by the release job, and OpenSpec's generated
+# artifacts and Claude Code's own scaffolding follow their own
+# conventions; correcting any of them is not this script's business.
+all=$(git ls-files '*.md' | grep -v '^CHANGELOG.md$' | grep -v '^openspec/' | grep -v '^\.claude/')
+
+# Run bare (CI, `bun run lint:mechanics`), it checks all of them. The pre-push
+# hook passes the files in the push: only the Markdown among them is checked,
+# so a push that changed one document doesn't start a JVM over every one. A push
+# that includes .ltex.json or this script, which can change the verdict on any
+# file, checks them all, as CI would.
+files=$all
+if [ $# -gt 0 ]; then
+  if printf '%s\n' "$@" | grep -Eq '^(\.ltex\.json|scripts/lint-mechanics\.sh)$'; then
+    files=$all
+  else
+    pushed=$(printf '%s\n' "$@" | grep -Fx -f <(printf '%s\n' "$all") || true)
+    if [ -z "$pushed" ]; then
+      echo "No prose in this push for ltex to check."
+      exit 0
+    fi
+    files=$pushed
+  fi
+fi
+
 if command -v ltex-cli-plus >/dev/null 2>&1; then
   run_ltex() { ltex-cli-plus "$@"; }
 elif command -v docker >/dev/null 2>&1; then
@@ -50,11 +74,6 @@ else
   export JAVA_HOME="$jdk"
   run_ltex() { "$HOME_DIR/bin/ltex-cli-plus" "$@"; }
 fi
-
-# CHANGELOG.md is written by the release job, and OpenSpec's generated
-# artifacts and Claude Code's own scaffolding follow their own
-# conventions; correcting any of them is not this script's business.
-files=$(git ls-files '*.md' | grep -v '^CHANGELOG.md$' | grep -v '^openspec/' | grep -v '^\.claude/')
 
 echo "Checking:"
 echo "$files"
