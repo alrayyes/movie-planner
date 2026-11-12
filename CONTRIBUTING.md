@@ -26,7 +26,9 @@
   isn't obvious from the failure.
 
   `ltex-cli-plus` needs nothing installed: the hook fetches and caches it
-  on first use.
+  on first use. The pre-push hook checks only the Markdown in your push, and
+  all of it when `.ltex.json` or `scripts/lint-mechanics.sh` changed. CI, and
+  `bun run lint:mechanics` by hand, check every document.
 
 - **[Docker](https://docs.docker.com/engine/install/)**, running locally,
   for the hooks that lint and build `Dockerfile`: hadolint at commit, the
