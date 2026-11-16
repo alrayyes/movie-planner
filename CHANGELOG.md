@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.7](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.6...movie-planner-v1.37.7) (2026-11-16)
+
+
+### Bug Fixes
+
+* **deps:** bump the python-dependencies group with 2 updates ([#508](https://github.com/alrayyes/movie-planner/issues/508)) ([4ac18cc](https://github.com/alrayyes/movie-planner/commit/4ac18cc0d5c54aba25aabf076b1b49f70cc1f629))
+
 ## [1.37.6](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.5...movie-planner-v1.37.6) (2026-11-09)
 
 
