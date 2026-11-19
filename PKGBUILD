@@ -40,22 +40,11 @@ makedepends=(
 )
 _tag="movie-planner-v${pkgver}"
 _srcdir="movie-planner-${_tag}"
-# Arch's python-caldav 3.7.0 imports calendaring_config but doesn't depend on
-# it, and no Arch or AUR package provides it (#491). A PKGBUILD can't depend
-# on a package that doesn't exist, so the pinned wheel is bundled here and
-# installed with the app. Remove this (source, checksum, install line, the
-# PYTHONPATH addition) once Arch ships the dependency or an AUR package
-# exists, since a bundled copy would then conflict with it.
-_ccver=0.5.0
-_ccwhl="calendaring_config-${_ccver}-py3-none-any.whl"
 source=(
   "${pkgname}-${pkgver}.tar.gz::https://github.com/alrayyes/movie-planner/archive/${_tag}.tar.gz"
-  "https://files.pythonhosted.org/packages/5f/17/3e4e04e3a344b2260139e64f53d34e95163e02b128b6066753540d5df524/${_ccwhl}"
 )
-noextract=("${_ccwhl}")
 sha256sums=(
   'c1f617f44db86f974a3ed6e7fe41ac657b018d298d89d70312721efad6fa9983'
-  'c5e1f6ffaf428a59b0e1373d951eb8e7fd9f49924912e65548cc2803e73a8646'
 )
 
 build() {
@@ -65,7 +54,7 @@ build() {
 
 package() {
   cd "$_srcdir"
-  python -m installer --destdir="$pkgdir" "$srcdir/${_ccwhl}" dist/*.whl
+  python -m installer --destdir="$pkgdir" dist/*.whl
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 
   # One man page per command and subcommand, generated from the
