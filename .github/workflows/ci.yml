@@ -396,8 +396,8 @@ jobs:
           chmod -R a+rwX /tmp/src "$GITHUB_WORKSPACE"
       - name: Prepare a dev PKGBUILD pointing at that tarball
         run: |
-          # Override entry 0 (the release tarball) after the originals, so
-          # the bundled wheel source and its checksum stay as shipped.
+          # Override the release tarball source and its checksum with the
+          # local tarball, after the originals.
           { sed -e "s/^pkgver=.*/pkgver=0.0.0/" PKGBUILD
             echo 'source[0]="file:///tmp/src/movie-planner-0.0.0.tar.gz"'
             echo "sha256sums[0]='SKIP'"
