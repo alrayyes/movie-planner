@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.37.8](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.7...movie-planner-v1.37.8) (2026-11-19)
+
+
+### Bug Fixes
+
+* **aur:** drop the bundled calendaring_config wheel ([#514](https://github.com/alrayyes/movie-planner/issues/514)) ([5daf646](https://github.com/alrayyes/movie-planner/commit/5daf6469a327b5f289894aa01201dca3181e32c6)), closes [#513](https://github.com/alrayyes/movie-planner/issues/513)
+* **deps:** bump dnspython from 2.9.1 to 2.9.2 ([#512](https://github.com/alrayyes/movie-planner/issues/512)) ([d56c78d](https://github.com/alrayyes/movie-planner/commit/d56c78d2893cbe6772fc2a4395cc46a1ac13bcd6))
+
 ## [1.37.7](https://github.com/alrayyes/movie-planner/compare/movie-planner-v1.37.6...movie-planner-v1.37.7) (2026-11-16)
 
 
