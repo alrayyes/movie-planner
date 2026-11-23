@@ -24,7 +24,7 @@ dependencies = [
   "questionary==2.1.1",
   "rapidfuzz==3.14.6",
   "tomlkit==0.15.2",
-  "typer==0.29.1",
+  "typer==0.29.2",
 ]
 scripts.movie-planner = "movie_planner:main"
 scripts.pathe-mail-import = "movie_planner.mail_import.cli:main"
@@ -39,10 +39,10 @@ dev = [
   "mypy==2.4.1",
   "pip-audit==2.10.1",
   "pyinstaller==6.22.3",
-  "pyproject-fmt==2.30.6",
+  "pyproject-fmt==2.31.2",
   "pytest==9.2.0",
   "pytest-cov==7.1",
-  "ruff==0.17.5",
+  "ruff==0.17.6",
   "testcontainers==4.15",
   "types-jsonschema==4.26.0.20261006",
 ]
